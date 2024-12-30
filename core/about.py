@@ -42,12 +42,9 @@ class AboutUs:
                 "• 部分指令可能存在延迟，请耐心等待数据输出\n\n"
                 "📋 项目信息:\n"
                 f"• 版本: OpenBeta {self.version}\n"
-                "• 开发者: xiaoyueyoqwq\n"
-                "• UX/UI设计：SHIA_NANA\n"
-                "• 技术支持：Shuakami\n\n"
+                "• 开发者: xiaoyueyoqwq\n\n"
                 "💡 问题反馈:\n"
                 "• 请联系xiaoyueyoqwq@gmail邮箱\n"
-                "• 或者github搜索thefinals-qqbot查阅源码\n"
                 "━━━━━━━━━━━━━"
             )
         except Exception as e:

@@ -43,7 +43,7 @@ class BrowserManager:
             await self.initialize()
         try:
             return await self.browser.new_page(
-                viewport={'width': 1250, 'height': 430},
+                viewport={'width': 1200, 'height': 400},
                 device_scale_factor=2.0
             )
         except Exception as e:

@@ -120,26 +120,8 @@ class BindManager:
         Returns:
             bool: 是否为有效的游戏ID
         """
-        try:
-            # 检查是否包含#号
-            if "#" not in game_id:
-                return False
-                
-            # 分割ID和代号
-            player_id, code = game_id.split("#", 1)
-            
-            # 验证ID和代号
-            if not player_id or not code:
-                return False
-                
-            # 验证代号是否为纯数字
-            if not code.isdigit():
-                return False
-                
-            return True
-            
-        except Exception:
-            return False
+        # 这里可以添加更多的验证规则
+        return bool(game_id and len(game_id) >= 3)
 
     def process_bind_command(self, user_id: str, args: str) -> str:
         """
@@ -174,10 +156,7 @@ class BindManager:
 
         # 处理绑定请求
         if not self._validate_game_id(args):
-            return (
-                "❌ 无效的游戏ID格式\n"
-                "正确格式: PlayerName#1234"
-            )
+            return "❌ 无效的游戏ID格式"
             
         if self.bind_user(user_id, args):
             return (
@@ -199,9 +178,9 @@ class BindManager:
             "/bind <游戏ID>\n"
             "示例: /bind PlayerName#1234\n\n"
             "解除绑定:\n"
-            "/unbind\n\n"
+            "/bind unbind\n\n"
             "查看当前绑定:\n"
-            "/status\n\n"
+            "/bind status\n\n"
             "绑定后可直接使用:\n"
             "/r - 查询排位\n"
             "/wt - 查询世界巡回赛"

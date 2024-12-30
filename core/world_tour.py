@@ -96,54 +96,53 @@ class WorldTourQuery:
 
         # 获取第一个有效数据用于基本信息
         first_season, first_data = next(iter(valid_data.items()))
-        name, club_tag, platform, rank, cash = self.api._format_player_data(first_data)
+        name, club_tag, platform, _, _ = self.api._format_player_data(first_data)
         
-        return (
-            f"\n💰 {first_season}世界巡回赛 | THE FINALS\n"
-            f"━━━━━━━━━━━━━\n"
-            f"📋 玩家: {name}{club_tag}\n"
-            f"🖥️ 平台: {platform}\n"
-            f"📊 排名: {rank}\n"
-            f"💵 奖金: ${cash}\n"
-            f"━━━━━━━━━━━━━"
-        )
+        # 构建响应
+        response = [
+            f"\n💰 世界巡回赛 | THE FINALS",
+            f"━━━━━━━━━━━━━",
+            f"📋 玩家: {name}{club_tag}",
+            f"🖥️ 平台: {platform}"
+        ]
+        
+        # 添加每个赛季的数据
+        for season, data in valid_data.items():
+            _, _, _, rank, cash = self.api._format_player_data(data)
+            season_icon, season_name, _ = self.api.seasons[season]
+            response.extend([
+                f"",
+                f"{season_icon} {season_name}:",
+                f"📊 排名: {rank}",
+                f"💵 奖金: ${cash}"
+            ])
+        
+        response.append("━━━━━━━━━━━━━")
+        return "\n".join(response)
 
-    async def process_wt_command(self, args: str) -> str:
-        """
-        处理世界巡回赛查询命令
-        :param args: 命令参数，格式：<玩家ID> [赛季]
-        """
-        if not args:
-            divider = "━" * 14
+    async def process_wt_command(self, player_name: str) -> str:
+        """处理世界巡回赛查询命令"""
+        if not player_name:
             return (
                 "\n📝 世界巡回赛查询说明\n"
-                f"{divider}\n"
-                "格式: /wt <玩家ID> [赛季]\n"
+                "━━━━━━━━━━━━━\n"
+                "格式: /wt <玩家ID>\n"
                 "示例: /wt PlayerName#1234\n"
-                "      /wt PlayerName#1234 s4\n"
-                "可用赛季:\n"
-                "- s3: 第三赛季\n"
-                "- s4: 第四赛季\n"
-                "- s5: 第五赛季(默认)"
+                "\n支持查询所有赛季数据"
             )
 
-        # 分割参数
-        parts = args.split()
-        player_name = parts[0]
-        season = parts[1].lower() if len(parts) > 1 else "s5"
-
-        # 验证赛季是否有效
-        if season not in self.api.seasons:
-            return f"⚠️ 无效的赛季ID: {season}\n请使用 /wt 查看支持的赛季列表"
-
-        bot_logger.info(f"查询玩家 {player_name} 的 {season} 赛季世界巡回赛数据")
+        bot_logger.info(f"查询玩家 {player_name} 的世界巡回赛数据")
         
         try:
-            # 获取指定赛季的数据
-            data = await self.api.get_player_stats(player_name, season)
+            # 并发查询所有赛季数据
+            tasks = [
+                self.api.get_player_stats(player_name, season)
+                for season in self.api.seasons.keys()
+            ]
+            results = await asyncio.gather(*tasks)
             
-            # 构建赛季数据字典
-            season_data = {season: data}
+            # 将结果与赛季对应
+            season_data = dict(zip(self.api.seasons.keys(), results))
             
             # 格式化并返回结果
             return self.format_response(player_name, season_data)

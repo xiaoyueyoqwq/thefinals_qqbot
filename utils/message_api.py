@@ -6,7 +6,6 @@ import random
 from dataclasses import dataclass
 from collections import deque
 from utils.logger import bot_logger
-from utils.config import settings
 
 # 消息类型枚举
 class MessageType(IntEnum):
@@ -272,13 +271,9 @@ class MessageController:
             message.seq = await self.sequence.get_next(message.group_id)
             
             # 构造参数
-            content = message.content
-            if hasattr(settings, 'debug') and settings.debug.get('message_id', False):
-                content = f"{content} [{random.randint(1000, 9999)}]"
-                
             params = {
                 "msg_type": message.msg_type.value,
-                "content": content,
+                "content": f"{message.content} [{random.randint(1000, 9999)}]",
                 "msg_seq": message.seq,
                 "msg_id": message.msg_id
             }
@@ -309,11 +304,9 @@ class MessageController:
 class MessageAPI:
     """消息API"""
     def __init__(self, api: Any):
-        self.api = api
+        self._api = api
         self.config = MessageConfig()
         self.config.validate()
-        self.sequence = SequenceGenerator(self.config)
-        self.rate_limiter = RateLimiter(self.config)
         self.controller = MessageController(self.config)
         asyncio.create_task(self.controller.start())
         bot_logger.info("MessageAPI初始化完成")
@@ -327,14 +320,21 @@ class MessageAPI:
         """创建媒体消息负载"""
         return {"file_info": file_info}
         
-    async def upload_group_file(self, group_id: str, file_type: FileType, url: str) -> Optional[Dict]:
-        """上传群文件"""
+    async def upload_group_file(self, group_id: str, file_type: FileType, url: str = None, file_data: str = None) -> Optional[Dict]:
+        """上传群文件
+        Args:
+            group_id: 群ID
+            file_type: 文件类型
+            url: 文件URL
+            file_data: 文件base64数据
+        """
         try:
-            bot_logger.debug(f"群文件上传开始 - group_id: {group_id}, type: {file_type}, url: {url}")
-            result = await self.api.post_group_file(
+            bot_logger.debug(f"群文件上传开始 - group_id: {group_id}, type: {file_type}")
+            result = await self._api.post_group_file(
                 group_openid=group_id,
                 file_type=file_type.value,
                 url=url,
+                file_data=file_data,
                 srv_send_msg=False
             )
             bot_logger.debug(f"群文件上传成功: {result}")
@@ -343,47 +343,56 @@ class MessageAPI:
             bot_logger.error(f"群文件上传失败: {str(e)}")
             return None
             
-    async def send_to_group(self, group_id: str, content: str, msg_type: MessageType = MessageType.TEXT, msg_id: Optional[str] = None, media: Optional[Dict] = None) -> bool:
-        """发送群消息"""
+    async def send_to_group(self, group_id: str, content: str, msg_type: MessageType, msg_id: str, media: Optional[Dict] = None, image_base64: Optional[str] = None) -> bool:
+        """发送群消息
+        Args:
+            group_id: 群ID
+            content: 消息内容
+            msg_type: 消息类型
+            msg_id: 消息ID
+            media: 媒体信息
+            image_base64: 图片base64数据
+        """
         try:
-            # 检查频率限制
-            try:
-                await self.rate_limiter.check(group_id, content)
-            except RateLimitExceeded:
-                bot_logger.warning(f"发送消息频率超限 - group_id: {group_id}")
-                return False
+            # 如果提供了base64图片，先上传
+            if image_base64:
+                file_result = await self.upload_group_file(
+                    group_id=group_id,
+                    file_type=FileType.IMAGE,
+                    file_data=image_base64
+                )
+                if not file_result:
+                    return False
+                media = self.create_media_payload(file_result["file_info"])
+                msg_type = MessageType.MEDIA
                 
-            # 生成序号
-            seq = await self.sequence.get_next(group_id)
-            bot_logger.debug(f"生成序号 - group_id: {group_id}, current: {seq-100}, next: {seq}")
-            
-            # 构建消息数据
-            data = {
-                "group_openid": group_id,
-                "msg_type": msg_type.value,
-                "msg_seq": seq
-            }
-            
-            # 根据消息类型设置内容
-            if msg_type == MessageType.TEXT:
-                data["content"] = content
-            elif msg_type == MessageType.MEDIA:
-                data["content"] = content
-                data["media"] = media
-                
-            # 添加可选的消息ID
-            if msg_id:
-                data["msg_id"] = msg_id
-                
-            # 发送消息
-            response = await self.api.post_group_message(**data)
-            
-            # 记录发送成功
-            bot_logger.debug(f"消息发送成功 - group_id: {group_id}, msg_id: {response.get('id', 'unknown')}, type: {msg_type.value}")
-            return True
-            
+            message = QueuedMessage(
+                group_id=group_id,
+                msg_type=msg_type,
+                content=content.replace("━", "-"),  # 替换特殊字符
+                msg_id=msg_id,
+                media=media,
+                timestamp=time.time()
+            )
+            return await self.controller.send(message, self._api)
         except Exception as e:
-            bot_logger.error(f"发送消息失败: {str(e)}")
+            bot_logger.error(f"发送群消息失败: {str(e)}")
+            return False
+            
+    async def recall_group_message(self, group_id: str, message_id: str) -> bool:
+        """撤回群消息
+        Args:
+            group_id: 群ID
+            message_id: 消息ID
+        """
+        try:
+            await self._api.recall_group_message(
+                group_openid=group_id,
+                message_id=message_id
+            )
+            return True
+        except Exception as e:
+            bot_logger.error(f"撤回群消息失败: {str(e)}")
             return False
         
     async def send_to_user(self, user_id: str, content: str, msg_type: MessageType, msg_id: str, file_image: Optional[bytes] = None) -> bool:
@@ -402,7 +411,7 @@ class MessageAPI:
                 params["file_image"] = file_image
             
             # 发送消息
-            await self.api.post_c2c_message(
+            await self._api.post_c2c_message(
                 openid=user_id,
                 **params
             )

@@ -1,7 +1,5 @@
 import os
 import asyncio
-import json
-import random
 from typing import Optional, Tuple, Dict
 from playwright.async_api import Page
 from utils.logger import bot_logger
@@ -75,10 +73,6 @@ class RankQuery:
         self.api = RankAPI()
         self.resources_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
         self.html_template_path = os.path.join(self.resources_dir, "templates", "rank.html")
-        self.tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "did_you_know.json")
-        
-        # 加载小知识数据
-        self.tips = self._load_tips()
         
         # 支持的赛季列表
         self.seasons = {
@@ -145,7 +139,7 @@ class RankQuery:
         bot_logger.info("RankQuery单例初始化完成")
         
     async def _preheat_page(self):
-        """预热页��实例"""
+        """预热页面实例"""
         if self._preheated:
             return
             
@@ -282,6 +276,7 @@ class RankQuery:
             await self._ensure_page_ready()
 
             async with self._lock:  # 使用锁确保线程安全
+                # 替换模板变量
                 html_content = self._template_cache['base']
                 for key, value in template_data.items():
                     html_content = html_content.replace(f"{{{{ {key} }}}}", str(value))
@@ -336,7 +331,7 @@ class RankQuery:
             # 等待OSS上传完成获取URL
             oss_result = await oss_task
             
-            # 用OSS的URL上传到QQ
+            # 使用OSS的URL上传到QQ
             qq_task = asyncio.create_task(
                 message_api.upload_group_file(
                     group_id=group_id,
@@ -354,35 +349,13 @@ class RankQuery:
             bot_logger.error(f"上传图片时出错: {str(e)}")
             return None, None
 
-    def _load_tips(self) -> list:
-        """加载小知识数据"""
-        try:
-            with open(self.tips_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return data.get("tips", [])
-        except Exception as e:
-            bot_logger.error(f"加载小知识数据失败: {str(e)}")
-            return []
-            
-    def _get_random_tip(self) -> str:
-        """获取随机小知识"""
-        if not self.tips:
-            return ""
-        return random.choice(self.tips)
-
     async def process_rank_command(self, args: str, message_api: Optional[MessageAPI] = None, group_id: Optional[str] = None) -> Tuple[Optional[bytes], str, Optional[Dict], Optional[Dict]]:
-        """
-        处理排位查询命令
-        :param args: 命令参数
-        :param message_api: 消息API实例
-        :param group_id: 群组ID
-        :return: (图片数据, 错误信息, OSS上传结果, QQ上传结果)
-        """
+        """处理排位查询命令"""
         if not args:
             return None, "请提供玩家ID", None, None
 
         # 分割参数
-        parts = args.strip().split()
+        parts = args.split()
         player_name = parts[0]
         season = parts[1].lower() if len(parts) > 1 else "s5"
 
