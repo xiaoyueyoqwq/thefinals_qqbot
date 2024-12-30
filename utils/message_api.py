@@ -354,7 +354,7 @@ class MessageAPI:
             image_base64: 图片base64数据
         """
         try:
-            # 如果提供了base64图片，先上传
+            # 如果提供了base64图片，先上传 ？？？？？？
             if image_base64:
                 file_result = await self.upload_group_file(
                     group_id=group_id,

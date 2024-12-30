@@ -302,11 +302,10 @@ class MyBot(botpy.Client):
                 if await self.plugin_manager.handle_message(handler, content):
                     return
                 
-                command_list = "\n".join(f"/{cmd} - {desc}" for cmd, desc in self.plugin_manager.get_command_list().items())
+                # 未知命令时提示使用 /about 获取帮助
                 await handler.send_text(
                     "❓ 未知的命令\n"
-                    "可用命令列表:\n"
-                    f"{command_list}"
+                    "提示：使用 /about 获取帮助信息"
                 )
         except Exception as e:
             bot_logger.error(f"处理消息时发生错误: {str(e)}")
@@ -322,6 +321,15 @@ class MyBot(botpy.Client):
         try:
             handler = MessageHandler(message, self)
             content = message.content.replace(f"<@!{self.robot.id}>", "").strip()
+            
+            # 如果是help命令，直接提示使用about
+            if content.lower() == "/help":
+                await handler.send_text(
+                    "❓需要帮助？\n"
+                    "请使用 /about 获取帮助信息"
+                )
+                return
+                
             self.message_queue.put((message, handler, content))
         except Exception as e:
             bot_logger.error(f"加入消息队列失败: {str(e)}")
@@ -442,7 +450,26 @@ class MyBot(botpy.Client):
 
 def main():
     try:
-        bot_logger.debug("="*50)
+        # 显示启动logo
+        print("="*50)
+        print("We  are")
+        print(".  ________")
+        print(" /\\     _____\\")
+        print(" \\  \\   \\______")
+        print("   \\  \\________\\")
+        print("     \\/________/")
+        print("  ___      ___")
+        print("/ \\   ''-. \\    \\")
+        print("\\  \\    \\-.      \\")
+        print("  \\  \\___\\ \\''\\___ \\")
+        print("    \\/___/  \\/___/")
+        print("   _________")
+        print(" / \\      _____\\")
+        print(" \\  \\______    \\")
+        print("  \\/ \\_________\\")
+        print("    \\ /_________/")
+        print("="*50)
+        
         bot_logger.debug("开始初始化机器人...")
         
         # 注入改进的代码

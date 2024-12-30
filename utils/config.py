@@ -1,7 +1,7 @@
 import os
 import yaml
 # 获取配置文件路径
-config_path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')), "config.yaml")
+config_path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')), "config", "config.yaml")
 
 # 读取配置文件
 with open(config_path, "r", encoding="utf-8") as f:

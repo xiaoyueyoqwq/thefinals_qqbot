@@ -297,10 +297,11 @@ class RankQuery:
                 # 等待一小段时间确保渲染完成
                 await asyncio.sleep(0.1)
 
-                # 截图
+                # 截图并压缩
                 screenshot = await self._page.screenshot(
                     full_page=True,
-                    type='png',
+                    type='jpeg',  # 使用jpeg格式以减小文件大小
+                    quality=85,   # 设置压缩质量
                     scale='device'
                 )
                 return screenshot
@@ -384,11 +385,6 @@ class RankQuery:
             if not image_data:
                 return None, "图片生成失败", None, None
                 
-            # 如果提供了message_api和group_id,执行并行上传
-            if message_api and group_id:
-                oss_result, qq_result = await self.upload_image(image_data, message_api, group_id)
-                return image_data, "", oss_result, qq_result
-            
             return image_data, "", None, None
             
         except Exception as e:

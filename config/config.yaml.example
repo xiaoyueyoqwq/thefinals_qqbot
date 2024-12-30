@@ -1,0 +1,13 @@
+bot:
+  appid: ""
+  token: ""
+  secret: ""  # 可选，用于oauth场景
+  sandbox: true  # 是否使用沙箱环境
+
+max_concurrent: 5  # 最大并发数
+max_workers: 10  # 最大工作线程数
+
+debug:
+  enabled: false  # 是否启用调试模式
+  test_reply: false  # 是否启用调试回复功能
+  message_id: false  # 是否在消息中显示消息ID 

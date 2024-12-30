@@ -132,6 +132,13 @@ class TestHelloPlugin(Plugin):
             bot_logger.error(f"base64图片发送测试失败: {str(e)}")
             await self.reply(handler, f"❌ 发生错误: {str(e)}")
 
+    @on_command("test", "测试参数传递")
+    async def test_params(self, handler, content):
+        """测试参数传递功能"""
+        parts = content.split(maxsplit=1)
+        param = parts[1] if len(parts) > 1 else "无参数"
+        await self.reply(handler, f"收到参数: {param}")
+
     async def on_load(self) -> None:
         """插件加载"""
         await super().on_load()

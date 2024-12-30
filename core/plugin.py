@@ -1,5 +1,5 @@
 """
-Plugin CORE [V1]
+Plugin CORE [V3]
 
 @ Author: Shuakami
 @ Docs: /docs/plugin.md
@@ -9,7 +9,7 @@ Plugin CORE [V1]
 import inspect
 import importlib.util
 import functools
-from typing import Dict, List, Optional, Any, Callable, Set
+from typing import Dict, List, Optional, Any, Callable, Set, Tuple
 from abc import ABC
 from botpy.message import Message
 from utils.message_handler import MessageHandler
@@ -177,8 +177,8 @@ class Plugin(ABC):
         self._config: Dict = {}  # 插件配置
         self._cache: Dict = {}  # 插件缓存
         self._states: Dict[str, Any] = {}  # 状态管理
-        self._keyword_handlers: Dict[str, Callable] = {}  # 关键词处理器映射
-        self._regex_handlers: List[tuple[re.Pattern, Callable]] = []  # 正则处理器列表
+        self._keyword_handlers: Dict[str, Tuple[Callable, bool]] = {}  # 关键词处理器映射
+        self._regex_handlers: List[Tuple[re.Pattern, Tuple[Callable, bool]]] = []  # 正则处理器列表
         self._keyword_handlers_lock = Lock()  # 锁用于_keyword_handlers
         self._regex_handlers_lock = Lock()  # 锁用于_regex_handlers
         self._messages: Dict[str, str] = {}  # 可定制消息模板
@@ -193,9 +193,9 @@ class Plugin(ABC):
             # 使用统一的注册逻辑
             decorators = {
                 '_is_command': (self.register_command, lambda m: (m._command, m._description)),
-                '_is_event_handler': (self.subscribe, lambda m: (m._event_type, method)),
-                '_is_keyword_handler': (self._register_keyword_handler, lambda m: (m._keywords, method)),
-                '_is_regex_handler': (self._register_regex_handler, lambda m: (m._pattern, method))
+                '_is_event_handler': (self.subscribe, lambda m: (m._event_type, m)),
+                '_is_keyword_handler': (self._register_keyword_handler, lambda m: (m._keywords, m)),
+                '_is_regex_handler': (self._register_regex_handler, lambda m: (m._pattern, m))
             }
             
             for attr, (register_func, get_args) in decorators.items():
@@ -206,7 +206,7 @@ class Plugin(ABC):
                         register_func(*get_args(method))
                     if attr == '_is_command':
                         setattr(self, f"_cmd_{method._command}", method)
-                
+    
     async def _handle_task_error(self, task_name: str, error: Exception):
         """统一的任务错误处理"""
         bot_logger.error(f"插件 {self.name} 执行 {task_name} 失败: {str(error)}")
@@ -274,19 +274,30 @@ class Plugin(ABC):
         await self._plugin_manager.dispatch_event(event)
 
     async def handle_event(self, event: Event) -> None:
-        """处理事件"""
+        """处理事件
+        Args:
+            event: 事件对象
+        """
         async with self._event_handlers_lock:
             handlers = self._event_handlers.get(event.type, set()).copy()
         
         for handler in handlers:
             try:
-                await handler(event)
+                # 动态传递参数
+                signature = inspect.signature(handler)
+                kwargs = {}
+                if 'event' in signature.parameters:
+                    kwargs['event'] = event
+                await handler(**kwargs)
             except Exception as e:
                 await self._handle_task_error("事件处理", e)
 
-    async def handle_message(self, handler: MessageHandler, content: str) -> None:
-        """处理消息"""
+    async def handle_message(self, handler: MessageHandler, content: str) -> bool:
+        """处理消息
+        返回是否有插件处理了该消息
+        """
         bot_logger.debug(f"[Plugin] {self.name} handling message: {content}")
+        handled = False
         
         # 先检查命令
         cmd = content.split()[0].lstrip("/")
@@ -295,43 +306,63 @@ class Plugin(ABC):
             if method:
                 try:
                     bot_logger.debug(f"[Plugin] {self.name} executing command: {cmd}")
-                    await method(handler, content)
-                    return
+                    signature = inspect.signature(method)
+                    kwargs = {}
+                    if 'handler' in signature.parameters:
+                        kwargs['handler'] = handler
+                    if 'content' in signature.parameters:
+                        kwargs['content'] = content
+                    await method(**kwargs)
+                    handled = True
                 except Exception as e:
                     await self._handle_task_error("消息处理", e)
-                    return
+                    return False  # 即使处理命令失败，也视为未处理
+                return handled  # 如果命令处理成功，返回True
         
         # 再检查关键词
         async with self._keyword_handlers_lock:
             keyword_handlers = self._keyword_handlers.copy()
-        for keyword, handler_func in keyword_handlers.items():
+        for keyword, handler_info in keyword_handlers.items():
             if keyword in content:
                 try:
                     bot_logger.debug(f"[Plugin] {self.name} matched keyword: {keyword}")
-                    # 获取处理器需要的参数个数
-                    params = inspect.signature(handler_func).parameters
-                    if len(params) > 2:  # self + handler + content
-                        await handler_func(handler, content)
-                    else:  # self + handler
-                        await handler_func(handler)
-                    return
+                    handler_func, needs_content = handler_info
+                    signature = inspect.signature(handler_func)
+                    kwargs = {}
+                    if 'handler' in signature.parameters:
+                        kwargs['handler'] = handler
+                    if 'content' in signature.parameters:
+                        kwargs['content'] = content
+                    await handler_func(**kwargs)
+                    handled = True
+                    return handled  # 假设关键词处理器处理后不再继续
                 except Exception as e:
                     await self._handle_task_error("关键词处理", e)
-                    return
-
+                    return False  # 如果关键词处理失败，视为未处理
+        
         # 最后检查正则
         async with self._regex_handlers_lock:
             regex_handlers = self._regex_handlers.copy()
-        for pattern, handler_func in regex_handlers:
+        for pattern, handler_info in regex_handlers:
             match = pattern.search(content)
             if match:
                 try:
                     bot_logger.debug(f"[Plugin] {self.name} matched regex: {pattern.pattern}")
-                    await handler_func(handler, content)
-                    return
+                    handler_func, needs_content = handler_info
+                    signature = inspect.signature(handler_func)
+                    kwargs = {}
+                    if 'handler' in signature.parameters:
+                        kwargs['handler'] = handler
+                    if 'content' in signature.parameters:
+                        kwargs['content'] = content
+                    await handler_func(**kwargs)
+                    handled = True
+                    return handled  # 假设正则处理器处理后不再继续
                 except Exception as e:
                     await self._handle_task_error("正则处理", e)
-                    return
+                    return False  # 如果正则处理失败，视为未处理
+        
+        return handled  # 如果未处理，返回False
 
     # 文件操作辅助方法
     def _get_plugin_path(self, *paths) -> Path:
@@ -430,6 +461,7 @@ class Plugin(ABC):
             image_data: 图片数据
             use_base64: 是否使用base64方式发送
         """
+        bot_logger.debug(f"[Plugin] {self.name} 回复图片消息, use_base64={use_base64}")
         return await handler.send_image(image_data, use_base64)
         
     async def recall_message(self, handler: MessageHandler) -> bool:
@@ -480,13 +512,13 @@ class Plugin(ABC):
                         new_msg_info.user_id == msg_info.user_id):
                         bot_logger.debug(f"[Plugin] Message matched, putting in queue: {content}")
                         await reply_queue.put(content)
-                        return True
+                        return True  # 表示消息已被处理
                     else:
                         bot_logger.debug(f"[Plugin] Message not matched: group_match={new_msg_info.group_id == msg_info.group_id}, "
                                        f"user_match={new_msg_info.user_id == msg_info.user_id}")
                 except Exception as e:
                     bot_logger.error(f"[Plugin] Error processing message: {str(e)}")
-                return False
+                return False  # 表示消息未被处理
             
             # 将处理器添加到插件管理器
             if self._plugin_manager:
@@ -534,6 +566,10 @@ class Plugin(ABC):
         unknown_command_message = self._messages.get("unknown_command").format(command_list=command_list)
         await self.reply(handler, unknown_command_message)
         
+    def get_command_list(self) -> Dict[str, str]:
+        """获取插件的命令列表"""
+        return self.commands
+    
     # 生命周期方法
     async def on_load(self) -> None:
         """插件加载时调用"""
@@ -563,16 +599,36 @@ class Plugin(ABC):
         return MessageInfo.from_handler(handler)
 
     async def _register_keyword_handler(self, keywords: tuple, handler: Callable) -> None:
-        """注册关键词处理器"""
+        """注册关键词处理器
+        Args:
+            keywords: 关键词元组
+            handler: 处理器函数
+        """
+        # 检查处理器是否需要content参数
+        signature = inspect.signature(handler)
+        needs_content = 'content' in signature.parameters
+        
+        bot_logger.debug(f"[Plugin] {self.name} registering keyword handler: needs_content={needs_content}")
+        
         async with self._keyword_handlers_lock:
             for keyword in keywords:
-                self._keyword_handlers[keyword] = handler
+                self._keyword_handlers[keyword] = (handler, needs_content)
 
     async def _register_regex_handler(self, pattern: str, handler: Callable) -> None:
-        """注册正则处理器"""
+        """注册正则处理器
+        Args:
+            pattern: 正则表达式模式
+            handler: 处理器函数
+        """
+        # 检查处理器是否需要content参数
+        signature = inspect.signature(handler)
+        needs_content = 'content' in signature.parameters
+        
+        bot_logger.debug(f"[Plugin] {self.name} registering regex handler: pattern={pattern}, needs_content={needs_content}")
+        
         compiled_pattern = re.compile(pattern)
         async with self._regex_handlers_lock:
-            self._regex_handlers.append((compiled_pattern, handler))
+            self._regex_handlers.append((compiled_pattern, (handler, needs_content)))
 
     async def reload(self) -> None:
         """热重载插件
@@ -636,7 +692,7 @@ class PluginManager:
         self._event_handlers: Dict[str, Set[Plugin]] = {}  # 事件类型到插件的映射
         self._event_handlers_lock = Lock()  # 锁用于_event_handlers
         self._event_queue: Queue[Event] = Queue()  # 事件队列
-        self._temp_handlers: List[Callable] = []
+        self._temp_handlers: List[Callable[[Message, MessageHandler, str], asyncio.Future]] = []
         self._temp_handlers_lock = Lock()  # 锁用于_temp_handlers
         self._plugin_load_lock = Lock()  # 锁用于插件加载
 
@@ -743,31 +799,35 @@ class PluginManager:
                 bot_logger.debug("[PluginManager] Trying temp handler")
                 if await temp_handler(handler.message, handler, content):
                     bot_logger.debug("[PluginManager] Message handled by temp handler")
-                    return True
+                    return True  # 消息已被处理，停止进一步处理
             except Exception as e:
                 bot_logger.error(f"[PluginManager] Temp handler failed: {str(e)}")
+        
+        handled = False
         
         # 遍历所有插件处理消息
         for plugin in self.plugins.values():
             if plugin.enabled:
                 try:
-                    await plugin.handle_message(handler, content)
-                    return True
+                    result = await plugin.handle_message(handler, content)
+                    if result:
+                        handled = True
                 except Exception as e:
                     bot_logger.error(f"插件 {plugin.name} 处理消息失败: {str(e)}")
                     continue
         
-        # 尝试让插件处理未知命令
-        for plugin in self.plugins.values():
-            if hasattr(plugin, 'unknown_command_response'):
-                try:
-                    await plugin.unknown_command_response(handler)
-                    return True
-                except Exception as e:
-                    bot_logger.error(f"插件 {plugin.name} 处理未知命令失败: {str(e)}")
-                    continue
-        return True
-            
+        if not handled:
+            # 尝试让插件处理未知命令
+            for plugin in self.plugins.values():
+                if hasattr(plugin, 'unknown_command_response') and plugin.enabled:
+                    try:
+                        await plugin.unknown_command_response(handler)
+                        handled = True
+                    except Exception as e:
+                        bot_logger.error(f"插件 {plugin.name} 处理未知命令失败: {str(e)}")
+                        continue
+        return handled
+                
     def get_command_list(self) -> Dict[str, str]:
         """获取所有已注册的命令列表"""
         commands = {}

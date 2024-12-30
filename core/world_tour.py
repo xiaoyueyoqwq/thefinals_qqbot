@@ -11,9 +11,9 @@ class WorldTourAPI(BaseAPI):
         self.platform = "crossplay"
         # 支持的赛季列表
         self.seasons = {
-            "s3": ("🎮", "第三赛季", "Season 3"),
-            "s4": ("🎯", "第四赛季", "Season 4"),
-            "s5": ("🌟", "第五赛季", "Season 5")
+            "s3": ("🎮", "s3", "Season 3"),
+            "s4": ("🎯", "s4", "Season 4"),
+            "s5": ("🌟", "s5", "Season 5")
         }
         # 设置默认请求头
         self.headers = {
@@ -96,29 +96,19 @@ class WorldTourQuery:
 
         # 获取第一个有效数据用于基本信息
         first_season, first_data = next(iter(valid_data.items()))
-        name, club_tag, platform, _, _ = self.api._format_player_data(first_data)
+        name, club_tag, platform, rank, cash = self.api._format_player_data(first_data)
+        season_icon, season_name, _ = self.api.seasons[first_season]
         
         # 构建响应
-        response = [
-            f"\n💰 世界巡回赛 | THE FINALS",
-            f"━━━━━━━━━━━━━",
-            f"📋 玩家: {name}{club_tag}",
-            f"🖥️ 平台: {platform}"
-        ]
-        
-        # 添加每个赛季的数据
-        for season, data in valid_data.items():
-            _, _, _, rank, cash = self.api._format_player_data(data)
-            season_icon, season_name, _ = self.api.seasons[season]
-            response.extend([
-                f"",
-                f"{season_icon} {season_name}:",
-                f"📊 排名: {rank}",
-                f"💵 奖金: ${cash}"
-            ])
-        
-        response.append("━━━━━━━━━━━━━")
-        return "\n".join(response)
+        return (
+            f"\n💰 {season_name}世界巡回赛 | THE FINALS\n"
+            f"━━━━━━━━━━━━━\n"
+            f"📋 玩家: {name}{club_tag}\n"
+            f"🖥️ 平台: {platform}\n"
+            f"📊 排名: {rank}\n"
+            f"💵 奖金: ${cash}\n"
+            f"━━━━━━━━━━━━━"
+        )
 
     async def process_wt_command(self, player_name: str) -> str:
         """处理世界巡回赛查询命令"""

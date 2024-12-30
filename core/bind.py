@@ -161,7 +161,7 @@ class BindManager:
         if self.bind_user(user_id, args):
             return (
                 "✅ 绑定成功！\n"
-                "━━━━━━━━━━━━━━━\n"
+                "━━━━━━━━━━━━━\n"
                 f"游戏ID: {args}\n\n"
                 "现在可以直接使用:\n"
                 "/r - 查询排位\n"

@@ -1,8 +1,9 @@
+from core.plugin import Plugin, on_command, on_keyword, on_regex, on_event, Event, EventType
 from utils.message_api import MessageType
 from utils.message_handler import MessageHandler
-from utils.plugin import Plugin
 from core.rank import RankQuery
 from core.bind import BindManager
+from utils.logger import bot_logger
 import json
 import os
 import random
@@ -11,31 +12,32 @@ class RankPlugin(Plugin):
     """排名查询插件"""
     
     def __init__(self, bind_manager: BindManager):
+        """初始化排名查询插件"""
         super().__init__()
         self.rank_query = RankQuery()
         self.bind_manager = bind_manager
-        
-        # 注册命令
-        self.register_command("rank", "查询排名信息")
-        self.register_command("r", "查询排名信息（简写）")
-        
-        # 加载小知识数据
         self.tips = self._load_tips()
+        bot_logger.debug(f"[{self.name}] 初始化排名查询插件")
         
     def _load_tips(self) -> list:
         """加载小知识数据"""
         try:
             tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "did_you_know.json")
+            bot_logger.debug(f"[{self.name}] 正在加载小知识文件: {tips_path}")
             with open(tips_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get("tips", [])
+                tips = data.get("tips", [])
+                bot_logger.info(f"[{self.name}] 成功加载 {len(tips)} 条小知识")
+                return tips
         except Exception as e:
+            bot_logger.error(f"[{self.name}] 加载小知识数据失败: {str(e)}")
             return []
             
     def _get_random_tip(self) -> str:
         """获取随机小知识"""
         if not self.tips:
-            return ""
+            bot_logger.warning(f"[{self.name}] 小知识列表为空")
+            return "暂无小知识"
         return random.choice(self.tips)
 
     def _format_loading_message(self, player_name: str, season: str) -> str:
@@ -48,46 +50,62 @@ class RankPlugin(Plugin):
         ]
         return "\n".join(message)
         
-    async def handle_message(self, handler: MessageHandler, content: str) -> None:
-        """处理排名查询命令"""
-        parts = content.split(maxsplit=1)
-        if len(parts) <= 1:
-            player_name = self.bind_manager.get_game_id(handler.message.author.member_openid)
-        else:
-            # 正确分割玩家ID和赛季
-            args = parts[1].split()
-            player_name = args[0]
-            season = args[1].lower() if len(args) > 1 else "s5"
-        
-        if not player_name:
-            await handler.send_text("❌ 请提供游戏ID或使用 /bind 绑定您的游戏ID")
-            return
+    @on_command("rank", "查询排名信息")
+    async def query_rank(self, handler: MessageHandler, content: str) -> None:
+        """处理rank命令查询排名"""
+        try:
+            bot_logger.debug(f"[{self.name}] 收到rank命令: {content}")
+            parts = content.split(maxsplit=1)
             
-        # 发送初始提示消息
-        await handler.send_text(self._format_loading_message(player_name, season))
+            # 解析玩家ID和赛季
+            if len(parts) <= 1:
+                player_name = self.bind_manager.get_game_id(handler.message.author.member_openid)
+                season = "s5"  # 默认赛季
+            else:
+                args = parts[1].split()
+                player_name = args[0]
+                season = args[1].lower() if len(args) > 1 else "s5"
             
-        # 使用并行上传功能
-        image_data, error_msg, oss_result, qq_result = await self.rank_query.process_rank_command(
-            f"{player_name} {season}" if len(args) > 1 else player_name,
-            message_api=handler._api,
-            group_id=handler.message.group_openid if handler.is_group else None
-        )
-        
-        if error_msg:
-            await handler.send_text(f"❌ {error_msg}")
-            return
+            bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
-        if handler.is_group and oss_result and qq_result:
-            # 直接发送富媒体消息
-            media_payload = handler._api.create_media_payload(qq_result["file_info"])
-            await handler._api.send_to_group(
-                group_id=handler.message.group_openid,
-                content=" ",
-                msg_type=MessageType.MEDIA,
-                msg_id=handler.message.id,
-                media=media_payload
+            if not player_name:
+                await self.reply(handler, "❌ 请提供游戏ID或使用 /bind 绑定您的游戏ID")
+                return
+                
+            # 发送初始提示消息
+            await self.reply(handler, self._format_loading_message(player_name, season))
+                
+            # 查询排名并生成图片
+            image_data, error_msg, _, _ = await self.rank_query.process_rank_command(
+                f"{player_name} {season}" if len(args) > 1 else player_name
             )
-        else:
-            # 如果不是群聊或上传失败,使用原始方式发送
-            if not await handler.send_image(image_data):
-                await handler.send_text("❌ 发送图片时发生错误") 
+            
+            if error_msg:
+                bot_logger.error(f"[{self.name}] 查询失败: {error_msg}")
+                await self.reply(handler, f"❌ {error_msg}")
+                return
+                
+            # 使用handler的send_image方法发送图片
+            bot_logger.debug(f"[{self.name}] 使用base64发送图片")
+            if not await handler.send_image(image_data, use_base64=True):
+                await self.reply(handler, "❌ 发送图片时发生错误")
+                    
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 处理rank命令时发生错误: {str(e)}", exc_info=True)
+            await self.reply(handler, "⚠️ 查询失败，请稍后重试")
+            
+    @on_command("r", "查询排名信息（简写）")
+    async def query_rank_short(self, handler: MessageHandler, content: str) -> None:
+        """处理r命令查询排名（简写）"""
+        bot_logger.debug(f"[{self.name}] 收到r命令，转发到rank处理")
+        await self.query_rank(handler, content)
+            
+    async def on_load(self) -> None:
+        """插件加载时的处理"""
+        await super().on_load()
+        bot_logger.info(f"[{self.name}] 排名查询插件已加载")
+        
+    async def on_unload(self) -> None:
+        """插件卸载时的处理"""
+        await super().on_unload()
+        bot_logger.info(f"[{self.name}] 排名查询插件已卸载") 
