@@ -1,0 +1,21 @@
+{
+  "name": "the-finals-api",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:remote": "wrangler dev --remote",
+    "deploy": "wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "biome": "npx @biomejs/biome check --write ."
+  },
+  "dependencies": {
+    "@hono/zod-openapi": "^0.16.4",
+    "@scalar/hono-api-reference": "^0.5.158",
+    "hono": "^4.6.8",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.2",
+    "@cloudflare/workers-types": "^4.20240605.0",
+    "wrangler": "^3.95.0"
+  }
+}
