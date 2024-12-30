@@ -50,6 +50,11 @@ class ColoredFormatter(logging.Formatter):
         # 直接为日志级别添加颜色
         color = self.COLORS.get(record.levelname, '')
         record.levelname = f"{color}{record.levelname}{Style.RESET_ALL}"
+        
+        # 如果是错误级别,自动添加堆栈信息
+        if record.levelno >= logging.ERROR and not record.exc_info:
+            record.exc_info = sys.exc_info()
+            
         return super().format(record)
 
 def create_handler(is_console: bool = False) -> logging.Handler:
@@ -57,13 +62,13 @@ def create_handler(is_console: bool = False) -> logging.Handler:
     if is_console:
         handler = logging.StreamHandler()
         formatter = ColoredFormatter(
-            '[%(asctime)s] [%(levelname)s] %(message)s',
+            '[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
     else:
         handler = logging.FileHandler(get_log_file_path(), encoding='utf-8', mode='w')
         formatter = logging.Formatter(
-            '[%(asctime)s] [%(levelname)s] %(message)s',
+            '[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
     
@@ -88,5 +93,30 @@ def setup_logger() -> logging.Logger:
     
     return logger
 
+class LogProxy:
+    """日志代理类，提供简化的日志接口"""
+    def __init__(self, logger):
+        self._logger = logger
+        
+    def debug(self, msg, *args, **kwargs):
+        self._logger.debug(msg, *args, **kwargs)
+        
+    def info(self, msg, *args, **kwargs):
+        self._logger.info(msg, *args, **kwargs)
+        
+    def warning(self, msg, *args, **kwargs):
+        self._logger.warning(msg, *args, **kwargs)
+        
+    def error(self, msg, *args, **kwargs):
+        self._logger.error(msg, *args, **kwargs)
+        
+    def critical(self, msg, *args, **kwargs):
+        self._logger.critical(msg, *args, **kwargs)
+
 # 建全局日志实例
 bot_logger = setup_logger()
+# 创建简化的log对象
+log = LogProxy(bot_logger)
+
+# 导出
+__all__ = ['bot_logger', 'log']

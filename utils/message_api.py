@@ -320,14 +320,21 @@ class MessageAPI:
         """创建媒体消息负载"""
         return {"file_info": file_info}
         
-    async def upload_group_file(self, group_id: str, file_type: FileType, url: str) -> Optional[Dict]:
-        """上传群文件"""
+    async def upload_group_file(self, group_id: str, file_type: FileType, url: str = None, file_data: str = None) -> Optional[Dict]:
+        """上传群文件
+        Args:
+            group_id: 群ID
+            file_type: 文件类型
+            url: 文件URL
+            file_data: 文件base64数据
+        """
         try:
-            bot_logger.debug(f"群文件上传开始 - group_id: {group_id}, type: {file_type}, url: {url}")
+            bot_logger.debug(f"群文件上传开始 - group_id: {group_id}, type: {file_type}")
             result = await self._api.post_group_file(
                 group_openid=group_id,
                 file_type=file_type.value,
                 url=url,
+                file_data=file_data,
                 srv_send_msg=False
             )
             bot_logger.debug(f"群文件上传成功: {result}")
@@ -336,17 +343,57 @@ class MessageAPI:
             bot_logger.error(f"群文件上传失败: {str(e)}")
             return None
             
-    async def send_to_group(self, group_id: str, content: str, msg_type: MessageType, msg_id: str, media: Optional[Dict] = None) -> bool:
-        """发送群消息"""
-        message = QueuedMessage(
-            group_id=group_id,
-            msg_type=msg_type,
-            content=content.replace("━", "-"),  # 替换特殊字符
-            msg_id=msg_id,
-            media=media,
-            timestamp=time.time()
-        )
-        return await self.controller.send(message, self._api)
+    async def send_to_group(self, group_id: str, content: str, msg_type: MessageType, msg_id: str, media: Optional[Dict] = None, image_base64: Optional[str] = None) -> bool:
+        """发送群消息
+        Args:
+            group_id: 群ID
+            content: 消息内容
+            msg_type: 消息类型
+            msg_id: 消息ID
+            media: 媒体信息
+            image_base64: 图片base64数据
+        """
+        try:
+            # 如果提供了base64图片，先上传
+            if image_base64:
+                file_result = await self.upload_group_file(
+                    group_id=group_id,
+                    file_type=FileType.IMAGE,
+                    file_data=image_base64
+                )
+                if not file_result:
+                    return False
+                media = self.create_media_payload(file_result["file_info"])
+                msg_type = MessageType.MEDIA
+                
+            message = QueuedMessage(
+                group_id=group_id,
+                msg_type=msg_type,
+                content=content.replace("━", "-"),  # 替换特殊字符
+                msg_id=msg_id,
+                media=media,
+                timestamp=time.time()
+            )
+            return await self.controller.send(message, self._api)
+        except Exception as e:
+            bot_logger.error(f"发送群消息失败: {str(e)}")
+            return False
+            
+    async def recall_group_message(self, group_id: str, message_id: str) -> bool:
+        """撤回群消息
+        Args:
+            group_id: 群ID
+            message_id: 消息ID
+        """
+        try:
+            await self._api.recall_group_message(
+                group_openid=group_id,
+                message_id=message_id
+            )
+            return True
+        except Exception as e:
+            bot_logger.error(f"撤回群消息失败: {str(e)}")
+            return False
         
     async def send_to_user(self, user_id: str, content: str, msg_type: MessageType, msg_id: str, file_image: Optional[bytes] = None) -> bool:
         """发送私聊消息"""
