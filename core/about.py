@@ -15,7 +15,7 @@ class AboutUs:
         if self._initialized:
             return
             
-        self.version = "v0.1.2"
+        self.version = "v1.0.0"
         self.github_url = "https://github.com/xiaoyueyoqwq"
         self.api_credit = "https://api.the-finals-leaderboard.com"
         self._initialized = True
@@ -42,7 +42,7 @@ class AboutUs:
                 "• 绑定ID后可直接使用 /r 或 /wt\n"
                 "• 部分指令可能存在延迟，请耐心等待数据输出\n\n"
                 "📋 项目信息:\n"
-                f"• 版本: OpenBeta {self.version}\n"
+                f"• 版本: Release {self.version}\n"
                 "• 开发者: xiaoyueyoqwq\n"
                 "• UX/UI设计：SHIA_NANA\n"
                 "• 技术支持：Shuakami\n\n"
