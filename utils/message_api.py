@@ -271,9 +271,13 @@ class MessageController:
             message.seq = await self.sequence.get_next(message.group_id)
             
             # 构造参数
+            content = message.content
+            if hasattr(api, "_show_message_id") and api._show_message_id:
+                content = f"{content} [{random.randint(1000, 9999)}]"
+                
             params = {
                 "msg_type": message.msg_type.value,
-                "content": f"{message.content} [{random.randint(1000, 9999)}]",
+                "content": content,
                 "msg_seq": message.seq,
                 "msg_id": message.msg_id
             }
@@ -303,11 +307,12 @@ class MessageController:
 
 class MessageAPI:
     """消息API"""
-    def __init__(self, api: Any):
+    def __init__(self, api: Any, config: Dict = None):
         self._api = api
         self.config = MessageConfig()
         self.config.validate()
         self.controller = MessageController(self.config)
+        self._show_message_id = config.get("message_id", False) if config else False
         asyncio.create_task(self.controller.start())
         bot_logger.info("MessageAPI初始化完成")
         

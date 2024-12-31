@@ -1,5 +1,7 @@
 import os
 import yaml
+from utils.logger import bot_logger
+
 # 获取配置文件路径
 config_path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')), "config", "config.yaml")
 
@@ -16,13 +18,6 @@ class Settings:
     
     # Debug 配置
     DEBUG_TEST_REPLY = _config["debug"]["test_reply"]
-
-    # OSS配置
-    OSS_ACCESS_KEY = _config["oss"]["access_key"]  # 多吉云 AccessKey
-    OSS_SECRET_KEY = _config["oss"]["secret_key"]  # 多吉云 SecretKey
-    OSS_BUCKET = _config["oss"]["bucket"]  # 存储空间名称
-    OSS_BUCKET_URL = _config["oss"]["bucket_url"]  # 存储空间域名 
-    OSS_IMAGE_RULE = _config["oss"]["image_rule"]  # 图片规则
     
     # 线程配置
     MAX_CONCURRENT = _config["max_concurrent"]  # 最大并发数

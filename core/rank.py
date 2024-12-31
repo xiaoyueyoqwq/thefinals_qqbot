@@ -5,7 +5,6 @@ from playwright.async_api import Page
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.browser import browser_manager
-from utils.doge_oss import doge_oss
 from utils.message_api import FileType, MessageAPI
 import uuid
 
@@ -315,78 +314,76 @@ class RankQuery:
                 self._preheated = False
             return None
 
-    async def upload_image(self, image_data: bytes, message_api: MessageAPI, group_id: str) -> Tuple[Optional[Dict], Optional[Dict]]:
-        """并行上传图片到OSS和QQ服务器"""
-        try:
-            # 生成唯一文件名
-            file_key = f"images/{uuid.uuid4()}.png"
-            
-            # 并行上传到OSS和QQ服务器
-            oss_task = asyncio.create_task(
-                doge_oss.upload_image(
-                    key=file_key,
-                    image_data=image_data
-                )
+    def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]]) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
+        """格式化响应消息"""
+        # 检查是否有任何赛季的数据
+        valid_data = {season: data for season, data in season_data.items() if data}
+        if not valid_data:
+            error_msg = (
+                    "⚠️ 未找到玩家数据\n"
+                    "━━━━━━━━━━━━━\n"
+                    "可能的原因:\n"
+                    "1. 玩家ID输入错误\n"
+                    "2. 玩家排名太低\n"
+                    "3. 你是zako\n"
+                    "━━━━━━━━━━━━━\n"
+                    "💡 提示: 你可以:\n"
+                    "1. 检查ID是否正确\n"
+                    "2. 尝试使用精确搜索\n"
+                    "3. 尝试查询其他赛季"
             )
-            
-            # 等待OSS上传完成获取URL
-            oss_result = await oss_task
-            
-            # 使用OSS的URL上传到QQ
-            qq_task = asyncio.create_task(
-                message_api.upload_group_file(
-                    group_id=group_id,
-                    file_type=FileType.IMAGE,
-                    url=oss_result["url"]
-                )
-            )
-            
-            # 等待QQ上传完成
-            qq_result = await qq_task
-            
-            return oss_result, qq_result
-            
-        except Exception as e:
-            bot_logger.error(f"上传图片时出错: {str(e)}")
-            return None, None
+            return None, error_msg, None, None
 
-    async def process_rank_command(self, args: str, message_api: Optional[MessageAPI] = None, group_id: Optional[str] = None) -> Tuple[Optional[bytes], str, Optional[Dict], Optional[Dict]]:
+    async def process_rank_command(self, player_name: str = None, season: str = None) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
         """处理排位查询命令"""
-        if not args:
-            return None, "请提供玩家ID", None, None
-
-        # 分割参数
-        parts = args.split()
+        if not player_name:
+            error_msg = (
+                "❌ 未提供玩家ID\n"
+                "━━━━━━━━━━━━━\n"
+                "🎮 使用方法:\n"
+                "1. /rank 玩家ID\n"
+                "2. /rank 玩家ID 赛季\n"
+                "━━━━━━━━━━━━━\n"
+                "💡 小贴士:\n"
+                "1. 可以使用 /bind 绑定ID\n"
+                "2. 赛季可选: s1~s5\n"
+                "3. 可尝试模糊搜索"
+            )
+            return None, error_msg, None, None
+            
+        # 解析玩家ID和赛季
+        parts = player_name.split()
         player_name = parts[0]
-        season = parts[1].lower() if len(parts) > 1 else "s5"
-
-        # 验证赛季
+        season = parts[1].lower() if len(parts) > 1 else season or "s5"
+        
+        # 检查赛季是否有效
         if season not in self.seasons:
-            return None, f"无效的赛季: {season}", None, None
-
+            error_msg = f"❌ 无效的赛季: {season}\n支持的赛季: {', '.join(self.seasons.keys())}"
+            return None, error_msg, None, None
+            
         try:
-            # 并行执行API请求和页面准备
-            api_task = asyncio.create_task(self.api.get_player_stats(player_name, season))
-            page_task = asyncio.create_task(self._ensure_page_ready())
+            # 查询玩家数据
+            season_data = {season: await self.api.get_player_stats(player_name, season)}
             
-            # 等待两个任务完成
-            player_data, _ = await asyncio.gather(api_task, page_task)
-            
-            if not player_data:
-                return None, "未找到玩家数据", None, None
-
+            # 检查数据并格式化响应
+            if not any(season_data.values()):
+                return self.format_response(player_name, season_data)
+                
             # 准备模板数据
-            template_data = self.prepare_template_data(player_data, season)
+            template_data = self.prepare_template_data(season_data[season], season)
             if not template_data:
-                return None, "数据处理失败", None, None
-
+                error_msg = "⚠️ 处理玩家数据时出错"
+                return None, error_msg, None, None
+                
             # 生成图片
             image_data = await self.generate_rank_image(template_data)
             if not image_data:
-                return None, "图片生成失败", None, None
+                error_msg = "⚠️ 生成图片时出错"
+                return None, error_msg, None, None
                 
-            return image_data, "", None, None
+            return image_data, None, season_data, template_data
             
         except Exception as e:
-            bot_logger.error(f"处理排位查询命令时出错: {str(e)}")
-            return None, "处理请求时发生错误", None, None
+            bot_logger.error(f"处理rank命令时出错: {str(e)}")
+            error_msg = "⚠️ 查询失败，请稍后重试"
+            return None, error_msg, None, None

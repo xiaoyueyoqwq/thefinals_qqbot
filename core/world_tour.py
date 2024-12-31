@@ -35,7 +35,19 @@ class WorldTourAPI(BaseAPI):
             if not isinstance(data, dict) or not data.get("count"):
                 return None
                 
-            return data["data"][0] if data.get("data") else None
+            # 如果是完整ID，直接返回第一个匹配
+            if "#" in player_name:
+                return data["data"][0] if data.get("data") else None
+                
+            # 否则进行模糊匹配
+            matches = []
+            for player in data.get("data", []):
+                name = player.get("name", "").lower()
+                if player_name.lower() in name:
+                    matches.append(player)
+                    
+            # 返回最匹配的结果（通常是第一个）
+            return matches[0] if matches else None
             
         except Exception as e:
             bot_logger.error(f"查询失败 - 赛季: {season}, 错误: {str(e)}")
@@ -87,11 +99,18 @@ class WorldTourQuery:
         valid_data = {season: data for season, data in season_data.items() if data}
         if not valid_data:
             return (
-                "⚠️ 未找到该玩家的世界巡回赛数据\n"
-                "请确保:\n"
-                "1. 输入了正确的游戏ID\n"
-                "2. 输入了完整的包括代号的ID\n"
-                "3. 玩家在巡回赛排行榜较为活跃"
+                "⚠️ 未找到玩家数据\n"
+                "━━━━━━━━━━━━━\n"
+                "可能的原因:\n"
+                "1. 玩家ID输入或绑定错误\n"
+                "2. 玩家巡回赛排名太低\n"
+                "3. 玩家和NamaTama不是好朋友\n"
+                "━━━━━━━━━━━━━\n"
+                "💡 提示: 你可以:\n"
+                "1. 检查ID是否正确\n"
+                "2. 尝试使用精确搜索\n"
+                "3. 成为pro哥，惊艳群u们\n"
+                "━━━━━━━━━━━━━"
             )
 
         # 获取第一个有效数据用于基本信息
@@ -110,15 +129,20 @@ class WorldTourQuery:
             f"━━━━━━━━━━━━━"
         )
 
-    async def process_wt_command(self, player_name: str) -> str:
+    async def process_wt_command(self, player_name: str = None) -> str:
         """处理世界巡回赛查询命令"""
         if not player_name:
             return (
-                "\n📝 世界巡回赛查询说明\n"
+                "❌ 未提供玩家ID\n"
                 "━━━━━━━━━━━━━\n"
-                "格式: /wt <玩家ID>\n"
-                "示例: /wt PlayerName#1234\n"
-                "\n支持查询所有赛季数据"
+                "🎮 使用方法:\n"
+                "1. /wt 玩家ID\n"
+                "2. /wt 玩家ID 赛季\n"
+                "━━━━━━━━━━━━━\n"
+                "💡 小贴士:\n"
+                "1. 可以使用 /bind 绑定ID\n"
+                "2. 赛季可选: s3~s5\n"
+                "3. 可尝试模糊搜索"
             )
 
         bot_logger.info(f"查询玩家 {player_name} 的世界巡回赛数据")

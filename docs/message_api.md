@@ -10,7 +10,7 @@
 - "稳定的测试环境" -> 实际：沙箱环境比正式环境还不稳定
 - "活跃的开发社区" -> 实际：issue堆积如山
 
-如果以上经历对你来说似曾相识，那么恭喜你，你已经成为了某些设计的“高级...品鉴师”。
+如果以上经历对你来说似曾相识，那么恭喜你，你已经成为了某些设计的"高级...品鉴师"。
 
 
 
@@ -20,7 +20,7 @@
 
 - 消息类型混乱得令人发指（0/1/2/3/4/7），连续数字？不存在的。
 - 参数可选性强到你怀疑人生，到底哪个是必须的？
-- 错误提示全靠想象：“invalid msgType” -> 什么是valid的？没人知道。
+- 错误提示全靠想象："invalid msgType" -> 什么是valid的？没人知道。
 - API设计前后矛盾，file\_type和msg\_type数值不一致，仿佛两个团队开发。
 - 图片上传接口设计离谱：
   - `upload_group_file` 只支持 URL。
@@ -30,7 +30,7 @@
 ### 2. 稳定性特色
 
 - 消息发送成功率堪比抽卡。
-- 官方报错：“消息被去重，请检查msgseq” -> 这还是中文吗？
+- 官方报错："消息被去重，请检查msgseq" -> 这还是中文吗？
 - 响应速度时快时慢，快的时候1s，慢的时候...希望你的用户够耐心。
 - 并发限制严格，但是文档里找不到具体数值。
 
@@ -192,21 +192,28 @@ await message_api.send_to_group(
 )
 
 # 发送图片消息
-# 1. 先上传图片到OSS获取URL
-from utils.doge_oss import doge_oss
-image_info = await doge_oss.upload_image(
-    key="images/example.png",
-    image_data=image_bytes,
-    image_type="png"
-)
+# 使用 base64 方式发送图片：
+```python
+# 读取图片数据
+with open("image.png", "rb") as f:
+    image_data = f.read()
 
-# 2. 发送图片消息
+# 转换为base64并发送
+image_base64 = base64.b64encode(image_data).decode('utf-8')
 await message_api.send_to_group(
     group_id="group_123",
-    content=image_info["url"],  # 使用OSS的URL
-    msg_type=MessageType.MIXED,  # 使用MIXED类型
-    msg_id="msg_124"
+    content=" ",
+    msg_type=MessageType.MEDIA,
+    msg_id="msg_124",
+    image_base64=image_base64
 )
+```
+
+或者使用 MessageHandler：
+```python
+# 使用 MessageHandler 发送图片
+await handler.send_image(image_data)
+```
 
 # 上传群文件（注意：这是上传到群文件，不是发送图片）
 file_result = await message_api.upload_group_file(

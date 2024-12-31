@@ -17,6 +17,13 @@ from core.bind import BindManager
 import types
 import functools
 from enum import IntEnum
+from plugins.bind_plugin import BindPlugin
+from plugins.about_plugin import AboutPlugin
+from plugins.rank_plugin import RankPlugin
+from plugins.world_tour_plugin import WorldTourPlugin
+from plugins.test_hello import TestHelloPlugin
+from plugins.oxy_egg import OxyEggPlugin
+from plugins.lock_plugin import LockPlugin
 
 
 # 定义消息类型枚举
@@ -447,6 +454,24 @@ class MyBot(botpy.Client):
         except Exception as e:
             bot_logger.error(f"插件初始化失败: {str(e)}")
             raise
+
+    async def _register_plugins(self) -> None:
+        """注册插件"""
+        bind_plugin = BindPlugin()
+        about_plugin = AboutPlugin()
+        lock_plugin = LockPlugin(bind_plugin)
+        rank_plugin = RankPlugin(bind_plugin, lock_plugin)
+        world_tour_plugin = WorldTourPlugin(bind_plugin, lock_plugin)
+        test_hello_plugin = TestHelloPlugin()
+        oxy_egg_plugin = OxyEggPlugin()
+        
+        await self.plugin_manager.register_plugin(bind_plugin)
+        await self.plugin_manager.register_plugin(about_plugin)
+        await self.plugin_manager.register_plugin(lock_plugin)
+        await self.plugin_manager.register_plugin(rank_plugin)
+        await self.plugin_manager.register_plugin(world_tour_plugin)
+        await self.plugin_manager.register_plugin(test_hello_plugin)
+        await self.plugin_manager.register_plugin(oxy_egg_plugin)
 
 def main():
     try:

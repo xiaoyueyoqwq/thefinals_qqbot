@@ -7,15 +7,17 @@ from utils.logger import bot_logger
 import json
 import os
 import random
+import traceback
 
 class RankPlugin(Plugin):
     """排名查询插件"""
     
-    def __init__(self, bind_manager: BindManager):
+    def __init__(self, bind_manager: BindManager, lock_plugin = None):
         """初始化排名查询插件"""
         super().__init__()
         self.rank_query = RankQuery()
         self.bind_manager = bind_manager
+        self.lock_plugin = lock_plugin
         self.tips = self._load_tips()
         bot_logger.debug(f"[{self.name}] 初始化排名查询插件")
         
@@ -50,6 +52,28 @@ class RankPlugin(Plugin):
         ]
         return "\n".join(message)
         
+    async def _check_id_protected(self, handler: MessageHandler, player_name: str) -> bool:
+        """检查ID是否被保护"""
+        if not self.lock_plugin:
+            return False
+            
+        # 如果是玩家自己查询自己，允许查询
+        user_id = handler.message.author.member_openid
+        bound_id = self.bind_manager.get_game_id(user_id)
+        if bound_id and bound_id.lower() == player_name.lower():
+            return False
+            
+        # 检查ID是否被保护
+        if self.lock_plugin.is_id_protected(player_name):
+            await handler.send_text(
+                "❌ 该ID已被保护\n"
+                "━━━━━━━━━━━━━\n"
+                "该玩家已开启ID保护，无法查询其信息"
+            )
+            return True
+            
+        return False
+
     @on_command("rank", "查询排名信息")
     async def query_rank(self, handler: MessageHandler, content: str) -> None:
         """处理rank命令查询排名"""
@@ -61,6 +85,7 @@ class RankPlugin(Plugin):
             if len(parts) <= 1:
                 player_name = self.bind_manager.get_game_id(handler.message.author.member_openid)
                 season = "s5"  # 默认赛季
+                args = []  # 确保args变量存在
             else:
                 args = parts[1].split()
                 player_name = args[0]
@@ -69,7 +94,22 @@ class RankPlugin(Plugin):
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
             if not player_name:
-                await self.reply(handler, "❌ 请提供游戏ID或使用 /bind 绑定您的游戏ID")
+                await self.reply(handler, (
+                    "❌ 未提供玩家ID\n"
+                    "━━━━━━━━━━━━━\n"
+                    "🎮 使用方法:\n"
+                    "1. /rank 玩家ID\n"
+                    "2. /rank 玩家ID 赛季\n"
+                    "━━━━━━━━━━━━━\n"
+                    "💡 小贴士:\n"
+                    "1. 可以使用 /bind 绑定ID\n"
+                    "2. 赛季可选: s1~s5\n"
+                    "3. 需要输入完整ID"
+                ))
+                return
+
+            # 检查ID是否被保护
+            if await self._check_id_protected(handler, player_name):
                 return
                 
             # 发送初始提示消息
@@ -77,19 +117,22 @@ class RankPlugin(Plugin):
                 
             # 查询排名并生成图片
             image_data, error_msg, _, _ = await self.rank_query.process_rank_command(
-                f"{player_name} {season}" if len(args) > 1 else player_name
+                f"{player_name} {season}" if args else player_name
             )
             
             if error_msg:
                 bot_logger.error(f"[{self.name}] 查询失败: {error_msg}")
-                await self.reply(handler, f"❌ {error_msg}")
+                await self.reply(handler, error_msg)
                 return
                 
             # 使用handler的send_image方法发送图片
             bot_logger.debug(f"[{self.name}] 使用base64发送图片")
-            if not await handler.send_image(image_data, use_base64=True):
-                await self.reply(handler, "❌ 发送图片时发生错误")
+            if not await handler.send_image(image_data):
+                await self.reply(handler, "⚠️ 发送图片时发生错误")
                     
+        except TypeError as e:
+            bot_logger.error(f"[{self.name}] 查询返回值格式错误: {str(e)}", exc_info=True)
+            await self.reply(handler, "⚠️ 查询失败，请稍后重试")
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理rank命令时发生错误: {str(e)}", exc_info=True)
             await self.reply(handler, "⚠️ 查询失败，请稍后重试")

@@ -87,7 +87,7 @@ class TestHelloPlugin(Plugin):
     @on_command("image", "测试发送图片")
     async def test_image(self, handler, content):
         """测试发送图片"""
-        await self.reply_image(handler, "resources/images/thefinals.png")
+        await self.reply_image(handler, "resources/images/thefinals_logo.png")
         await self.reply(handler, "已发送测试图片") 
 
     @on_command("savedata", "保存数据")
@@ -116,7 +116,7 @@ class TestHelloPlugin(Plugin):
         """测试base64图片发送"""
         try:
             # 读取测试图片
-            async with aiofiles.open("data/test.png", "rb") as f:
+            async with aiofiles.open("resources/images/thefinals_logo.png", "rb") as f:
                 image_data = await f.read()
             
             # 使用base64方式发送
@@ -131,13 +131,6 @@ class TestHelloPlugin(Plugin):
         except Exception as e:
             bot_logger.error(f"base64图片发送测试失败: {str(e)}")
             await self.reply(handler, f"❌ 发生错误: {str(e)}")
-
-    @on_command("test", "测试参数传递")
-    async def test_params(self, handler, content):
-        """测试参数传递功能"""
-        parts = content.split(maxsplit=1)
-        param = parts[1] if len(parts) > 1 else "无参数"
-        await self.reply(handler, f"收到参数: {param}")
 
     async def on_load(self) -> None:
         """插件加载"""
