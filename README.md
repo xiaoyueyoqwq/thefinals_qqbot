@@ -48,3 +48,17 @@ python bot.py
 - `plugin.md` - 插件系统说明
 - `message_api.md` - 消息API说明
 - `extension_guide.md` - 扩展开发指南
+
+## 许可协议
+本项目采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh) 协议开源。
+
+您可以自由地：
+- 共享 — 在任何媒介以任何形式复制、发行本作品
+- 演绎 — 修改、转换或以本作品为基础进行创作
+- 在任何用途下，甚至商业目的
+
+惟须遵守下列条件：
+- 署名 — 您必须给出适当的署名，提供指向本许可协议的链接
+- 相同方式共享 — 您必须基于与原先许可协议相同的许可协议分发您贡献的作品
+
+详细信息请查看 [LICENSE](LICENSE) 文件。
