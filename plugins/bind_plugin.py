@@ -43,7 +43,7 @@ class BindPlugin(Plugin):
         # 处理绑定请求
         if not self._validate_game_id(args):
             await self.reply(handler,
-                "❌ 无效的游戏ID格式\n"
+                "\n❌ 无效的游戏ID格式\n"
                 "━━━━━━━━━━━━━━━\n"
                 "正确格式: PlayerName#1234\n"
                 "要求:\n"
