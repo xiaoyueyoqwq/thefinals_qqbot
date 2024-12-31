@@ -3,6 +3,7 @@ bot:
   token: ""
   secret: ""  # 可选，用于oauth场景
   sandbox: true  # 是否使用沙箱环境
+  zako_pic: false
 
 max_concurrent: 5  # 最大并发数
 max_workers: 10  # 最大工作线程数

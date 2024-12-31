@@ -9,6 +9,7 @@ from utils.message_api import FileType, MessageAPI
 from PIL import Image
 import io
 import uuid
+import yaml
 
 class RankAPI(BaseAPI):
     """排位系统API封装"""
@@ -54,6 +55,30 @@ class RankAPI(BaseAPI):
             
         except Exception as e:
             bot_logger.error(f"查询失败 - 赛季: {season}, 错误: {str(e)}")
+            return None
+
+    async def get_exact_id(self, player_name: str) -> Optional[str]:
+        """获取玩家的精确ID"""
+        try:
+            # 使用当前赛季进行查询
+            url = f"/leaderboard/s5/{self.platform}"
+            params = {"name": player_name}
+            
+            response = await self.get(url, params=params, headers=self.headers)
+            if not response or response.status_code != 200:
+                return None
+            
+            data = self.handle_response(response)
+            if not isinstance(data, dict) or not data.get("count"):
+                return None
+            
+            # 返回第一个匹配的完整ID
+            if data.get("data"):
+                return data["data"][0].get("name")
+            return None
+            
+        except Exception as e:
+            bot_logger.error(f"获取精确ID失败: {str(e)}")
             return None
 
 class RankQuery:
@@ -334,6 +359,16 @@ class RankQuery:
                 "2. 尝试使用精确搜索\n"
                 "3. 尝试查询其他赛季"
             )
+            # 读取配置
+            try:
+                with open("config/config.yaml", "r", encoding="utf-8") as f:
+                    config = yaml.safe_load(f)
+                    if not config["bot"].get("zako_pic", False):
+                        return None, error_msg, None, None
+            except Exception as e:
+                bot_logger.error(f"读取配置文件失败: {str(e)}")
+                return None, error_msg, None, None
+
             # 读取zako图片
             try:
                 zako_path = os.path.join(self.resources_dir, "images", "zako.jpg")

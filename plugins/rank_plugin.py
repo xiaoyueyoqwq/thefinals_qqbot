@@ -108,8 +108,18 @@ class RankPlugin(Plugin):
                 ))
                 return
 
-            # 检查ID是否被保护
-            if await self._check_id_protected(handler, player_name):
+            # 检查ID是否被保护（先进行精确ID匹配）
+            if "#" in player_name:
+                exact_id = player_name
+            else:
+                # 对于模糊查询，先获取精确ID
+                try:
+                    exact_id = await self.rank_query.api.get_exact_id(player_name)
+                except Exception as e:
+                    bot_logger.error(f"[{self.name}] 获取精确ID失败: {str(e)}")
+                    exact_id = None
+
+            if exact_id and await self._check_id_protected(handler, exact_id):
                 return
                 
             # 发送初始提示消息

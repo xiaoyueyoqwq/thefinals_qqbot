@@ -5,6 +5,7 @@ from utils.base_api import BaseAPI
 from PIL import Image
 import io
 import os
+import yaml
 
 class WorldTourAPI(BaseAPI):
     """世界巡回赛API封装"""
@@ -23,6 +24,30 @@ class WorldTourAPI(BaseAPI):
             "Accept": "application/json",
             "User-Agent": "TheFinals-Bot/1.0"
         }
+
+    async def get_exact_id(self, player_name: str) -> Optional[str]:
+        """获取玩家的精确ID"""
+        try:
+            # 使用当前赛季进行查询
+            url = f"/leaderboard/s5worldtour/{self.platform}"
+            params = {"name": player_name}
+            
+            response = await self.get(url, params=params, headers=self.headers)
+            if not response or response.status_code != 200:
+                return None
+            
+            data = self.handle_response(response)
+            if not isinstance(data, dict) or not data.get("count"):
+                return None
+            
+            # 返回第一个匹配的完整ID
+            if data.get("data"):
+                return data["data"][0].get("name")
+            return None
+            
+        except Exception as e:
+            bot_logger.error(f"获取精确ID失败: {str(e)}")
+            return None
 
     async def get_player_stats(self, player_name: str, season: str) -> Optional[dict]:
         """查询玩家在指定赛季的数据"""
@@ -115,6 +140,16 @@ class WorldTourQuery:
                 "2. 尝试使用精确搜索\n"
                 "3. 成为pro哥，惊艳群u们"
             )
+            # 读取配置
+            try:
+                with open("config/config.yaml", "r", encoding="utf-8") as f:
+                    config = yaml.safe_load(f)
+                    if not config["bot"].get("zako_pic", False):
+                        return error_msg, None
+            except Exception as e:
+                bot_logger.error(f"读取配置文件失败: {str(e)}")
+                return error_msg, None
+
             # 读取zako图片
             try:
                 zako_path = os.path.join(self.resources_dir, "images", "zako.jpg")
