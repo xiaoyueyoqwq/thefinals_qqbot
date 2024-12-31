@@ -13,6 +13,23 @@ class BindPlugin(Plugin):
         self.bind_manager = bind_manager
         bot_logger.debug(f"[{self.name}] 初始化游戏ID绑定插件")
         
+    def _validate_game_id(self, game_id: str) -> bool:
+        """验证游戏ID格式
+        格式要求：PlayerName#1234
+        """
+        if not game_id or '#' not in game_id:
+            return False
+            
+        name, number = game_id.split('#', 1)
+        if not name or not number:
+            return False
+            
+        # 确保#后面是4位数字
+        if not number.isdigit() or len(number) != 4:
+            return False
+            
+        return True
+        
     @on_command("bind", "绑定游戏ID，示例: /bind PlayerName#1234")
     async def bind_game_id(self, handler: MessageHandler, content: str) -> None:
         """绑定游戏ID"""
@@ -24,10 +41,13 @@ class BindPlugin(Plugin):
             return
             
         # 处理绑定请求
-        if not self.bind_manager._validate_game_id(args):
+        if not self._validate_game_id(args):
             await self.reply(handler,
                 "❌ 无效的游戏ID格式\n"
                 "正确格式: PlayerName#1234\n"
+                "要求:\n"
+                "1. 必须包含#号\n"
+                "2. #号后必须是4位数字\n"
                 "示例: SHIA_NANA#7933"
             )
             return
