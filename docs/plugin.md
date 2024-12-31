@@ -1,8 +1,54 @@
-# Plugin CORE V1 插件开发指南
+# Plugin CORE V3.1.0 插件开发指南
 
 这是一个简单好用的插件框架,帮你轻松实现各种机器人功能。不管是新手还是老手,都能快速上手。
 
-## 创建插件
+## 最新特性 (V3.1.0)
+
+### 命令隐藏功能
+现在你可以创建隐藏命令了！这些命令不会在命令列表中显示，但仍然可以使用：
+
+```python
+@on_command("secret", "这是个隐藏命令", hidden=True)
+async def secret_command(self, handler, content):
+    await self.reply(handler, "你发现了隐藏命令！")
+```
+
+### 优化的未知命令处理
+- 更智能的命令提示
+- 按字母顺序排序的命令列表
+- 隐藏命令不会显示在提示中
+- 防止多个插件同时响应未知命令
+
+### 增强的并发处理
+更稳定的并发任务处理：
+
+```python
+# 创建多个并发任务
+tasks = []
+for i in range(5):
+    tasks.append(self._process_task(handler, i))
+    
+# 等待所有任务完成
+await asyncio.gather(*tasks)
+```
+
+### 可靠的状态管理
+改进的状态持久化机制：
+
+```python
+# 设置状态（自动保存）
+await self.set_state("user_status", "online")
+
+# 获取状态（带默认值）
+status = self.get_state("user_status", "offline")
+
+# 清除状态（自动保存）
+await self.clear_state("user_status")
+```
+
+---
+
+## 快速上手：创建插件
 
 创建插件超简单,继承 `Plugin` 类就行了:
 
@@ -140,7 +186,7 @@ class MyPlugin(Plugin):
 
 | 装饰器 | 说明 | 参数 |
 |--------|------|------|
-| @on_command | 命令触发器 | command: 命令名<br>description: 命令描述 |
+| @on_command | 命令触发器 | command: 命令名<br>description: 命令描述<br>hidden: 是否隐藏(bool) |
 | @on_keyword | 关键词触发器 | *keywords: 触发关键词列表 |
 | @on_regex | 正则匹配触发器 | pattern: 正则表达式 |
 | @on_event | 事件监听器 | event_type: 事件类型 |
