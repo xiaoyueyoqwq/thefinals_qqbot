@@ -81,15 +81,14 @@ class WorldTourPlugin(Plugin):
             if await self._check_id_protected(handler, player_name):
                 return
                 
-            # 如果是完整ID格式，直接查询
-            if re.match(r"^[a-zA-Z0-9_]+#\d{4}$", player_name):
-                result = await self.world_tour_query.process_wt_command(player_name)
-            # 否则尝试模糊搜索
-            else:
-                result = await self.world_tour_query.process_wt_command(player_name)
-                
-            bot_logger.debug(f"[{self.name}] 查询结果: {result}")
+            # 查询数据
+            result, zako_image = await self.world_tour_query.process_wt_command(player_name)
+            
+            # 发送结果
             await self.reply(handler, result)
+            # 如果有zako图片，发送它
+            if zako_image:
+                await handler.send_image(zako_image)
             
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理世界巡回赛查询命令时发生错误: {str(e)}", exc_info=True)

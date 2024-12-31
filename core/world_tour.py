@@ -2,6 +2,9 @@ from typing import Optional, Dict, List, Tuple
 import asyncio
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
+from PIL import Image
+import io
+import os
 
 class WorldTourAPI(BaseAPI):
     """世界巡回赛API封装"""
@@ -92,26 +95,48 @@ class WorldTourQuery:
     
     def __init__(self):
         self.api = WorldTourAPI()
+        self.resources_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
 
-    def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]]) -> str:
+    def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]]) -> Tuple[str, Optional[bytes]]:
         """格式化响应消息"""
         # 检查是否有任何赛季的数据
         valid_data = {season: data for season, data in season_data.items() if data}
         if not valid_data:
-            return (
+            error_msg = (
                 "⚠️ 未找到玩家数据\n"
                 "━━━━━━━━━━━━━\n"
                 "可能的原因:\n"
                 "1. 玩家ID输入或绑定错误\n"
                 "2. 玩家巡回赛排名太低\n"
-                "3. 玩家和NamaTama不是好朋友\n"
+                "3. 你是zako\n"
                 "━━━━━━━━━━━━━\n"
                 "💡 提示:\n"
                 "1. 检查ID是否正确\n"
                 "2. 尝试使用精确搜索\n"
-                "3. 成为pro哥，惊艳群u们\n"
-                "━━━━━━━━━━━━━"
+                "3. 成为pro哥，惊艳群u们"
             )
+            # 读取zako图片
+            try:
+                zako_path = os.path.join(self.resources_dir, "images", "zako.jpg")
+                bot_logger.debug(f"尝试读取zako图片: {zako_path}")
+                # 使用PIL打开图片
+                with Image.open(zako_path) as img:
+                    # 调整图片大小到原来的一半
+                    width, height = img.size
+                    new_width = width // 2
+                    new_height = height // 2
+                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                    
+                    # 转换为bytes
+                    buffer = io.BytesIO()
+                    img.save(buffer, format='JPEG', quality=85)
+                    zako_image = buffer.getvalue()
+                    
+                bot_logger.debug(f"成功读取并压缩zako图片，大小: {len(zako_image)} bytes")
+                return error_msg, zako_image
+            except Exception as e:
+                bot_logger.error(f"读取zako图片失败: {str(e)}, 路径: {zako_path}")
+                return error_msg, None
 
         # 获取第一个有效数据用于基本信息
         first_season, first_data = next(iter(valid_data.items()))
@@ -127,9 +152,9 @@ class WorldTourQuery:
             f"📊 排名: {rank}\n"
             f"💵 奖金: ${cash}\n"
             f"━━━━━━━━━━━━━"
-        )
+        ), None
 
-    async def process_wt_command(self, player_name: str = None) -> str:
+    async def process_wt_command(self, player_name: str = None) -> Tuple[str, Optional[bytes]]:
         """处理世界巡回赛查询命令"""
         if not player_name:
             return (
@@ -143,7 +168,7 @@ class WorldTourQuery:
                 "1. 可以使用 /bind 绑定ID\n"
                 "2. 赛季可选: s3~s5\n"
                 "3. 可尝试模糊搜索"
-            )
+            ), None
 
         bot_logger.info(f"查询玩家 {player_name} 的世界巡回赛数据")
         
@@ -163,4 +188,4 @@ class WorldTourQuery:
             
         except Exception as e:
             bot_logger.error(f"处理世界巡回赛查询命令时出错: {str(e)}")
-            return "⚠️ 查询过程中发生错误，请稍后重试" 
+            return "⚠️ 查询过程中发生错误，请稍后重试", None 

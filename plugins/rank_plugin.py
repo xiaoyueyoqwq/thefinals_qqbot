@@ -116,13 +116,16 @@ class RankPlugin(Plugin):
             await self.reply(handler, self._format_loading_message(player_name, season))
                 
             # 查询排名并生成图片
-            image_data, error_msg, _, _ = await self.rank_query.process_rank_command(
+            image_data, error_msg, _, extra_data = await self.rank_query.process_rank_command(
                 f"{player_name} {season}" if args else player_name
             )
             
             if error_msg:
                 bot_logger.error(f"[{self.name}] 查询失败: {error_msg}")
                 await self.reply(handler, error_msg)
+                # 如果有zako图片，发送它
+                if extra_data and "zako_image" in extra_data:
+                    await handler.send_image(extra_data["zako_image"])
                 return
                 
             # 使用handler的send_image方法发送图片
