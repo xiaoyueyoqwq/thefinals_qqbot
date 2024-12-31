@@ -6,10 +6,7 @@ from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.browser import browser_manager
 from utils.message_api import FileType, MessageAPI
-from PIL import Image
-import io
 import uuid
-import yaml
 
 class RankAPI(BaseAPI):
     """排位系统API封装"""
@@ -55,30 +52,6 @@ class RankAPI(BaseAPI):
             
         except Exception as e:
             bot_logger.error(f"查询失败 - 赛季: {season}, 错误: {str(e)}")
-            return None
-
-    async def get_exact_id(self, player_name: str) -> Optional[str]:
-        """获取玩家的精确ID"""
-        try:
-            # 使用当前赛季进行查询
-            url = f"/leaderboard/s5/{self.platform}"
-            params = {"name": player_name}
-            
-            response = await self.get(url, params=params, headers=self.headers)
-            if not response or response.status_code != 200:
-                return None
-            
-            data = self.handle_response(response)
-            if not isinstance(data, dict) or not data.get("count"):
-                return None
-            
-            # 返回第一个匹配的完整ID
-            if data.get("data"):
-                return data["data"][0].get("name")
-            return None
-            
-        except Exception as e:
-            bot_logger.error(f"获取精确ID失败: {str(e)}")
             return None
 
 class RankQuery:
@@ -347,50 +320,19 @@ class RankQuery:
         valid_data = {season: data for season, data in season_data.items() if data}
         if not valid_data:
             error_msg = (
-                "⚠️ 未找到玩家数据\n"
-                "━━━━━━━━━━━━━\n"
-                "可能的原因:\n"
-                "1. 玩家ID输入错误\n"
-                "2. 玩家排名太低\n"
-                "3. 你是zako\n"
-                "━━━━━━━━━━━━━\n"
-                "💡 提示: \n"
-                "1. 检查ID是否正确\n"
-                "2. 尝试使用精确搜索\n"
-                "3. 尝试查询其他赛季"
+                    "⚠️ 未找到玩家数据\n"
+                    "━━━━━━━━━━━━━\n"
+                    "可能的原因:\n"
+                    "1. 玩家ID输入错误\n"
+                    "2. 玩家排名太低\n"
+                    "3. 你是zako\n"
+                    "━━━━━━━━━━━━━\n"
+                    "💡 提示: 你可以:\n"
+                    "1. 检查ID是否正确\n"
+                    "2. 尝试使用精确搜索\n"
+                    "3. 尝试查询其他赛季"
             )
-            # 读取配置
-            try:
-                with open("config/config.yaml", "r", encoding="utf-8") as f:
-                    config = yaml.safe_load(f)
-                    if not config["bot"].get("zako_pic", False):
-                        return None, error_msg, None, None
-            except Exception as e:
-                bot_logger.error(f"读取配置文件失败: {str(e)}")
-                return None, error_msg, None, None
-
-            # 读取zako图片
-            try:
-                zako_path = os.path.join(self.resources_dir, "images", "zako.jpg")
-                bot_logger.debug(f"尝试读取zako图片: {zako_path}")
-                # 使用PIL打开图片
-                with Image.open(zako_path) as img:
-                    # 调整图片大小到原来的一半
-                    width, height = img.size
-                    new_width = width // 2
-                    new_height = height // 2
-                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                    
-                    # 转换为bytes
-                    buffer = io.BytesIO()
-                    img.save(buffer, format='JPEG', quality=85)
-                    zako_image = buffer.getvalue()
-                    
-                bot_logger.debug(f"成功读取并压缩zako图片，大小: {len(zako_image)} bytes")
-                return None, error_msg, None, {"zako_image": zako_image}
-            except Exception as e:
-                bot_logger.error(f"读取zako图片失败: {str(e)}, 路径: {zako_path}")
-                return None, error_msg, None, None
+            return None, error_msg, None, None
 
     async def process_rank_command(self, player_name: str = None, season: str = None) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
         """处理排位查询命令"""

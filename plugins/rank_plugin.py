@@ -12,12 +12,11 @@ import traceback
 class RankPlugin(Plugin):
     """排名查询插件"""
     
-    def __init__(self, bind_manager: BindManager, lock_plugin = None):
+    def __init__(self, bind_manager: BindManager):
         """初始化排名查询插件"""
         super().__init__()
         self.rank_query = RankQuery()
         self.bind_manager = bind_manager
-        self.lock_plugin = lock_plugin
         self.tips = self._load_tips()
         bot_logger.debug(f"[{self.name}] 初始化排名查询插件")
         
@@ -52,35 +51,6 @@ class RankPlugin(Plugin):
         ]
         return "\n".join(message)
         
-    async def _check_id_protected(self, handler: MessageHandler, player_name: str) -> bool:
-        """检查ID是否被保护"""
-        if not self.lock_plugin:
-            bot_logger.warning(f"[{self.name}] ID保护插件未加载，无法进行ID保护检查")
-            bot_logger.debug(f"[{self.name}] lock_plugin属性为: {self.lock_plugin}")
-            return False
-            
-        # 如果是玩家自己查询自己，允许查询
-        user_id = handler.message.author.member_openid
-        bound_id = self.bind_manager.get_game_id(user_id)
-        if bound_id and bound_id.lower() == player_name.lower():
-            bot_logger.debug(f"[{self.name}] 允许用户查询自己的ID: {player_name}")
-            return False
-            
-        # 检查ID是否被保护
-        bot_logger.debug(f"[{self.name}] 正在检查ID {player_name} 是否被保护...")
-        if self.lock_plugin.is_id_protected(player_name):
-            protector_id = self.lock_plugin.get_id_protector(player_name)
-            bot_logger.info(f"[{self.name}] ID {player_name} 已被用户 {protector_id} 保护，拒绝查询")
-            await handler.send_text(
-                "❌ 该ID已被保护\n"
-                "━━━━━━━━━━━━━\n"
-                "该玩家已开启ID保护，无法查询其信息"
-            )
-            return True
-            
-        bot_logger.debug(f"[{self.name}] ID {player_name} 未被保护")
-        return False
-
     @on_command("rank", "查询排名信息")
     async def query_rank(self, handler: MessageHandler, content: str) -> None:
         """处理rank命令查询排名"""
@@ -114,42 +84,18 @@ class RankPlugin(Plugin):
                     "3. 需要输入完整ID"
                 ))
                 return
-
-            # 检查ID是否被保护（先进行精确ID匹配）
-            if "#" in player_name:
-                exact_id = player_name
-                # 检查ID是否被保护
-                if await self._check_id_protected(handler, exact_id):
-                    return
-            else:
-                # 对于模糊查询，先获取精确ID
-                try:
-                    exact_id = await self.rank_query.api.get_exact_id(player_name)
-                    if exact_id:
-                        # 立即检查API返回的精确ID是否被保护
-                        if await self._check_id_protected(handler, exact_id):
-                            return
-                except Exception as e:
-                    bot_logger.error(f"[{self.name}] 获取精确ID失败: {str(e)}")
-                    exact_id = None
-
-            # 使用最终确定的ID进行查询
-            query_id = exact_id if exact_id else player_name
-            
+                
             # 发送初始提示消息
-            await self.reply(handler, self._format_loading_message(query_id, season))
+            await self.reply(handler, self._format_loading_message(player_name, season))
                 
             # 查询排名并生成图片
-            image_data, error_msg, _, extra_data = await self.rank_query.process_rank_command(
-                f"{query_id} {season}" if args else query_id
+            image_data, error_msg, _, _ = await self.rank_query.process_rank_command(
+                f"{player_name} {season}" if args else player_name
             )
             
             if error_msg:
                 bot_logger.error(f"[{self.name}] 查询失败: {error_msg}")
                 await self.reply(handler, error_msg)
-                # 如果有zako图片，发送它
-                if extra_data and "zako_image" in extra_data:
-                    await handler.send_image(extra_data["zako_image"])
                 return
                 
             # 使用handler的send_image方法发送图片

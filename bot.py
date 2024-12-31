@@ -17,13 +17,6 @@ from core.bind import BindManager
 import types
 import functools
 from enum import IntEnum
-from plugins.bind_plugin import BindPlugin
-from plugins.about_plugin import AboutPlugin
-from plugins.rank_plugin import RankPlugin
-from plugins.world_tour_plugin import WorldTourPlugin
-from plugins.test_hello import TestHelloPlugin
-from plugins.oxy_egg import OxyEggPlugin
-from plugins.lock_plugin import LockPlugin
 
 
 # 定义消息类型枚举
@@ -155,61 +148,60 @@ class SessionMonitor:
                 await asyncio.sleep(5)  # 发生错误时等待5秒再继续
 
     async def _safe_reconnect(self):
-        """执行无损重连
-        1. 等待当前消息处理完成
-        2. 暂停新消息处理
-        3. 保存会话状态
-        4. 执行重连
-        5. 恢复会话状态
-        6. 恢复消息处理
-        """
+        """执行无损重连"""
         bot_logger.info(f"[SessionMonitor] Session已运行{(time.time() - self.last_session_time)/60:.1f}分钟，准备无损重连...")
         
         try:
             # 1. 等待当前消息处理完成
             bot_logger.debug("[SessionMonitor] 等待当前消息处理完成...")
-            await self.bot.message_queue.join()
+            if hasattr(self.bot, 'message_queue'):
+                await self.bot.message_queue.join()
             
             # 2. 暂停新消息处理
-            old_should_stop = self.bot.should_stop.is_set()
-            self.bot.should_stop.set()
+            old_should_stop = False
+            if hasattr(self.bot, 'should_stop'):
+                old_should_stop = self.bot.should_stop.is_set()
+                self.bot.should_stop.set()
             
             # 3. 保存会话状态
             bot_logger.debug("[SessionMonitor] 保存会话状态...")
             old_session_id = None
             old_last_seq = None
-            if hasattr(self.bot._client, "_session"):
-                session = getattr(self.bot._client, "_session", {})
-                old_session_id = session.get("session_id")
-                old_last_seq = session.get("last_seq")
+            if hasattr(self.bot, '_client') and hasattr(self.bot._client, '_session'):
+                session = getattr(self.bot._client, '_session', {})
+                if isinstance(session, dict):
+                    old_session_id = session.get('session_id')
+                    old_last_seq = session.get('last_seq')
             
             # 4. 执行重连
             bot_logger.info("[SessionMonitor] 开始执行重连...")
-            if hasattr(self.bot, "_client") and hasattr(self.bot._client, "_session"):
-                await self.bot._client._session.close()
-                bot_logger.info("[SessionMonitor] 已断开旧连接，等待重连...")
-                
-                # 等待新连接建立
-                retry = 0
-                while retry < 30:  # 最多等待30秒
-                    if hasattr(self.bot._client, "_session") and \
-                       getattr(self.bot._client._session, "closed", True) is False:
-                        break
-                    await asyncio.sleep(1)
-                    retry += 1
-                
-                if retry >= 30:
-                    raise TimeoutError("等待新连接超时")
-                
-                # 5. 恢复会话状态
-                if old_session_id and old_last_seq:
-                    bot_logger.debug("[SessionMonitor] 恢复会话状态...")
-                    new_session = getattr(self.bot._client, "_session", {})
-                    new_session["session_id"] = old_session_id
-                    new_session["last_seq"] = old_last_seq
+            if hasattr(self.bot, '_client') and hasattr(self.bot._client, '_session'):
+                if hasattr(self.bot._client._session, 'close'):
+                    await self.bot._client._session.close()
+                    bot_logger.info("[SessionMonitor] 已断开旧连接，等待重连...")
+                    
+                    # 等待新连接建立
+                    retry = 0
+                    while retry < 30:  # 最多等待30秒
+                        if hasattr(self.bot._client, '_session') and \
+                           not getattr(self.bot._client._session, 'closed', True):
+                            break
+                        await asyncio.sleep(1)
+                        retry += 1
+                    
+                    if retry >= 30:
+                        raise TimeoutError("等待新连接超时")
+                    
+                    # 5. 恢复会话状态
+                    if old_session_id and old_last_seq:
+                        bot_logger.debug("[SessionMonitor] 恢复会话状态...")
+                        new_session = getattr(self.bot._client, '_session', {})
+                        if isinstance(new_session, dict):
+                            new_session['session_id'] = old_session_id
+                            new_session['last_seq'] = old_last_seq
             
             # 6. 恢复消息处理
-            if not old_should_stop:
+            if hasattr(self.bot, 'should_stop') and not old_should_stop:
                 self.bot.should_stop.clear()
             
             bot_logger.info("[SessionMonitor] 无损重连完成")
@@ -217,7 +209,7 @@ class SessionMonitor:
         except Exception as e:
             bot_logger.error(f"[SessionMonitor] 无损重连失败: {e}")
             # 确保消息处理恢复
-            if not old_should_stop:
+            if hasattr(self.bot, 'should_stop') and not old_should_stop:
                 self.bot.should_stop.clear()
             raise
 
@@ -442,39 +434,18 @@ class MyBot(botpy.Client):
             bot_logger.error(f"浏览器初始化失败: {str(e)}")
             raise
     
-    async def _init_plugins(self) -> None:
-        """初始化插件系统"""
+    async def _init_plugins(self):
+        """初始化插件的异步方法"""
         try:
-            # 创建BindManager实例
-            bind_manager = BindManager()
-            
-            # 加载插件，传入bind_manager
+            # 自动发现并注册插件
             await self.plugin_manager.auto_discover_plugins(
                 plugins_dir="plugins",
-                bind_manager=bind_manager
+                bind_manager=self.bind_manager
             )
-            
+            await self.plugin_manager.load_all()
         except Exception as e:
-            bot_logger.error(f"插件初始化失败: {str(e)}", exc_info=True)
+            bot_logger.error(f"插件初始化失败: {str(e)}")
             raise
-
-    async def _register_plugins(self) -> None:
-        """注册插件"""
-        bind_plugin = BindPlugin()
-        about_plugin = AboutPlugin()
-        lock_plugin = LockPlugin(bind_plugin)
-        rank_plugin = RankPlugin(bind_plugin, lock_plugin)
-        world_tour_plugin = WorldTourPlugin(bind_plugin, lock_plugin)
-        test_hello_plugin = TestHelloPlugin()
-        oxy_egg_plugin = OxyEggPlugin()
-        
-        await self.plugin_manager.register_plugin(bind_plugin)
-        await self.plugin_manager.register_plugin(about_plugin)
-        await self.plugin_manager.register_plugin(lock_plugin)
-        await self.plugin_manager.register_plugin(rank_plugin)
-        await self.plugin_manager.register_plugin(world_tour_plugin)
-        await self.plugin_manager.register_plugin(test_hello_plugin)
-        await self.plugin_manager.register_plugin(oxy_egg_plugin)
 
 def main():
     try:
