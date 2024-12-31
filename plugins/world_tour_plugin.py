@@ -35,16 +35,22 @@ class WorldTourPlugin(Plugin):
     async def _check_id_protected(self, handler: MessageHandler, player_name: str) -> bool:
         """检查ID是否被保护"""
         if not self.lock_plugin:
+            bot_logger.warning(f"[{self.name}] ID保护插件未加载，无法进行ID保护检查")
+            bot_logger.debug(f"[{self.name}] lock_plugin属性为: {self.lock_plugin}")
             return False
             
         # 如果是玩家自己查询自己，允许查询
         user_id = handler.message.author.member_openid
         bound_id = self.bind_manager.get_game_id(user_id)
         if bound_id and bound_id.lower() == player_name.lower():
+            bot_logger.debug(f"[{self.name}] 允许用户查询自己的ID: {player_name}")
             return False
             
         # 检查ID是否被保护
+        bot_logger.debug(f"[{self.name}] 正在检查ID {player_name} 是否被保护...")
         if self.lock_plugin.is_id_protected(player_name):
+            protector_id = self.lock_plugin.get_id_protector(player_name)
+            bot_logger.info(f"[{self.name}] ID {player_name} 已被用户 {protector_id} 保护，拒绝查询")
             await handler.send_text(
                 "❌ 该ID已被保护\n"
                 "━━━━━━━━━━━━━\n"
@@ -52,6 +58,7 @@ class WorldTourPlugin(Plugin):
             )
             return True
             
+        bot_logger.debug(f"[{self.name}] ID {player_name} 未被保护")
         return False
 
     @on_command("wt", "查询世界巡回赛信息")
@@ -80,19 +87,26 @@ class WorldTourPlugin(Plugin):
             # 检查ID是否被保护（先进行精确ID匹配）
             if "#" in player_name:
                 exact_id = player_name
+                # 检查ID是否被保护
+                if await self._check_id_protected(handler, exact_id):
+                    return
             else:
                 # 对于模糊查询，先获取精确ID
                 try:
                     exact_id = await self.world_tour_query.api.get_exact_id(player_name)
+                    if exact_id:
+                        # 立即检查API返回的精确ID是否被保护
+                        if await self._check_id_protected(handler, exact_id):
+                            return
                 except Exception as e:
                     bot_logger.error(f"[{self.name}] 获取精确ID失败: {str(e)}")
                     exact_id = None
 
-            if exact_id and await self._check_id_protected(handler, exact_id):
-                return
-                
+            # 使用最终确定的ID进行查询
+            query_id = exact_id if exact_id else player_name
+            
             # 查询数据
-            result, zako_image = await self.world_tour_query.process_wt_command(player_name)
+            result, zako_image = await self.world_tour_query.process_wt_command(query_id)
             
             # 发送结果
             await self.reply(handler, result)

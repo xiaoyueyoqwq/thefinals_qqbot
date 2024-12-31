@@ -442,17 +442,20 @@ class MyBot(botpy.Client):
             bot_logger.error(f"浏览器初始化失败: {str(e)}")
             raise
     
-    async def _init_plugins(self):
-        """初始化插件的异步方法"""
+    async def _init_plugins(self) -> None:
+        """初始化插件系统"""
         try:
-            # 自动发现并注册插件
+            # 创建BindManager实例
+            bind_manager = BindManager()
+            
+            # 加载插件，传入bind_manager
             await self.plugin_manager.auto_discover_plugins(
                 plugins_dir="plugins",
-                bind_manager=self.bind_manager
+                bind_manager=bind_manager
             )
-            await self.plugin_manager.load_all()
+            
         except Exception as e:
-            bot_logger.error(f"插件初始化失败: {str(e)}")
+            bot_logger.error(f"插件初始化失败: {str(e)}", exc_info=True)
             raise
 
     async def _register_plugins(self) -> None:

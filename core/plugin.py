@@ -9,7 +9,7 @@ Plugin CORE [V3]
 import inspect
 import importlib.util
 import functools
-from typing import Dict, List, Optional, Any, Callable, Set, Tuple
+from typing import Dict, List, Optional, Any, Callable, Set, Tuple, Type
 from abc import ABC
 from botpy.message import Message
 from utils.message_handler import MessageHandler
@@ -23,6 +23,7 @@ from datetime import datetime
 import pytz
 from pathlib import Path
 import re
+import os
 
 
 # 预定义事件类型
@@ -745,6 +746,33 @@ class PluginManager:
                     bot_logger.error(f"插件 {plugin.name} 的依赖 {dependency} 未满足")
                     return
             
+            # 特殊处理RankPlugin和WorldTourPlugin的依赖注入
+            if plugin.name == "RankPlugin":
+                bot_logger.debug(f"正在为 {plugin.name} 注入依赖...")
+                bind_plugin = self.get_plugin("BindPlugin")
+                lock_plugin = self.get_plugin("LockPlugin")
+                bot_logger.debug(f"找到依赖: BindPlugin={bind_plugin is not None}, LockPlugin={lock_plugin is not None}")
+                if bind_plugin:
+                    plugin.bind_manager = bind_plugin.bind_manager
+                if lock_plugin:
+                    plugin.lock_plugin = lock_plugin
+                    bot_logger.debug(f"成功注入LockPlugin到{plugin.name}")
+                else:
+                    bot_logger.warning(f"未找到LockPlugin，{plugin.name}的ID保护功能将不可用")
+                    
+            elif plugin.name == "WorldTourPlugin":
+                bot_logger.debug(f"正在为 {plugin.name} 注入依赖...")
+                bind_plugin = self.get_plugin("BindPlugin")
+                lock_plugin = self.get_plugin("LockPlugin")
+                bot_logger.debug(f"找到依赖: BindPlugin={bind_plugin is not None}, LockPlugin={lock_plugin is not None}")
+                if bind_plugin:
+                    plugin.bind_manager = bind_plugin.bind_manager
+                if lock_plugin:
+                    plugin.lock_plugin = lock_plugin
+                    bot_logger.debug(f"成功注入LockPlugin到{plugin.name}")
+                else:
+                    bot_logger.warning(f"未找到LockPlugin，{plugin.name}的ID保护功能将不可用")
+            
             self.plugins[plugin.name] = plugin
             # 注册插件的所有命令
             for cmd in plugin.commands:
@@ -900,6 +928,20 @@ class PluginManager:
             for plugin in list(self.plugins.values()):
                 await self.unregister_plugin(plugin.name)
 
+    def get_plugin(self, plugin_name: str) -> Optional[Plugin]:
+        """获取插件实例
+        
+        Args:
+            plugin_name: 插件名称
+            
+        Returns:
+            Optional[Plugin]: 插件实例，如果不存在则返回None
+        """
+        plugin = self.plugins.get(plugin_name)
+        if not plugin:
+            bot_logger.debug(f"未找到插件: {plugin_name}")
+        return plugin
+
     async def auto_discover_plugins(self, plugins_dir: str = "plugins", **plugin_kwargs) -> None:
         """自动发现并注册插件"""
         bot_logger.debug(f"开始扫描插件目录: {plugins_dir}")
@@ -933,8 +975,29 @@ class PluginManager:
                         item != Plugin):  # 排除基类自身
                         try:
                             # 实例化插件并注册
-                            plugin_instance = item(**plugin_kwargs)  # 只通过 kwargs 传递参数
-                            await self.register_plugin(plugin_instance)
+                            if item.__name__ == "BindPlugin":
+                                # 为BindPlugin传入bind_manager参数
+                                plugin = item(bind_manager=plugin_kwargs.get("bind_manager"))
+                            elif item.__name__ == "RankPlugin":
+                                bind_plugin = self.get_plugin("BindPlugin")
+                                lock_plugin = self.get_plugin("LockPlugin")
+                                bot_logger.debug(f"为RankPlugin注入依赖: BindPlugin={bind_plugin is not None}, LockPlugin={lock_plugin is not None}")
+                                plugin = item(
+                                    bind_manager=bind_plugin.bind_manager if bind_plugin else None,
+                                    lock_plugin=lock_plugin
+                                )
+                            elif item.__name__ == "WorldTourPlugin":
+                                bind_plugin = self.get_plugin("BindPlugin")
+                                lock_plugin = self.get_plugin("LockPlugin")
+                                bot_logger.debug(f"为WorldTourPlugin注入依赖: BindPlugin={bind_plugin is not None}, LockPlugin={lock_plugin is not None}")
+                                plugin = item(
+                                    bind_manager=bind_plugin.bind_manager if bind_plugin else None,
+                                    lock_plugin=lock_plugin
+                                )
+                            else:
+                                plugin = item()
+                                
+                            await self.register_plugin(plugin)
                             bot_logger.info(f"成功加载插件: {item_name}")
                         except Exception as e:
                             bot_logger.error(f"实例化插件 {item_name} 失败: {str(e)}")
@@ -942,4 +1005,4 @@ class PluginManager:
             except Exception as e:
                 bot_logger.error(f"加载插件模块 {module_name} 失败: {str(e)}")
                 
-        bot_logger.info(f"插件扫描完成,共加载 {len(self.plugins)} 个插件") 
+        bot_logger.info(f"插件扫描完成,共加载 {len(self.plugins)} 个插件")

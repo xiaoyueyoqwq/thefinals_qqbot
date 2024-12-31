@@ -1,7 +1,8 @@
 import os
 import json
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from utils.logger import bot_logger
+from datetime import datetime
 
 class LockManager:
     """ID保护管理器 - 负责管理玩家ID的保护状态"""
@@ -10,7 +11,7 @@ class LockManager:
         """初始化保护管理器"""
         self.data_dir = "data"
         self.data_file = os.path.join(self.data_dir, "protected_ids.json")
-        self.protected_ids: Dict[str, str] = {}
+        self.protected_ids: Dict[str, Dict[str, Any]] = {}
         self._ensure_data_dir()
         self._load_data()
         
@@ -30,7 +31,19 @@ class LockManager:
             if os.path.exists(self.data_file):
                 with open(self.data_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self.protected_ids = data.get("protected_ids", {})
+                    # 转换旧格式数据
+                    if "protected_ids" in data:
+                        old_data = data["protected_ids"]
+                        self.protected_ids = {}
+                        for user_id, game_id in old_data.items():
+                            if game_id.lower() not in [k.lower() for k in self.protected_ids.keys()]:
+                                self.protected_ids[game_id] = {
+                                    "protected_by": user_id,
+                                    "protected_at": datetime.now().isoformat()
+                                }
+                    else:
+                        self.protected_ids = data
+                    self._save_data()  # 保存转换后的数据
             else:
                 self._save_data()  # 创建初始文件
                 
@@ -43,7 +56,7 @@ class LockManager:
         """保存保护数据到文件"""
         try:
             with open(self.data_file, "w", encoding="utf-8") as f:
-                json.dump({"protected_ids": self.protected_ids}, f, ensure_ascii=False, indent=2)
+                json.dump(self.protected_ids, f, ensure_ascii=False, indent=2)
             bot_logger.debug("保护数据已保存")
         except Exception as e:
             bot_logger.error(f"保存保护数据失败: {str(e)}")
@@ -58,7 +71,27 @@ class LockManager:
         Returns:
             bool: 是否被保护
         """
-        return game_id in self.protected_ids.values()
+        if not game_id:
+            return False
+        game_id = game_id.lower()
+        return game_id in [k.lower() for k in self.protected_ids.keys()]
+        
+    def get_id_protector(self, game_id: str) -> Optional[str]:
+        """获取ID的保护者
+        
+        Args:
+            game_id: 游戏ID
+            
+        Returns:
+            Optional[str]: 保护者的user_id，如果ID未被保护则返回None
+        """
+        if not game_id:
+            return None
+        game_id = game_id.lower()
+        for protected_id, info in self.protected_ids.items():
+            if protected_id.lower() == game_id:
+                return info["protected_by"]
+        return None
         
     def protect_id(self, user_id: str, game_id: str) -> bool:
         """保护指定用户的游戏ID
@@ -71,10 +104,19 @@ class LockManager:
             bool: 是否保护成功
         """
         try:
-            if user_id in self.protected_ids:
+            # 检查ID是否已被保护
+            if self.is_id_protected(game_id):
                 return False
                 
-            self.protected_ids[user_id] = game_id
+            # 检查用户是否已经保护了其他ID
+            for _, info in self.protected_ids.items():
+                if info["protected_by"] == user_id:
+                    return False
+                    
+            self.protected_ids[game_id] = {
+                "protected_by": user_id,
+                "protected_at": datetime.now().isoformat()
+            }
             self._save_data()
             bot_logger.info(f"用户 {user_id} 保护ID: {game_id}")
             return True
@@ -92,13 +134,14 @@ class LockManager:
             Optional[str]: 被解除保护的游戏ID，如果用户没有保护的ID则返回None
         """
         try:
-            if user_id not in self.protected_ids:
-                return None
-                
-            game_id = self.protected_ids.pop(user_id)
-            self._save_data()
-            bot_logger.info(f"用户 {user_id} 解除保护ID: {game_id}")
-            return game_id
+            # 查找用户保护的ID
+            for game_id, info in list(self.protected_ids.items()):
+                if info["protected_by"] == user_id:
+                    del self.protected_ids[game_id]
+                    self._save_data()
+                    bot_logger.info(f"用户 {user_id} 解除保护ID: {game_id}")
+                    return game_id
+            return None
         except Exception as e:
             bot_logger.error(f"解除保护失败: {str(e)}")
             return None
@@ -112,4 +155,7 @@ class LockManager:
         Returns:
             Optional[str]: 保护的游戏ID，如果用户没有保护的ID则返回None
         """
-        return self.protected_ids.get(user_id) 
+        for game_id, info in self.protected_ids.items():
+            if info["protected_by"] == user_id:
+                return game_id
+        return None 
