@@ -2,11 +2,13 @@ from core.plugin import Plugin, on_command, on_keyword, Event, EventType
 from utils.message_handler import MessageHandler
 from core.bind import BindManager
 from utils.logger import bot_logger
+import json
 
 class BindPlugin(Plugin):
     """游戏ID绑定插件"""
     
     def __init__(self, bind_manager: BindManager):
+        """初始化游戏ID绑定插件"""
         super().__init__()
         self.bind_manager = bind_manager
         bot_logger.debug(f"[{self.name}] 初始化游戏ID绑定插件")
@@ -30,7 +32,12 @@ class BindPlugin(Plugin):
             )
             return
             
-        if self.bind_manager.bind_user(handler.message.author.member_openid, args):
+        try:
+            async with self.bind_manager._lock:
+                self.bind_manager.bindings[handler.message.author.member_openid] = args
+                with open(self.bind_manager.bind_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.bind_manager.bindings, f, ensure_ascii=False, indent=2)
+                
             await self.reply(handler,
                 "✅ 绑定成功！\n"
                 "━━━━━━━━━━━━━━━\n"
@@ -39,16 +46,26 @@ class BindPlugin(Plugin):
                 "/r - 查询排位\n"
                 "/wt - 查询世界巡回赛"
             )
-        else:
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 绑定失败: {str(e)}")
             await self.reply(handler, "❌ 绑定失败，请稍后重试")
             
     @on_command("unbind", "解除游戏ID绑定")
     async def unbind_game_id(self, handler: MessageHandler, content: str) -> None:
         """解除游戏ID绑定"""
-        if self.bind_manager.unbind_user(handler.message.author.member_openid):
-            await self.reply(handler, "✅ 已解除游戏ID绑定")
-        else:
-            await self.reply(handler, "❌ 您当前没有绑定游戏ID")
+        try:
+            user_id = handler.message.author.member_openid
+            async with self.bind_manager._lock:
+                if user_id in self.bind_manager.bindings:
+                    del self.bind_manager.bindings[user_id]
+                    with open(self.bind_manager.bind_file, 'w', encoding='utf-8') as f:
+                        json.dump(self.bind_manager.bindings, f, ensure_ascii=False, indent=2)
+                    await self.reply(handler, "✅ 已解除游戏ID绑定")
+                else:
+                    await self.reply(handler, "❌ 您当前没有绑定游戏ID")
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 解绑失败: {str(e)}")
+            await self.reply(handler, "❌ 解绑失败，请稍后重试")
             
     @on_command("status", "查看当前绑定的游戏ID")
     async def check_bind_status(self, handler: MessageHandler, content: str) -> None:
