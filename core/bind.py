@@ -83,12 +83,16 @@ class BindManager:
                 bot_logger.info(f"已加载 {len(self.bindings)} 个用户绑定")
             else:
                 self.bindings = {}
-                asyncio.create_task(self._save_bindings_async())
+                # 直接同步保存，避免使用异步操作
+                with open(self.bind_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.bindings, f, ensure_ascii=False, indent=2)
                 bot_logger.info("创建新的绑定数据文件")
         except json.JSONDecodeError as e:
             bot_logger.error(f"绑定数据文件格式错误: {str(e)}")
             self.bindings = {}
-            asyncio.create_task(self._save_bindings_async())
+            # 直接同步保存，避免使用异步操作
+            with open(self.bind_file, 'w', encoding='utf-8') as f:
+                json.dump(self.bindings, f, ensure_ascii=False, indent=2)
         except Exception as e:
             bot_logger.error(f"加载绑定数据失败: {str(e)}")
             raise
