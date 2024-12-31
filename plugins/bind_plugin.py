@@ -44,11 +44,12 @@ class BindPlugin(Plugin):
         if not self._validate_game_id(args):
             await self.reply(handler,
                 "❌ 无效的游戏ID格式\n"
+                "━━━━━━━━━━━━━━━\n"
                 "正确格式: PlayerName#1234\n"
                 "要求:\n"
                 "1. 必须包含#号\n"
                 "2. #号后必须是4位数字\n"
-                "示例: SHIA_NANA#7933"
+                "3. 必须为精确EmbarkID"
             )
             return
             
