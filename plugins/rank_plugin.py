@@ -12,11 +12,11 @@ import traceback
 class RankPlugin(Plugin):
     """排名查询插件"""
     
-    def __init__(self, bind_manager: BindManager):
+    def __init__(self):
         """初始化排名查询插件"""
         super().__init__()
         self.rank_query = RankQuery()
-        self.bind_manager = bind_manager
+        self.bind_manager = BindManager()
         self.tips = self._load_tips()
         bot_logger.debug(f"[{self.name}] 初始化排名查询插件")
         

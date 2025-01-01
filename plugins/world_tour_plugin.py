@@ -8,10 +8,10 @@ import re
 class WorldTourPlugin(Plugin):
     """世界巡回赛查询插件"""
     
-    def __init__(self, bind_manager: BindManager):
+    def __init__(self):
         super().__init__()
         self.world_tour_query = WorldTourQuery()
-        self.bind_manager = bind_manager
+        self.bind_manager = BindManager()
         self._messages = {
             "not_found": (
                 "❌ 未提供玩家ID\n"

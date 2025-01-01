@@ -7,10 +7,10 @@ import json
 class BindPlugin(Plugin):
     """游戏ID绑定插件"""
     
-    def __init__(self, bind_manager: BindManager):
+    def __init__(self):
         """初始化游戏ID绑定插件"""
         super().__init__()
-        self.bind_manager = bind_manager
+        self.bind_manager = BindManager()
         bot_logger.debug(f"[{self.name}] 初始化游戏ID绑定插件")
         
     def _validate_game_id(self, game_id: str) -> bool:

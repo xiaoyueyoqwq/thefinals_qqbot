@@ -234,7 +234,6 @@ class MyBot(botpy.Client):
         # 初始化组件
         self.browser_manager = browser_manager
         self.plugin_manager = PluginManager()
-        self.bind_manager = BindManager()
         
         # 初始化Session监控
         self.session_monitor = SessionMonitor(self)
@@ -437,11 +436,9 @@ class MyBot(botpy.Client):
     async def _init_plugins(self):
         """初始化插件的异步方法"""
         try:
-            bind_manager = BindManager()
             # 自动发现并注册插件
             await self.plugin_manager.auto_discover_plugins(
-                plugins_dir="plugins",
-                bind_manager=bind_manager
+                plugins_dir="plugins"
             )
             await self.plugin_manager.load_all()
         except Exception as e:
