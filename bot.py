@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
 import asyncio
-from asyncio import create_task
 import concurrent.futures
 import threading
 from queue import Queue, Empty
@@ -14,9 +13,9 @@ from utils.browser import browser_manager
 from utils.message_handler import MessageHandler
 from core.plugin import PluginManager
 from core.bind import BindManager
-import types
 import functools
 from enum import IntEnum
+import traceback
 
 
 # 定义消息类型枚举
@@ -90,14 +89,7 @@ def inject_botpy():
     
     # 添加撤回群消息的API
     async def recall_group_message(self, group_openid: str, message_id: str) -> str:
-        """撤回群消息
-        用于撤回机器人发送在当前群 group_openid 的消息 message_id，发送超出2分钟的消息不可撤回
-        Args:
-            group_openid (str): 群聊的 openid
-            message_id (str): 要撤回的消息的 ID
-        Returns:
-            成功执行返回 None
-        """
+        """撤回群消息"""
         route = botpy.http.Route(
             "DELETE",
             "/v2/groups/{group_openid}/messages/{message_id}",
@@ -107,174 +99,143 @@ def inject_botpy():
         return await self._http.request(route)
     botpy.api.BotAPI.recall_group_message = recall_group_message
 
+    # 4. 增强Session重连机制
+    import botpy.gateway
+    
+    async def force_reconnect(self):
+        """强制重连方法"""
+        try:
+            if self._conn and not self._conn.closed:
+                await self._conn.close()
+            self._session["session_id"] = ""
+            self._session["last_seq"] = 0
+            await self.ws_connect()
+        except Exception as e:
+            bot_logger.error(f"[Gateway] 重连失败: {e}")
+            raise
+    
+    botpy.gateway.BotWebSocket.force_reconnect = force_reconnect
+    
+    old_ws_connect = botpy.gateway.BotWebSocket.ws_connect
+    @functools.wraps(old_ws_connect)
+    async def new_ws_connect(self):
+        """增强的WebSocket连接方法"""
+        try:
+            result = await old_ws_connect(self)
+            return result
+        except Exception as e:
+            bot_logger.error(f"[Gateway] 连接失败: {e}")
+            raise
+    botpy.gateway.BotWebSocket.ws_connect = new_ws_connect
+
 
 class SessionMonitor:
     """Session监控类，用于处理腾讯的Session超时问题"""
     def __init__(self, bot):
         self.bot = bot
         self.last_session_time = time.time()
-        self.session_timeout = 25 * 60  # 25分钟就重连，比30分钟提前
+        self.session_timeout = 25 * 60 # 25分钟
         self._monitor_task = None
         self._reconnecting = False
         self._reconnect_lock = asyncio.Lock()
+        self._running = True
         
     async def start_monitoring(self):
         """启动监控任务"""
+        self._running = True
         self._monitor_task = asyncio.create_task(self._monitor_session())
-        bot_logger.info("[SessionMonitor] Session监控已启动")
+        
+    async def stop_monitoring(self):
+        """停止监控任务"""
+        self._running = False
+        if self._monitor_task:
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
         
     async def _monitor_session(self):
         """监控Session状态的主循环"""
-        while True:
+        bot_logger.info("[SessionMonitor] 开始监控会话")
+        while self._running:
             try:
                 current_time = time.time()
                 elapsed = current_time - self.last_session_time
                 
                 if elapsed >= self.session_timeout and not self._reconnecting:
                     async with self._reconnect_lock:
-                        if self._reconnecting:  # 双重检查
+                        if self._reconnecting:
                             continue
                         self._reconnecting = True
                         try:
-                            await self._safe_reconnect()
+                            bot_logger.info("[SessionMonitor] 会话超时,开始重连")
+                            await self.bot.restart()
+                            bot_logger.info("[SessionMonitor] 重连完成")
+                        except Exception as e:
+                            bot_logger.error(f"[SessionMonitor] 重启失败: {e}")
                         finally:
                             self._reconnecting = False
                             self.last_session_time = time.time()
                 
-                await asyncio.sleep(60)  # 每分钟检查一次
+                await asyncio.sleep(1)
                 
             except Exception as e:
-                bot_logger.error(f"[SessionMonitor] Session监控异常: {e}")
-                await asyncio.sleep(5)  # 发生错误时等待5秒再继续
-
-    async def _safe_reconnect(self):
-        """执行无损重连
-        1. 等待当前消息处理完成
-        2. 暂停新消息处理
-        3. 保存会话状态
-        4. 执行重连
-        5. 恢复会话状态
-        6. 恢复消息处理
-        """
-        bot_logger.info(f"[SessionMonitor] Session已运行{(time.time() - self.last_session_time)/60:.1f}分钟，准备无损重连...")
-        
-        try:
-            # 1. 等待当前消息处理完成
-            bot_logger.debug("[SessionMonitor] 等待当前消息处理完成...")
-            await self.bot.message_queue.join()
-            
-            # 2. 暂停新消息处理
-            old_should_stop = self.bot.should_stop.is_set()
-            self.bot.should_stop.set()
-            
-            # 3. 保存会话状态
-            bot_logger.debug("[SessionMonitor] 保存会话状态...")
-            old_session_id = None
-            old_last_seq = None
-            if hasattr(self.bot._client, "_session"):
-                session = getattr(self.bot._client, "_session", {})
-                old_session_id = session.get("session_id")
-                old_last_seq = session.get("last_seq")
-            
-            # 4. 执行重连
-            bot_logger.info("[SessionMonitor] 开始执行重连...")
-            if hasattr(self.bot, "_client") and hasattr(self.bot._client, "_session"):
-                await self.bot._client._session.close()
-                bot_logger.info("[SessionMonitor] 已断开旧连接，等待重连...")
-                
-                # 等待新连接建立
-                retry = 0
-                while retry < 30:  # 最多等待30秒
-                    if hasattr(self.bot._client, "_session") and \
-                       getattr(self.bot._client._session, "closed", True) is False:
-                        break
-                    await asyncio.sleep(1)
-                    retry += 1
-                
-                if retry >= 30:
-                    raise TimeoutError("等待新连接超时")
-                
-                # 5. 恢复会话状态
-                if old_session_id and old_last_seq:
-                    bot_logger.debug("[SessionMonitor] 恢复会话状态...")
-                    new_session = getattr(self.bot._client, "_session", {})
-                    new_session["session_id"] = old_session_id
-                    new_session["last_seq"] = old_last_seq
-            
-            # 6. 恢复消息处理
-            if not old_should_stop:
-                self.bot.should_stop.clear()
-            
-            bot_logger.info("[SessionMonitor] 无损重连完成")
-            
-        except Exception as e:
-            bot_logger.error(f"[SessionMonitor] 无损重连失败: {e}")
-            # 确保消息处理恢复
-            if not old_should_stop:
-                self.bot.should_stop.clear()
-            raise
+                bot_logger.error(f"[SessionMonitor] 监控异常: {e}")
+                await asyncio.sleep(5)
+        bot_logger.info("[SessionMonitor] 停止监控会话")
 
 
 class MyBot(botpy.Client):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # 初始化线程池
         self.thread_pool = concurrent.futures.ThreadPoolExecutor(
             max_workers=settings.MAX_WORKERS if hasattr(settings, 'MAX_WORKERS') else 10,
             thread_name_prefix="bot_worker"
         )
-        # 消息队列
         self.message_queue = Queue()
-        # 信号量控制并发
         self.semaphore = asyncio.Semaphore(
             settings.MAX_CONCURRENT if hasattr(settings, 'MAX_CONCURRENT') else 5
         )
-        # 线程安全的事件循环
         self._loop = asyncio.get_event_loop()
         
-        # 初始化组件
         self.browser_manager = browser_manager
         self.plugin_manager = PluginManager()
         self.bind_manager = BindManager()
         
-        # 初始化Session监控
         self.session_monitor = SessionMonitor(self)
         
-        # 启动消息处理线程
         self.should_stop = threading.Event()
         self.message_processor = threading.Thread(
             target=self._process_message_queue,
             name="message_processor",
-            daemon=True  # 设置为守护线程
+            daemon=True
         )
         self.message_processor.start()
-
+        
+        # 备份队列
+        self.backup_queue = Queue()
+        # 已完成的任务ID
+        self.completed_tasks = set()
+        
     def _process_message_queue(self):
         """处理消息队列的线程方法"""
         while not self.should_stop.is_set():
             try:
-                # 获取消息，设置超时以便定期检查should_stop标志
-                message, handler, content = self.message_queue.get(timeout=0.1)  # 缩短队列等待时间
-                
+                message, handler, content = self.message_queue.get(timeout=0.1)
                 try:
-                    # 在事件循环中执行异步处理
                     future = asyncio.run_coroutine_threadsafe(
                         self._handle_single_message(message, handler, content),
                         self._loop
                     )
-                    # 不等待处理完成，让消息异步处理
                     self._loop.call_soon_threadsafe(
                         lambda: self._loop.create_task(self._wait_message_result(future))
                     )
-                    
                 except Exception as e:
                     bot_logger.error(f"处理消息时出错: {str(e)}")
                 finally:
-                    # 只在实际获取到消息时调用task_done
                     self.message_queue.task_done()
-                    
             except Empty:
-                # 队列为空，继续等待
                 continue
             except Exception as e:
                 bot_logger.error(f"消息队列处理异常: {str(e)}")
@@ -283,23 +244,28 @@ class MyBot(botpy.Client):
         """等待消息处理结果"""
         try:
             await asyncio.wait_for(asyncio.wrap_future(future), timeout=90)
-        except asyncio.TimeoutError:
-            bot_logger.error("消息处理超时")
         except Exception as e:
             bot_logger.error(f"消息处理出错: {str(e)}")
 
     async def _handle_single_message(self, message: Message, handler: MessageHandler, content: str):
         """处理单条消息的异步方法"""
+        # 生成任务ID
+        task_id = f"{message.id}_{content}"
+        
+        # 检查是否已经处理过
+        if task_id in self.completed_tasks:
+            bot_logger.debug(f"[Bot] 跳过已处理的任务: {task_id}")
+            return
+            
         try:
-            # 检查是否是回复消息
             if hasattr(self.plugin_manager, '_temp_handlers') and self.plugin_manager._temp_handlers:
-                # 优先处理回复消息
                 if await self.plugin_manager.handle_message(handler, content):
+                    self.completed_tasks.add(task_id)
                     return
             
-            # 普通消息处理
             async with self.semaphore:
                 if await self.plugin_manager.handle_message(handler, content):
+                    self.completed_tasks.add(task_id)
                     return
                 
                 command_list = "\n".join(f"/{cmd} - {desc}" for cmd, desc in self.plugin_manager.get_command_list().items())
@@ -308,14 +274,17 @@ class MyBot(botpy.Client):
                     "可用命令列表:\n"
                     f"{command_list}"
                 )
+                self.completed_tasks.add(task_id)
+                
         except Exception as e:
             bot_logger.error(f"处理消息时发生错误: {str(e)}")
-            await asyncio.sleep(1)
             await handler.send_text(
                 "⚠️ 处理消息时发生错误\n"
                 "建议：请稍后重试\n"
                 "如果问题持续存在，请在 /about 中联系开发者"
             )
+            # 出错的任务也标记为完成,避免重试
+            self.completed_tasks.add(task_id)
 
     async def process_message(self, message: Message) -> None:
         """将消息加入队列"""
@@ -329,98 +298,61 @@ class MyBot(botpy.Client):
     async def on_close(self):
         """当机器人关闭时触发"""
         try:
-            # 停止消息处理
             self.should_stop.set()
-            
-            # 等待消息队列清空(设置超时避免卡死)
             try:
                 self.message_queue.join()
             except Exception:
                 pass
-            
-            # 等待消息处理线程结束(设置超时避免卡死)
             self.message_processor.join(timeout=5)
             
-            # 并发清理资源
             cleanup_tasks = []
-            
-            # 清理插件
-            plugins_cleanup = asyncio.create_task(self._cleanup_plugins())
-            cleanup_tasks.append(plugins_cleanup)
-            
-            # 清理浏览器
-            browser_cleanup = asyncio.create_task(self._cleanup_browser())
-            cleanup_tasks.append(browser_cleanup)
-            
-            # 等待所有清理任务完成
+            cleanup_tasks.append(asyncio.create_task(self._cleanup_plugins()))
+            cleanup_tasks.append(asyncio.create_task(self._cleanup_browser()))
             await asyncio.gather(*cleanup_tasks)
             
-            # 关闭线程池
             self.thread_pool.shutdown(wait=True)
+            
+            # 停止 Session 监控
+            await self.session_monitor.stop_monitoring()
             
         except Exception as e:
             bot_logger.error(f"清理资源时出错: {str(e)}")
 
     async def _cleanup_plugins(self):
-        """清理插件的异步方法"""
         try:
             await self.plugin_manager.unload_all()
         except Exception as e:
             bot_logger.error(f"清理插件失败: {str(e)}")
     
     async def _cleanup_browser(self):
-        """清理浏览器的异步方法"""
         try:
             await self.browser_manager.cleanup()
         except Exception as e:
             bot_logger.error(f"清理浏览器失败: {str(e)}")
 
     async def on_group_at_message_create(self, message: GroupMessage):
-        """当收到群组@消息时触发"""
-        bot_logger.debug(f"收到群@消息：{message.content}")
-        # 更新最后会话时间
         self.session_monitor.last_session_time = time.time()
         await self.process_message(message)
 
     async def on_at_message_create(self, message: Message):
-        """当收到频道@消息时触发"""
-        bot_logger.debug(f"收到频道@消息：{message.content}")
-        # 更新最后会话时间
         self.session_monitor.last_session_time = time.time()
         await self.process_message(message)
 
     async def on_ready(self):
-        """当机器人就绪时触发"""
         try:
-            bot_logger.debug("开始初始化机器人...")
-            
-            # 并发初始化组件
             init_tasks = []
-            
-            # 初始化浏览器
-            browser_task = asyncio.create_task(self._init_browser())
-            init_tasks.append(browser_task)
-            
-            # 初始化插件
-            plugins_task = asyncio.create_task(self._init_plugins())
-            init_tasks.append(plugins_task)
-            
-            # 等待所有初始化任务完成
+            init_tasks.append(asyncio.create_task(self._init_browser()))
+            init_tasks.append(asyncio.create_task(self._init_plugins()))
             await asyncio.gather(*init_tasks)
-            
-            # 启动Session监控
             await self.session_monitor.start_monitoring()
             
             bot_logger.info(f"机器人已登录成功：{self.robot.name}")
-            bot_logger.debug(f"机器人ID：{self.robot.id}")
             bot_logger.info(f"运行环境：{'沙箱环境' if settings.BOT_SANDBOX else '正式环境'}")
-            
         except Exception as e:
             bot_logger.error(f"初始化失败: {str(e)}")
             raise
 
     async def _init_browser(self):
-        """初始化浏览器的异步方法"""
         try:
             await self.browser_manager.initialize()
         except Exception as e:
@@ -428,9 +360,7 @@ class MyBot(botpy.Client):
             raise
     
     async def _init_plugins(self):
-        """初始化插件的异步方法"""
         try:
-            # 自动发现并注册插件
             await self.plugin_manager.auto_discover_plugins(
                 plugins_dir="plugins",
                 bind_manager=self.bind_manager
@@ -440,22 +370,97 @@ class MyBot(botpy.Client):
             bot_logger.error(f"插件初始化失败: {str(e)}")
             raise
 
+    def _backup_tasks(self):
+        """备份未完成的任务"""
+        try:
+            # 只备份消息队列中的任务
+            while not self.message_queue.empty():
+                try:
+                    task = self.message_queue.get_nowait()
+                    message, _, content = task
+                    task_id = f"{message.id}_{content}"
+                    # 只备份未完成的任务
+                    if task_id not in self.completed_tasks:
+                        self.backup_queue.put(task)
+                    self.message_queue.task_done()
+                except Empty:
+                    break
+                    
+            bot_logger.debug(f"[Bot] 已备份 {self.backup_queue.qsize()} 个任务")
+        except Exception as e:
+            bot_logger.error(f"[Bot] 备份任务失败: {e}")
+    
+    def _restore_tasks(self):
+        """恢复备份的任务"""
+        try:
+            # 恢复备份的任务到消息队列
+            while not self.backup_queue.empty():
+                try:
+                    task = self.backup_queue.get_nowait()
+                    message, _, content = task
+                    task_id = f"{message.id}_{content}"
+                    # 只恢复未完成的任务
+                    if task_id not in self.completed_tasks:
+                        self.message_queue.put(task)
+                    self.backup_queue.task_done()
+                except Empty:
+                    break
+            bot_logger.debug(f"[Bot] 已恢复 {self.message_queue.qsize()} 个任务")
+        except Exception as e:
+            bot_logger.error(f"[Bot] 恢复任务失败: {e}")
+
+    async def restart(self):
+        """重启机器人"""
+        try:
+            bot_logger.info("[Bot] 开始重启...")
+            
+            # 停止消息处理
+            old_should_stop = self.should_stop.is_set()
+            self.should_stop.set()
+            
+            # 备份未完成的任务
+            self._backup_tasks()
+            
+            # 等待消息队列清空
+            try:
+                self.message_queue.join()
+            except Exception:
+                pass
+            
+            # 等待消息处理线程结束
+            self.message_processor.join(timeout=5)
+            
+            # 强制重连
+            if hasattr(self, "_connection") and hasattr(self._connection, "_ws"):
+                await self._connection._ws.force_reconnect()
+                bot_logger.info("[Bot] WebSocket 重连完成")
+            
+            # 恢复备份的任务
+            self._restore_tasks()
+            
+            # 重新启动消息处理线程
+            if not old_should_stop:
+                self.should_stop.clear()
+                self.message_processor = threading.Thread(
+                    target=self._process_message_queue,
+                    name="message_processor",
+                    daemon=True
+                )
+                self.message_processor.start()
+                bot_logger.info("[Bot] 消息处理已恢复")
+            
+            bot_logger.info("[Bot] 重启完成")
+            
+        except Exception as e:
+            bot_logger.error(f"[Bot] 重启失败: {e}")
+            raise
+
 def main():
     try:
-        bot_logger.debug("="*50)
-        bot_logger.debug("开始初始化机器人...")
-        
-        # 注入改进的代码
         inject_botpy()
-        
         intents = botpy.Intents(public_guild_messages=True, public_messages=True)
         client = MyBot(intents=intents)
-        
-        bot_logger.info("正在启动机器人...")
-        bot_logger.debug("正在连接到QQ服务器...")
-        
         client.run(appid=settings.BOT_APPID, secret=settings.BOT_SECRET)
-        
     except Exception as e:
         bot_logger.error(f"运行时发生错误：{str(e)}")
         if "invalid appid or secret" in str(e).lower():

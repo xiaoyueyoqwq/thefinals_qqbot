@@ -1,3 +1,4 @@
+import asyncio
 from core.plugin import Plugin, on_command, on_keyword, on_regex, on_event, Event, EventType
 from utils.logger import log, bot_logger
 import aiofiles
@@ -87,7 +88,7 @@ class TestHelloPlugin(Plugin):
     @on_command("image", "测试发送图片")
     async def test_image(self, handler, content):
         """测试发送图片"""
-        await self.reply_image(handler, "resources/images/thefinals.png")
+        await self.reply_image(handler, "resources/images/thefinals_logo.png")
         await self.reply(handler, "已发送测试图片") 
 
     @on_command("savedata", "保存数据")
@@ -116,8 +117,11 @@ class TestHelloPlugin(Plugin):
         """测试base64图片发送"""
         try:
             # 读取测试图片
-            async with aiofiles.open("data/test.png", "rb") as f:
+            async with aiofiles.open("resources/images/thefinals_logo.png", "rb") as f:
                 image_data = await f.read()
+                
+            # 等待5秒
+            await asyncio.sleep(5)
             
             # 使用base64方式发送
             bot_logger.debug("开始使用base64方式发送图片")

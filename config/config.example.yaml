@@ -1,0 +1,20 @@
+# Bot配置
+bot:
+  appid: ""  # 机器人的AppID
+  token: ""  # 机器人的Token
+  secret: ""  # 机器人的Secret
+  sandbox: true  # 是否使用沙箱环境
+
+# 调试配置
+debug:
+  test_reply: false  # 是否启用测试回复
+
+# 命令配置
+command:
+  prefix_required: true  # 是否强制要求命令前缀
+  prefix: "/"  # 命令前缀
+  respond_to_unknown: true  # 是否响应未知命令
+
+# 线程配置
+max_concurrent: 5  # 最大并发数
+max_workers: 10  # 最大工作线程数 

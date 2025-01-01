@@ -2,7 +2,6 @@ import uuid
 import base64
 from botpy.message import GroupMessage
 from utils.logger import bot_logger
-from utils.doge_oss import doge_oss
 from utils.message_api import FileType, MessageAPI, MessageType
 
 class MessageHandler:
@@ -13,75 +12,79 @@ class MessageHandler:
         self.is_group = isinstance(message, GroupMessage)
         self._api = MessageAPI(message._api)
 
-    async def send_text(self, content: str) -> bool:
-        """发送文本消息"""
+    async def send_text(self, content: str, image_data: bytes = None) -> bool:
+        """发送文本消息，支持图文混排
+        Args:
+            content: 文本内容
+            image_data: 可选的图片数据，如果提供则会发送图文混排消息
+        """
         try:
-            if self.is_group:
-                await self._api.send_to_group(
-                    group_id=self.message.group_openid,
-                    content=content,
-                    msg_type=MessageType.TEXT,
-                    msg_id=self.message.id
-                )
+            # 如果有图片数据，使用图文混排
+            if image_data:
+                image_base64 = base64.b64encode(image_data).decode('utf-8')
+                if self.is_group:
+                    await self._api.send_to_group(
+                        group_id=self.message.group_openid,
+                        content=content,
+                        msg_type=MessageType.MIXED,
+                        msg_id=self.message.id,
+                        image_base64=image_base64
+                    )
+                else:
+                    await self._api.send_to_user(
+                        user_id=self.message.author.id,
+                        content=content,
+                        msg_type=MessageType.MIXED,
+                        msg_id=self.message.id,
+                        image_base64=image_base64
+                    )
+            # 纯文本消息
             else:
-                await self._api.send_to_user(
-                    user_id=self.message.author.id,
-                    content=content,
-                    msg_type=MessageType.TEXT,
-                    msg_id=self.message.id
-                )
+                if self.is_group:
+                    await self._api.send_to_group(
+                        group_id=self.message.group_openid,
+                        content=content,
+                        msg_type=MessageType.TEXT,
+                        msg_id=self.message.id
+                    )
+                else:
+                    await self._api.send_to_user(
+                        user_id=self.message.author.id,
+                        content=content,
+                        msg_type=MessageType.TEXT,
+                        msg_id=self.message.id
+                    )
             return True
         except Exception as e:
             bot_logger.error(f"发送消息时发生错误: {str(e)}")
             return False
 
-    async def send_image(self, image_data: bytes, use_base64: bool = False) -> bool:
+    async def send_image(self, image_data: bytes) -> bool:
         """发送图片消息
         Args:
-            image_data: 图片数据
-            use_base64: 是否使用base64方式发送
+            image_data: 图片数据(将自动转换为base64编码发送)
         """
         try:
+            # 统一使用base64编码
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            
             if self.is_group:
-                if use_base64:
-                    # 直接使用base64发送
-                    image_base64 = base64.b64encode(image_data).decode('utf-8')
-                    await self._api.send_to_group(
-                        group_id=self.message.group_openid,
-                        content=" ",
-                        msg_type=MessageType.MEDIA,
-                        msg_id=self.message.id,
-                        image_base64=image_base64
-                    )
-                else:
-                    # 使用OSS中转
-                    file_key = f"images/{uuid.uuid4()}.png"
-                    upload_result = await doge_oss.upload_image(key=file_key, image_data=image_data)
-                    
-                    # 上传到QQ服务器
-                    file_result = await self._api.upload_group_file(
-                        group_id=self.message.group_openid,
-                        file_type=FileType.IMAGE,
-                        url=upload_result["url"]
-                    )
-                    
-                    # 发送富媒体消息
-                    media_payload = self._api.create_media_payload(file_result["file_info"])
-                    await self._api.send_to_group(
-                        group_id=self.message.group_openid,
-                        content=" ",
-                        msg_type=MessageType.MEDIA,
-                        msg_id=self.message.id,
-                        media=media_payload
-                    )
+                # 群聊消息
+                await self._api.send_to_group(
+                    group_id=self.message.group_openid,
+                    content=" ",
+                    msg_type=MessageType.MEDIA,
+                    msg_id=self.message.id,
+                    image_base64=image_base64
+                )
             else:
-                # 私聊图片发送
+                # 私聊消息
                 await self._api.send_to_user(
                     user_id=self.message.author.id,
                     content=" ",
                     msg_type=MessageType.MEDIA,
                     msg_id=self.message.id,
-                    file_image=image_data
+                    image_base64=image_base64
                 )
             return True
         except Exception as e:

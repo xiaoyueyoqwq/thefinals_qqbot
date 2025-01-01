@@ -395,20 +395,33 @@ class MessageAPI:
             bot_logger.error(f"撤回群消息失败: {str(e)}")
             return False
         
-    async def send_to_user(self, user_id: str, content: str, msg_type: MessageType, msg_id: str, file_image: Optional[bytes] = None) -> bool:
-        """发送私聊消息"""
+    async def send_to_user(self, user_id: str, content: str, msg_type: MessageType, msg_id: str, image_base64: Optional[str] = None) -> bool:
+        """发送私聊消息
+        Args:
+            user_id: 用户ID
+            content: 消息内容
+            msg_type: 消息类型
+            msg_id: 消息ID
+            image_base64: 图片base64数据
+        """
         try:
             bot_logger.debug(f"准备发送私聊消息 - user_id: {user_id}, msg_type: {msg_type}, msg_id: {msg_id}")
             
-            # 构造参数
+            # 构造基础参数
             params = {
                 "msg_type": msg_type.value,
                 "content": content.replace("━", "-"),  # 替换特殊字符
                 "msg_id": msg_id
             }
             
-            if file_image:
-                params["file_image"] = file_image
+            # 如果有图片数据
+            if image_base64:
+                if msg_type == MessageType.MIXED:
+                    # 图文混排消息
+                    params["image_base64"] = image_base64
+                elif msg_type == MessageType.MEDIA:
+                    # 纯图片消息
+                    params["file_data"] = image_base64
             
             # 发送消息
             await self._api.post_c2c_message(
