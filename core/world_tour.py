@@ -11,9 +11,9 @@ class WorldTourAPI(BaseAPI):
         self.platform = "crossplay"
         # 支持的赛季列表
         self.seasons = {
-            "s3": ("🎮", "s3", "Season 3"),
-            "s4": ("🎯", "s4", "Season 4"),
-            "s5": ("🌟", "s5", "Season 5")
+            "s3": ("🎮", "s3", "season 3"),
+            "s4": ("🎯", "s4", "season 4"),
+            "s5": ("🌟", "s5", "season 5")
         }
         # 设置默认请求头
         self.headers = {
@@ -93,13 +93,17 @@ class WorldTourQuery:
     def __init__(self):
         self.api = WorldTourAPI()
 
-    def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]]) -> str:
+    def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]], target_season: str = None) -> str:
         """格式化响应消息"""
         # 检查是否有任何赛季的数据
-        valid_data = {season: data for season, data in season_data.items() if data}
+        if target_season:
+            valid_data = {season: data for season, data in season_data.items() if data and season == target_season}
+        else:
+            valid_data = {season: data for season, data in season_data.items() if data}
+            
         if not valid_data:
             return (
-                "⚠️ 未找到玩家数据\n"
+                "\n⚠️ 未找到玩家数据\n"
                 "━━━━━━━━━━━━━\n"
                 "可能的原因:\n"
                 "1. 玩家ID输入或绑定错误\n"
@@ -129,11 +133,11 @@ class WorldTourQuery:
             f"━━━━━━━━━━━━━"
         )
 
-    async def process_wt_command(self, player_name: str = None) -> str:
+    async def process_wt_command(self, player_name: str = None, season: str = None) -> str:
         """处理世界巡回赛查询命令"""
         if not player_name:
             return (
-                "❌ 未提供玩家ID\n"
+                "\n❌ 未提供玩家ID\n"
                 "━━━━━━━━━━━━━\n"
                 "🎮 使用方法:\n"
                 "1. /wt 玩家ID\n"
@@ -145,22 +149,25 @@ class WorldTourQuery:
                 "3. 可尝试模糊搜索"
             )
 
-        bot_logger.info(f"查询玩家 {player_name} 的世界巡回赛数据")
+        # 如果提供了赛季参数，只查询指定赛季
+        seasons_to_query = [season] if season and season in self.api.seasons else self.api.seasons.keys()
+        
+        bot_logger.info(f"查询玩家 {player_name} 的世界巡回赛数据，赛季: {season if season else '全部'}")
         
         try:
-            # 并发查询所有赛季数据
+            # 并发查询赛季数据
             tasks = [
-                self.api.get_player_stats(player_name, season)
-                for season in self.api.seasons.keys()
+                self.api.get_player_stats(player_name, s)
+                for s in seasons_to_query
             ]
             results = await asyncio.gather(*tasks)
             
             # 将结果与赛季对应
-            season_data = dict(zip(self.api.seasons.keys(), results))
+            season_data = dict(zip(seasons_to_query, results))
             
             # 格式化并返回结果
-            return self.format_response(player_name, season_data)
+            return self.format_response(player_name, season_data, season)
             
         except Exception as e:
             bot_logger.error(f"处理世界巡回赛查询命令时出错: {str(e)}")
-            return "⚠️ 查询过程中发生错误，请稍后重试" 
+            return "\n⚠️ 查询过程中发生错误，请稍后重试" 

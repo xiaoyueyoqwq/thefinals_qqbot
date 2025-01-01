@@ -44,7 +44,7 @@ class RankPlugin(Plugin):
     def _format_loading_message(self, player_name: str, season: str) -> str:
         """格式化加载提示消息"""
         message = [
-            f"⏰正在查询 {player_name} 的 {season} 赛季数据...",
+            f"\n⏰正在查询 {player_name} 的 {season} 赛季数据...",
             "━━━━━━━━━━━━━",  # 分割线
             "🤖你知道吗？",
             f"[ {self._get_random_tip()} ]"
@@ -58,39 +58,53 @@ class RankPlugin(Plugin):
             bot_logger.debug(f"[{self.name}] 收到rank命令: {content}")
             parts = content.split(maxsplit=1)
             
-            # 解析玩家ID和赛季
-            if len(parts) <= 1:
-                player_name = self.bind_manager.get_game_id(handler.message.author.member_openid)
+            # 获取用户绑定的ID
+            bound_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
+            
+            # 解析命令参数
+            if len(parts) <= 1:  # 没有参数，使用绑定ID和默认赛季
+                if not bound_id:
+                    await self.reply(handler, (
+                        "\n❌ 未提供玩家ID\n"
+                        "━━━━━━━━━━━━━\n"
+                        "🎮 使用方法:\n"
+                        "1. /rank 玩家ID\n"
+                        "2. /rank 玩家ID 赛季\n"
+                        "━━━━━━━━━━━━━\n"
+                        "💡 小贴士:\n"
+                        "1. 可以使用 /bind 绑定ID\n"
+                        "2. 赛季可选: s1~s5\n"
+                        "3. 需要输入完整ID"
+                    ))
+                    return
+                player_name = bound_id
                 season = "s5"  # 默认赛季
-                args = []  # 确保args变量存在
             else:
                 args = parts[1].split()
-                player_name = args[0]
-                season = args[1].lower() if len(args) > 1 else "s5"
+                if len(args) == 1:  # 只有一个参数
+                    if args[0].lower().startswith('s') and args[0].lower() in ["s1", "s2", "s3", "s4", "s5"]:
+                        # 参数是赛季，使用绑定ID
+                        if not bound_id:
+                            await self.reply(handler, "\n❌ 请先绑定游戏ID或提供玩家ID")
+                            return
+                        player_name = bound_id
+                        season = args[0].lower()
+                    else:
+                        # 参数是玩家ID，使用默认赛季
+                        player_name = args[0]
+                        season = "s5"
+                else:  # 有两个参数
+                    player_name = args[0]
+                    season = args[1].lower()
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
-            if not player_name:
-                await self.reply(handler, (
-                    "❌ 未提供玩家ID\n"
-                    "━━━━━━━━━━━━━\n"
-                    "🎮 使用方法:\n"
-                    "1. /rank 玩家ID\n"
-                    "2. /rank 玩家ID 赛季\n"
-                    "━━━━━━━━━━━━━\n"
-                    "💡 小贴士:\n"
-                    "1. 可以使用 /bind 绑定ID\n"
-                    "2. 赛季可选: s1~s5\n"
-                    "3. 需要输入完整ID"
-                ))
-                return
-                
             # 发送初始提示消息
             await self.reply(handler, self._format_loading_message(player_name, season))
                 
             # 查询排名并生成图片
             image_data, error_msg, _, _ = await self.rank_query.process_rank_command(
-                f"{player_name} {season}" if args else player_name
+                f"{player_name} {season}"
             )
             
             if error_msg:
@@ -101,14 +115,14 @@ class RankPlugin(Plugin):
             # 使用handler的send_image方法发送图片
             bot_logger.debug(f"[{self.name}] 使用base64发送图片")
             if not await handler.send_image(image_data):
-                await self.reply(handler, "⚠️ 发送图片时发生错误")
+                await self.reply(handler, "\n⚠️ 发送图片时发生错误")
                     
         except TypeError as e:
             bot_logger.error(f"[{self.name}] 查询返回值格式错误: {str(e)}", exc_info=True)
-            await self.reply(handler, "⚠️ 查询失败，请稍后重试")
+            await self.reply(handler, "\n⚠️ 查询失败，请稍后重试")
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理rank命令时发生错误: {str(e)}", exc_info=True)
-            await self.reply(handler, "⚠️ 查询失败，请稍后重试")
+            await self.reply(handler, "\n⚠️ 查询失败，请稍后重试")
             
     @on_command("r", "查询排名信息（简写）")
     async def query_rank_short(self, handler: MessageHandler, content: str) -> None:

@@ -320,7 +320,7 @@ class RankQuery:
         valid_data = {season: data for season, data in season_data.items() if data}
         if not valid_data:
             error_msg = (
-                    "⚠️ 未找到玩家数据\n"
+                    "\n⚠️ 未找到玩家数据\n"
                     "━━━━━━━━━━━━━\n"
                     "可能的原因:\n"
                     "1. 玩家ID输入错误\n"
@@ -338,7 +338,7 @@ class RankQuery:
         """处理排位查询命令"""
         if not player_name:
             error_msg = (
-                "❌ 未提供玩家ID\n"
+                "\n❌ 未提供玩家ID\n"
                 "━━━━━━━━━━━━━\n"
                 "🎮 使用方法:\n"
                 "1. /rank 玩家ID\n"
@@ -372,18 +372,18 @@ class RankQuery:
             # 准备模板数据
             template_data = self.prepare_template_data(season_data[season], season)
             if not template_data:
-                error_msg = "⚠️ 处理玩家数据时出错"
+                error_msg = "\n⚠️ 处理玩家数据时出错"
                 return None, error_msg, None, None
                 
             # 生成图片
             image_data = await self.generate_rank_image(template_data)
             if not image_data:
-                error_msg = "⚠️ 生成图片时出错"
+                error_msg = "\n⚠️ 生成图片时出错"
                 return None, error_msg, None, None
                 
             return image_data, None, season_data, template_data
             
         except Exception as e:
             bot_logger.error(f"处理rank命令时出错: {str(e)}")
-            error_msg = "⚠️ 查询失败，请稍后重试"
+            error_msg = "\n⚠️ 查询失败，请稍后重试"
             return None, error_msg, None, None
