@@ -5,7 +5,7 @@ from playwright.async_api import Page
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.browser import browser_manager
-from utils.doge_oss import doge_oss
+# from utils.doge_oss import doge_oss
 from utils.message_api import FileType, MessageAPI
 import uuid
 
@@ -322,10 +322,10 @@ class RankQuery:
             
             # 并行上传到OSS和QQ服务器
             oss_task = asyncio.create_task(
-                doge_oss.upload_image(
-                    key=file_key,
-                    image_data=image_data
-                )
+                # doge_oss.upload_image(
+                #     key=file_key,
+                #     image_data=image_data
+                # )
             )
             
             # 等待OSS上传完成获取URL
