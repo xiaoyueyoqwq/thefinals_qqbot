@@ -901,10 +901,8 @@ class PluginManager:
         """获取所有已注册的命令列表（不包含隐藏命令）"""
         commands = {}
         for plugin in self.plugins.values():
-            if plugin.enabled and not plugin.maintenance:
-                for cmd, info in plugin.commands.items():
-                    if not info.get('hidden', False):
-                        commands[cmd] = info
+            if plugin.enabled:
+                commands.update(plugin.get_command_list())
         return commands
             
     async def load_all(self) -> None:
