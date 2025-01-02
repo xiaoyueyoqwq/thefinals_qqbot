@@ -15,7 +15,7 @@ class AboutUs:
         if self._initialized:
             return
             
-        self.version = "v1.0.0"
+        self.version = "v1.2.1"
         self.github_url = "https://github.com/xiaoyueyoqwq"
         self.api_credit = "https://api.the-finals-leaderboard.com"
         self._initialized = True

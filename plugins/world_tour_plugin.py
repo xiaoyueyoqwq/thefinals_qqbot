@@ -4,14 +4,18 @@ from core.world_tour import WorldTourQuery
 from core.bind import BindManager
 from utils.logger import bot_logger
 import re
+import os
+import json
+import random
 
 class WorldTourPlugin(Plugin):
     """世界巡回赛查询插件"""
     
-    def __init__(self, bind_manager: BindManager):
+    def __init__(self):
         super().__init__()
         self.world_tour_query = WorldTourQuery()
-        self.bind_manager = bind_manager
+        self.bind_manager = BindManager()
+        self.tips = self._load_tips()
         self._messages = {
             "not_found": (
                 "❌ 未提供玩家ID\n"
@@ -25,10 +29,41 @@ class WorldTourPlugin(Plugin):
                 "2. 赛季可选: s3~s5\n"
                 "3. 可尝试模糊搜索"
             ),
-            "query_failed": "⚠️ 查询失败，请稍后重试",
-            "invalid_id": "❌ 无效的游戏ID格式，正确格式: PlayerName#1234"
+            "query_failed": "\n⚠️ 查询失败，请稍后重试",
+            "invalid_id": "\n❌ 无效的游戏ID格式，正确格式: PlayerName#1234"
         }
         bot_logger.debug(f"[{self.name}] 初始化世界巡回赛查询插件")
+        
+    def _load_tips(self) -> list:
+        """加载小知识数据"""
+        try:
+            tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "did_you_know.json")
+            bot_logger.debug(f"[{self.name}] 正在加载小知识文件: {tips_path}")
+            with open(tips_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                tips = data.get("tips", [])
+                bot_logger.info(f"[{self.name}] 成功加载 {len(tips)} 条小知识")
+                return tips
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 加载小知识数据失败: {str(e)}")
+            return []
+            
+    def _get_random_tip(self) -> str:
+        """获取随机小知识"""
+        if not self.tips:
+            bot_logger.warning(f"[{self.name}] 小知识列表为空")
+            return "暂无小知识"
+        return random.choice(self.tips)
+
+    def _format_loading_message(self, player_name: str, season: str = "s5") -> str:
+        """格式化加载提示消息"""
+        message = [
+            f"\n⏰正在查询 {player_name} 的 {season.lower()} 赛季世界巡回赛数据...",
+            "━━━━━━━━━━━━━",  # 分割线
+            "🤖你知道吗？",
+            f"[ {self._get_random_tip()} ]"
+        ]
+        return "\n".join(message)
         
     @on_command("wt", "查询世界巡回赛信息")
     async def query_world_tour(self, handler: MessageHandler, content: str) -> None:
@@ -36,29 +71,46 @@ class WorldTourPlugin(Plugin):
         try:
             bot_logger.debug(f"[{self.name}] 收到世界巡回赛查询命令: {content}")
             
-            # 获取用户ID
-            user_id = handler.message.author.member_openid
+            # 获取用户绑定的ID
+            bound_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
             
-            # 解析参数
+            # 解析命令参数
             parts = content.split(maxsplit=1)
-            if len(parts) > 1:
-                player_name = parts[1]
+            if len(parts) <= 1:  # 没有参数，使用绑定ID
+                if not bound_id:
+                    await self.reply(handler, self._messages["not_found"])
+                    return
+                player_name = bound_id
+                season = "s5"  # 默认赛季
             else:
-                # 只尝试获取绑定的ID
-                player_name = self.bind_manager.get_game_id(user_id)
+                args = parts[1].split()
+                if len(args) == 1:  # 只有一个参数
+                    if args[0].lower().startswith('s') and args[0].lower() in ["s3", "s4", "s5"]:
+                        # 参数是赛季，使用绑定ID
+                        if not bound_id:
+                            await self.reply(handler, "\n❌ 请先绑定游戏ID或提供玩家ID")
+                            return
+                        player_name = bound_id
+                        season = args[0].lower()
+                    else:
+                        # 参数是玩家ID
+                        player_name = args[0]
+                        season = "s5"  # 默认赛季
+                else:  # 有两个参数，第一个是ID，第二个是赛季
+                    player_name = args[0]
+                    season = args[1].lower() if args[1].lower() in ["s3", "s4", "s5"] else "s5"
             
-            bot_logger.debug(f"[{self.name}] 解析玩家ID: {player_name}")
+            bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
-            if not player_name:
-                await self.reply(handler, self._messages["not_found"])
-                return
-                
+            # 发送初始提示消息
+            await self.reply(handler, self._format_loading_message(player_name, season))
+            
             # 如果是完整ID格式，直接查询
             if re.match(r"^[a-zA-Z0-9_]+#\d{4}$", player_name):
-                result = await self.world_tour_query.process_wt_command(player_name)
+                result = await self.world_tour_query.process_wt_command(player_name, season)
             # 否则尝试模糊搜索
             else:
-                result = await self.world_tour_query.process_wt_command(player_name)
+                result = await self.world_tour_query.process_wt_command(player_name, season)
                 
             bot_logger.debug(f"[{self.name}] 查询结果: {result}")
             await self.reply(handler, result)

@@ -7,10 +7,10 @@ import json
 class BindPlugin(Plugin):
     """游戏ID绑定插件"""
     
-    def __init__(self, bind_manager: BindManager):
+    def __init__(self):
         """初始化游戏ID绑定插件"""
         super().__init__()
-        self.bind_manager = bind_manager
+        self.bind_manager = BindManager()
         bot_logger.debug(f"[{self.name}] 初始化游戏ID绑定插件")
         
     def _validate_game_id(self, game_id: str) -> bool:
@@ -60,7 +60,7 @@ class BindPlugin(Plugin):
                     json.dump(self.bind_manager.bindings, f, ensure_ascii=False, indent=2)
                 
             await self.reply(handler,
-                "✅ 绑定成功！\n"
+                "\n✅ 绑定成功！\n"
                 "━━━━━━━━━━━━━━━\n"
                 f"游戏ID: {args}\n\n"
                 "现在可以直接使用:\n"
@@ -94,7 +94,7 @@ class BindPlugin(Plugin):
         game_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
         if game_id:
             await self.reply(handler,
-                "📋 当前绑定信息\n"
+                "\n📋 当前绑定信息\n"
                 "━━━━━━━━━━━━━━━\n"
                 f"游戏ID: {game_id}"
             )
@@ -104,7 +104,7 @@ class BindPlugin(Plugin):
     def _get_help_message(self) -> str:
         """获取帮助信息"""
         return (
-            "📝 绑定功能说明\n"
+            "\n📝 绑定功能说明\n"
             "━━━━━━━━━━━━━━━\n"
             "绑定游戏ID:\n"
             "/bind <游戏ID>\n"
