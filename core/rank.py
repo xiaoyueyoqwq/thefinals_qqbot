@@ -6,13 +6,14 @@ from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.browser import browser_manager
 from utils.message_api import FileType, MessageAPI
+from utils.config import settings
 import uuid
 
 class RankAPI(BaseAPI):
     """排位系统API封装"""
     
     def __init__(self):
-        super().__init__("https://api.the-finals-leaderboard.com/v1", timeout=10)
+        super().__init__(settings.api_base_url, timeout=10)
         self.platform = "crossplay"
         # 设置默认请求头
         self.headers = {

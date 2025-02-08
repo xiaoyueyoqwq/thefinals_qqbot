@@ -29,6 +29,16 @@ class Settings:
     PROXY_PORT = _config.get("proxy", {}).get("port", 7890)
     PROXY_TYPE = _config.get("proxy", {}).get("type", "http")
     
+    # API配置
+    API_USE_PROXY = _config.get("api", {}).get("use_proxy", True)
+    API_STANDARD_URL = _config.get("api", {}).get("standard", {}).get("base_url", "https://api.the-finals-leaderboard.com/v1")
+    API_PROXY_URL = _config.get("api", {}).get("proxy", {}).get("base_url", "https://thefinals-api.luoxiaohei.cn")
+    
+    @property
+    def api_base_url(self) -> str:
+        """返回当前使用的API基础URL"""
+        return self.API_PROXY_URL if self.API_USE_PROXY else self.API_STANDARD_URL
+
     @property
     def proxy(self) -> dict:
         """返回代理配置字典"""

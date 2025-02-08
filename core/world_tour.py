@@ -2,12 +2,13 @@ from typing import Optional, Dict, List, Tuple
 import asyncio
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
+from utils.config import settings
 
 class WorldTourAPI(BaseAPI):
     """世界巡回赛API封装"""
     
     def __init__(self):
-        super().__init__("https://api.the-finals-leaderboard.com/v1", timeout=10)
+        super().__init__(settings.api_base_url, timeout=10)
         self.platform = "crossplay"
         # 支持的赛季列表
         self.seasons = {
