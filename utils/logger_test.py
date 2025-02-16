@@ -34,8 +34,8 @@ def test_logger():
     time.sleep(1)
     
     # 检查结果
-    archive_dir = os.path.join(get_log_directory(), "archive")
-    archive_files = [f for f in os.listdir(archive_dir) if f.endswith('.gz')]
+    log_dir = get_log_directory()
+    archive_files = [f for f in os.listdir(log_dir) if f.endswith('.gz')]
     
     # 获取新日志文件大小
     size_after = os.path.getsize(log_file) if os.path.exists(log_file) else 0
@@ -45,9 +45,9 @@ def test_logger():
     print(f"▫️ 发现压缩文件数量: {len(archive_files)}")
     if archive_files:
         print("▫️ 最新的压缩文件:")
-        newest_file = max(archive_files, key=lambda x: os.path.getctime(os.path.join(archive_dir, x)))
+        newest_file = max(archive_files, key=lambda x: os.path.getctime(os.path.join(log_dir, x)))
         print(f"  - 文件名: {newest_file}")
-        size = os.path.getsize(os.path.join(archive_dir, newest_file))
+        size = os.path.getsize(os.path.join(log_dir, newest_file))
         print(f"  - 大小: {size/1024:.2f} KB")
     
     print("\n✅ 日志测试完成!")

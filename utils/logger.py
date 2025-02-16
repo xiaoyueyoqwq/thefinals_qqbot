@@ -44,13 +44,8 @@ def get_log_directory() -> str:
     # 在根目录下创建logs文件夹
     log_dir = os.path.join(root_dir, "logs")
     
-    # 创建子目录
-    daily_dir = os.path.join(log_dir, "daily")  # 存放每日日志
-    archive_dir = os.path.join(log_dir, "archive")  # 存放归档日志
-    
-    # 创建所需的目录
-    for directory in [log_dir, daily_dir, archive_dir]:
-        os.makedirs(directory, exist_ok=True)
+    # 创建日志目录
+    os.makedirs(log_dir, exist_ok=True)
         
     return log_dir
 
@@ -61,11 +56,14 @@ def get_log_file_path(filename: str = "latest.log") -> str:
 def cleanup_old_logs(max_days: int = 30) -> None:
     """清理旧的日志文件"""
     try:
-        archive_dir = os.path.join(get_log_directory(), "archive")
+        log_dir = get_log_directory()
         current_time = datetime.now()
         
-        for filename in os.listdir(archive_dir):
-            filepath = os.path.join(archive_dir, filename)
+        for filename in os.listdir(log_dir):
+            if filename == "latest.log":  # 跳过当前日志文件
+                continue
+                
+            filepath = os.path.join(log_dir, filename)
             # 获取文件修改时间
             file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
             # 如果文件超过指定天数，则删除
@@ -120,7 +118,6 @@ def create_handler(is_console: bool = False) -> logging.Handler:
         # 设置日志文件命名格式
         handler.namer = lambda name: os.path.join(
             get_log_directory(),
-            "archive",
             f"log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         )
         
