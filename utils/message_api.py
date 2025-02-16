@@ -126,12 +126,19 @@ class SequenceGenerator:
         self.config = config
         self._sequences: Dict[str, int] = {}
         self._lock = asyncio.Lock()
+        self._max_seq = 1_000_000  # 设置序号上限为100万
         
     async def get_next(self, group_id: str) -> int:
         """获取下一个序号"""
         async with self._lock:
             current = self._sequences.get(group_id, 0)
             next_seq = current + self.config.seq_step
+            
+            # 如果超过上限，重置为初始值
+            if next_seq >= self._max_seq:
+                next_seq = self.config.seq_step
+                bot_logger.info(f"序号达到上限，重置 - group_id: {group_id}")
+            
             self._sequences[group_id] = next_seq
             bot_logger.debug(f"生成序号 - group_id: {group_id}, current: {current}, next: {next_seq}")
             return next_seq
@@ -140,7 +147,7 @@ class SequenceGenerator:
         """重置序号"""
         async with self._lock:
             self._sequences[group_id] = 0
-            bot_logger.debug(f"重置序号 - group_id: {group_id}")
+            bot_logger.info(f"手动重置序号 - group_id: {group_id}")
 
 class RateLimiter:
     """频率限制器"""
@@ -298,7 +305,17 @@ class MessageController:
             return False
             
         except Exception as e:
-            bot_logger.error(f"消息发送失败 - group_id: {message.group_id}, error: {str(e)}")
+            error_msg = str(e)
+            bot_logger.error(f"消息发送失败 - group_id: {message.group_id}, error: {error_msg}")
+            
+            # 检查是否是序号重复错误
+            if "消息被去重" in error_msg or "msgseq" in error_msg.lower():
+                bot_logger.warning(f"检测到序号重复，尝试重置 - group_id: {message.group_id}")
+                await self.sequence.reset(message.group_id)
+                # 立即重试一次
+                return await self.send(message, api)
+            
+            # 其他错误进行常规重试
             if message.retry_count < self.config.max_retry:
                 message.retry_count += 1
                 await asyncio.sleep(self.config.retry_delay)

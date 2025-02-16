@@ -1,5 +1,6 @@
 from typing import Optional
 from utils.logger import bot_logger
+from utils.config import settings
 
 class AboutUs:
     """关于信息类"""
@@ -17,7 +18,7 @@ class AboutUs:
             
         self.version = "v1.2.1"
         self.github_url = "https://github.com/xiaoyueyoqwq"
-        self.api_credit = "https://api.the-finals-leaderboard.com"
+        self.api_credit = settings.API_STANDARD_URL.replace("/v1", "")  # 移除版本号
         self._initialized = True
         
         bot_logger.info("AboutUs单例初始化完成")

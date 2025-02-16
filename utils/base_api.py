@@ -3,6 +3,7 @@ import asyncio
 import time
 from typing import Any, AsyncGenerator, Dict, Optional, Union, Tuple, ClassVar, List
 from utils.logger import bot_logger
+from utils.config import settings
 from functools import wraps
 from contextlib import asynccontextmanager
 
@@ -51,23 +52,56 @@ class BaseAPI:
         self.timeout = timeout
     
     @classmethod
+    def _get_proxy_url(cls) -> Optional[str]:
+        """获取代理URL"""
+        try:
+            proxy_config = getattr(settings, 'proxy', {})
+            if not proxy_config or not proxy_config.get('enabled', False):
+                bot_logger.debug("代理未启用")
+                return None
+                
+            proxy_type = proxy_config.get('type', 'http')
+            host = proxy_config.get('host', '127.0.0.1')
+            port = proxy_config.get('port', 7890)
+            
+            proxy_url = f"{proxy_type}://{host}:{port}"
+            bot_logger.info(f"[BaseAPI] 使用代理: {proxy_url}")
+            return proxy_url
+        except Exception as e:
+            bot_logger.error(f"[BaseAPI] 获取代理配置失败: {e}")
+            return None
+    
+    @classmethod
     @asynccontextmanager
     async def get_client(cls) -> AsyncGenerator[httpx.AsyncClient, None]:
         """从连接池获取客户端"""
         async with cls._pool_semaphore:
             async with cls._client_lock:
                 if not cls._client_pool:
+                    # 获取代理配置
+                    proxy_url = cls._get_proxy_url()
+                    
+                    bot_logger.debug(f"[BaseAPI] 创建新的HTTP客户端, 代理: {proxy_url}")
+                    # 创建客户端
+                    proxies = None
+                    if proxy_url:
+                        proxies = proxy_url
+                    
                     client = httpx.AsyncClient(
                         timeout=30,
+                        proxy=proxies,
                         limits=httpx.Limits(
                             max_keepalive_connections=20,
                             max_connections=100,
                             keepalive_expiry=30
-                        )
+                        ),
+                        verify=False  # 禁用SSL验证,避免代理证书问题
                     )
                     cls._client_pool.append(client)
+                    bot_logger.debug("[BaseAPI] HTTP客户端创建成功")
                 else:
                     client = cls._client_pool.pop()
+                    bot_logger.debug("[BaseAPI] 从连接池获取HTTP客户端")
             
             try:
                 yield client
@@ -75,6 +109,7 @@ class BaseAPI:
                 if not client.is_closed:
                     async with cls._client_lock:
                         cls._client_pool.append(client)
+                        bot_logger.debug("[BaseAPI] HTTP客户端归还连接池")
     
     @classmethod
     async def close_all_clients(cls):
@@ -142,12 +177,14 @@ class BaseAPI:
     ) -> httpx.Response:
         """发送HTTP请求"""
         url = self._build_url(endpoint)
+        bot_logger.debug(f"[BaseAPI] 发起请求: {method} {url}")
         
         # 对GET请求使用缓存
         if use_cache and method.upper() == "GET":
             cache_key = self.get_cache_key(endpoint, params)
             cached_data = await self.get_cached_data(cache_key)
             if cached_data is not None:
+                bot_logger.debug("[BaseAPI] 使用缓存数据")
                 return cached_data
         
         # 限制并发请求数量
@@ -157,6 +194,7 @@ class BaseAPI:
             
             try:
                 async with self.get_client() as client:
+                    bot_logger.debug(f"[BaseAPI] 发送请求: {method} {url}")
                     response = await client.request(
                         method=method,
                         url=url,
@@ -167,16 +205,18 @@ class BaseAPI:
                         **kwargs
                     )
                     response.raise_for_status()
+                    bot_logger.debug(f"[BaseAPI] 请求成功: {response.status_code}")
                     
                     # 缓存成功的GET请求结果
                     if use_cache and method.upper() == "GET":
                         cache_key = self.get_cache_key(endpoint, params)
                         await self.set_cache_data(cache_key, response)
+                        bot_logger.debug("[BaseAPI] 响应已缓存")
                     
                     return response
                     
             except httpx.RequestError as e:
-                bot_logger.error(f"请求失败: {str(e)}")
+                bot_logger.error(f"[BaseAPI] 请求失败: {str(e)}")
                 raise
     
     @classmethod

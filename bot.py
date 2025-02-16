@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
 import asyncio
-from asyncio import create_task
 import concurrent.futures
 import threading
 from queue import Queue, Empty
@@ -13,9 +12,6 @@ from utils.logger import bot_logger
 from utils.browser import browser_manager
 from utils.message_handler import MessageHandler
 from core.plugin import PluginManager
-from core.bind import BindManager
-import types
-import functools
 from enum import IntEnum
 
 
@@ -38,74 +34,8 @@ class FileType(IntEnum):
 
 def inject_botpy():
     """注入腾讯SDK的改进代码"""
-    # 1. 修复logging的force参数
-    import botpy.logging
-    old_configure_logging = botpy.logging.configure_logging
-    @functools.wraps(old_configure_logging)
-    def new_configure_logging(*args, **kwargs):
-        kwargs['force'] = True
-        return old_configure_logging(*args, **kwargs)
-    botpy.logging.configure_logging = new_configure_logging
-    
-    # 2. 增强Message类的功能
-    def enhanced_reply(self, **kwargs):
-        return self._api.post_group_message(
-            group_openid=self.group_openid, 
-            msg_id=self.id,
-            **kwargs
-        )
-    botpy.message.Message.reply = enhanced_reply
-    
-    # 添加撤回消息的功能
-    def recall(self):
-        """撤回当前消息"""
-        return self._api.recall_group_message(
-            group_openid=self.group_openid,
-            message_id=self.id
-        )
-    botpy.message.Message.recall = recall
-    
-    # 3. 增强API的文件处理
-    import botpy.api
-    old_post_group_file = botpy.api.BotAPI.post_group_file
-    @functools.wraps(old_post_group_file)
-    async def new_post_group_file(self, group_openid: str, file_type: int, 
-                                url: str = None, srv_send_msg: bool = False,
-                                file_data: str = None) -> 'botpy.types.message.Media':
-        payload = {
-            "group_openid": group_openid,
-            "file_type": file_type,
-            "url": url,
-            "srv_send_msg": srv_send_msg,
-            "file_data": file_data
-        }
-        payload = {k: v for k, v in payload.items() if v is not None}
-        route = botpy.http.Route(
-            "POST", 
-            "/v2/groups/{group_openid}/files",
-            group_openid=group_openid
-        )
-        return await self._http.request(route, json=payload)
-    botpy.api.BotAPI.post_group_file = new_post_group_file
-    
-    # 添加撤回群消息的API
-    async def recall_group_message(self, group_openid: str, message_id: str) -> str:
-        """撤回群消息
-        用于撤回机器人发送在当前群 group_openid 的消息 message_id，发送超出2分钟的消息不可撤回
-        Args:
-            group_openid (str): 群聊的 openid
-            message_id (str): 要撤回的消息的 ID
-        Returns:
-            成功执行返回 None
-        """
-        route = botpy.http.Route(
-            "DELETE",
-            "/v2/groups/{group_openid}/messages/{message_id}",
-            group_openid=group_openid,
-            message_id=message_id
-        )
-        return await self._http.request(route)
-    botpy.api.BotAPI.recall_group_message = recall_group_message
+    from injectors import inject_all
+    inject_all()
 
 
 class SessionMonitor:
@@ -151,14 +81,16 @@ class SessionMonitor:
         """执行无损重连"""
         bot_logger.info(f"[SessionMonitor] Session已运行{(time.time() - self.last_session_time)/60:.1f}分钟，准备无损重连...")
         
+        # 初始化状态变量
+        old_should_stop = False
+        
         try:
             # 1. 等待当前消息处理完成
             bot_logger.debug("[SessionMonitor] 等待当前消息处理完成...")
-            if hasattr(self.bot, 'message_queue'):
-                await self.bot.message_queue.join()
+            if hasattr(self.bot, 'message_queue') and self.bot.message_queue is not None:
+                await asyncio.get_event_loop().run_in_executor(None, self.bot.message_queue.join)
             
             # 2. 暂停新消息处理
-            old_should_stop = False
             if hasattr(self.bot, 'should_stop'):
                 old_should_stop = self.bot.should_stop.is_set()
                 self.bot.should_stop.set()
@@ -209,8 +141,11 @@ class SessionMonitor:
         except Exception as e:
             bot_logger.error(f"[SessionMonitor] 无损重连失败: {e}")
             # 确保消息处理恢复
-            if hasattr(self.bot, 'should_stop') and not old_should_stop:
-                self.bot.should_stop.clear()
+            try:
+                if hasattr(self.bot, 'should_stop') and not old_should_stop:
+                    self.bot.should_stop.clear()
+            except Exception as inner_e:
+                bot_logger.error(f"[SessionMonitor] 恢复消息处理时出错: {inner_e}")
             raise
 
 
@@ -445,7 +380,48 @@ class MyBot(botpy.Client):
             bot_logger.error(f"插件初始化失败: {str(e)}")
             raise
 
-def main():
+async def check_ip():
+    """检查当前出口IP"""
+    from utils.base_api import BaseAPI
+    import aiohttp
+    import ssl
+    
+    # 获取代理配置
+    proxy_url = BaseAPI._get_proxy_url()
+    bot_logger.info(f"[Botpy] 正在检查出口IP, 代理: {proxy_url}")
+    
+    # 创建SSL上下文
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    
+    # 创建带代理的session
+    connector = aiohttp.TCPConnector(
+        ssl=ssl_ctx,
+        force_close=True,
+        limit=10
+    )
+    session = aiohttp.ClientSession(
+        connector=connector,
+        timeout=aiohttp.ClientTimeout(total=20)
+    )
+    
+    try:
+        async with session.get(
+            url="https://api.ipify.org?format=json",
+            proxy=proxy_url,
+            ssl=ssl_ctx
+        ) as response:
+            data = await response.json()
+            ip = data.get("ip")
+            bot_logger.info(f"||||||||||||||||||| 当前出口IP: {ip} |||||||||||||||||||||||||||||||||")
+    except Exception as e:
+        bot_logger.error(f"[Botpy] 检查出口IP失败: {e}")
+    finally:
+        await session.close()
+
+async def async_main():
+    """异步主函数"""
     try:
         # 显示启动logo
         print("="*50)
@@ -472,13 +448,16 @@ def main():
         # 注入改进的代码
         inject_botpy()
         
+        # 检查出口IP
+        await check_ip()
+        
         intents = botpy.Intents(public_guild_messages=True, public_messages=True)
         client = MyBot(intents=intents)
         
         bot_logger.info("正在启动机器人...")
         bot_logger.debug("正在连接到QQ服务器...")
         
-        client.run(appid=settings.BOT_APPID, secret=settings.BOT_SECRET)
+        await client.start(appid=settings.BOT_APPID, secret=settings.BOT_SECRET)
         
     except Exception as e:
         bot_logger.error(f"运行时发生错误：{str(e)}")
@@ -488,6 +467,21 @@ def main():
             bot_logger.error("2. 是否已在 QQ 开放平台完成机器人配置")
             bot_logger.error("3. Secret 是否已过期")
         sys.exit(1)
+
+def main():
+    """主函数"""
+    try:
+        # 创建新的event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # 运行异步主函数
+        loop.run_until_complete(async_main())
+    except KeyboardInterrupt:
+        bot_logger.info("收到退出信号,正在关闭...")
+    finally:
+        # 清理event loop
+        loop.close()
 
 if __name__ == "__main__":
     main()

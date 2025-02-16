@@ -54,6 +54,9 @@ data/
 *.bak
 *.tmp
 *.temp
+sdk-guide.txt
+botpy-master
+the-finals-api-main
 
 # Distribution / packaging
 dist/
