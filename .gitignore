@@ -47,7 +47,7 @@ Thumbs.db
 
 # Project specific
 config.yaml
-data/
+user_binds.json
 *.db
 *.sqlite3
 *.sqlite
