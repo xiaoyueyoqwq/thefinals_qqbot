@@ -13,8 +13,11 @@ class MagicConch:
     def _load_answers(self) -> list:
         """加载答案数据"""
         try:
-            config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "magic_conch.json")
+            config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "magic_conch.json")
             bot_logger.debug("[MagicConch] 正在加载答案文件")
+            
+            # 确保data目录存在
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
             
             with open(config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)

@@ -23,8 +23,12 @@ class RankPlugin(Plugin):
     def _load_tips(self) -> list:
         """加载小知识数据"""
         try:
-            tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "did_you_know.json")
+            tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "did_you_know.json")
             bot_logger.debug(f"[{self.name}] 正在加载小知识文件: {tips_path}")
+            
+            # 确保data目录存在
+            os.makedirs(os.path.dirname(tips_path), exist_ok=True)
+            
             with open(tips_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 tips = data.get("tips", [])
