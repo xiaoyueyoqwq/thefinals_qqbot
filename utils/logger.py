@@ -4,6 +4,10 @@ import logging
 import platform
 from typing import TextIO
 from colorama import init, Fore, Style
+from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime
+import gzip
+import shutil
 
 # 初始化colorama以支持Windows
 init()
@@ -23,18 +27,53 @@ class TeeOutput:
         for stream in (self.file, self.original_stream):
             stream.flush()
 
-def get_log_file_path() -> str:
-    """获取日志文件路径"""
+class GZipRotator:
+    """日志压缩处理器"""
+    def __call__(self, source: str, dest: str) -> None:
+        with open(source, 'rb') as f_in:
+            with gzip.open(f"{dest}.gz", 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        os.remove(source)  # 删除原始文件
+
+def get_log_directory() -> str:
+    """获取日志目录"""
     # 获取当前文件所在目录
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # 获取项目根目录 (当前目录的父目录)
+    # 获取项目根目录
     root_dir = os.path.dirname(current_dir)
     # 在根目录下创建logs文件夹
     log_dir = os.path.join(root_dir, "logs")
     
-    os.makedirs(log_dir, exist_ok=True)
+    # 创建子目录
+    daily_dir = os.path.join(log_dir, "daily")  # 存放每日日志
+    archive_dir = os.path.join(log_dir, "archive")  # 存放归档日志
     
-    return os.path.join(log_dir, "latest.log")
+    # 创建所需的目录
+    for directory in [log_dir, daily_dir, archive_dir]:
+        os.makedirs(directory, exist_ok=True)
+        
+    return log_dir
+
+def get_log_file_path(filename: str = "latest.log") -> str:
+    """获取日志文件路径"""
+    return os.path.join(get_log_directory(), filename)
+
+def cleanup_old_logs(max_days: int = 30) -> None:
+    """清理旧的日志文件"""
+    try:
+        archive_dir = os.path.join(get_log_directory(), "archive")
+        current_time = datetime.now()
+        
+        for filename in os.listdir(archive_dir):
+            filepath = os.path.join(archive_dir, filename)
+            # 获取文件修改时间
+            file_time = datetime.fromtimestamp(os.path.getmtime(filepath))
+            # 如果文件超过指定天数，则删除
+            if (current_time - file_time).days > max_days:
+                os.remove(filepath)
+                
+    except Exception as e:
+        print(f"清理日志文件失败: {str(e)}")
 
 class ColoredFormatter(logging.Formatter):
     """带颜色的日志格式化器"""
@@ -66,7 +105,25 @@ def create_handler(is_console: bool = False) -> logging.Handler:
             datefmt='%Y-%m-%d %H:%M:%S'
         )
     else:
-        handler = logging.FileHandler(get_log_file_path(), encoding='utf-8', mode='w')
+        # 创建TimedRotatingFileHandler
+        log_path = get_log_file_path()
+        handler = TimedRotatingFileHandler(
+            filename=log_path,
+            when='midnight',  # 每天午夜切换
+            interval=1,  # 间隔为1天
+            backupCount=0,  # 不限制备份数量，通过cleanup_old_logs控制
+            encoding='utf-8'
+        )
+        
+        # 设置自定义的日志轮转处理
+        handler.rotator = GZipRotator()
+        # 设置日志文件命名格式
+        handler.namer = lambda name: os.path.join(
+            get_log_directory(),
+            "archive",
+            f"log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        )
+        
         formatter = logging.Formatter(
             '[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -81,6 +138,9 @@ def setup_logger() -> logging.Logger:
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
+    
+    # 清理旧日志
+    cleanup_old_logs()
     
     # 添加处理器
     logger.addHandler(create_handler(is_console=False))  # 文件处理器
