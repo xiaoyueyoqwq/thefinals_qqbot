@@ -5,21 +5,21 @@
 - message_injector: 消息类功能增强
 - api_injector: API功能增强
 - proxy_injector: 代理支持注入
-- websocket_injector: WebSocket代理支持
+# - websocket_injector: WebSocket代理支持
 """
 
 from .logging_injector import LoggingInjector
 from .message_injector import MessageInjector
 from .api_injector import APIInjector
 from .proxy_injector import ProxyInjector
-from .websocket_injector import WebSocketInjector
+# from .websocket_injector import WebSocketInjector
 
 __all__ = [
     'LoggingInjector',
     'MessageInjector', 
     'APIInjector',
     'ProxyInjector',
-    'WebSocketInjector'
+    # 'WebSocketInjector'
 ]
 
 def inject_all():
@@ -28,11 +28,11 @@ def inject_all():
     MessageInjector.inject()
     APIInjector.inject()
     ProxyInjector.inject()
-    WebSocketInjector.inject()
+    # WebSocketInjector.inject()
 
 def rollback_all():
     """回滚所有注入"""
-    WebSocketInjector.rollback()
+    # WebSocketInjector.rollback()
     ProxyInjector.rollback()
     APIInjector.rollback()
     MessageInjector.rollback()

@@ -3,6 +3,7 @@ import sys
 import asyncio
 import concurrent.futures
 import threading
+from injectors import inject_all as inject_botpy
 from queue import Queue, Empty
 import time
 import botpy
@@ -30,12 +31,6 @@ class FileType(IntEnum):
     VIDEO = 2
     AUDIO = 3
     FILE = 4
-
-
-def inject_botpy():
-    """注入腾讯SDK的改进代码"""
-    from injectors import inject_all
-    inject_all()
 
 
 class SessionMonitor:
@@ -181,6 +176,9 @@ class MyBot(botpy.Client):
             daemon=True  # 设置为守护线程
         )
         self.message_processor.start()
+        
+        # 存储所有运行中的任务
+        self._running_tasks = set()
 
     def _process_message_queue(self):
         """处理消息队列的线程方法"""
@@ -211,6 +209,64 @@ class MyBot(botpy.Client):
                 continue
             except Exception as e:
                 bot_logger.error(f"消息队列处理异常: {str(e)}")
+
+    def create_task(self, coro, name=None):
+        """创建并跟踪异步任务"""
+        task = self._loop.create_task(coro, name=name)
+        self._running_tasks.add(task)
+        task.add_done_callback(self._running_tasks.discard)
+        return task
+
+    async def start(self, appid=None, secret=None):
+        """启动机器人时初始化任务"""
+        # 调用父类的 start 方法并传入认证参数
+        await super().start(appid=appid, secret=secret)
+        
+        # 启动Session监控
+        self.create_task(self.session_monitor.start_monitoring(), "session_monitor")
+        
+        # 启动插件任务
+        for plugin in self.plugin_manager.plugins.values():
+            if hasattr(plugin, 'start_tasks'):
+                for task in plugin.start_tasks():
+                    self.create_task(task, f"{plugin.__class__.__name__}_task")
+
+    async def close(self):
+        """关闭机器人时清理资源"""
+        try:
+            # 1. 设置停止标志
+            self.should_stop.set()
+            
+            # 2. 等待消息队列处理完成
+            if not self.message_queue.empty():
+                bot_logger.info("等待消息队列处理完成...")
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self.message_queue.join
+                )
+            
+            # 3. 取消所有运行中的任务
+            if self._running_tasks:
+                bot_logger.info(f"正在取消 {len(self._running_tasks)} 个运行中的任务...")
+                for task in self._running_tasks:
+                    if not task.done():
+                        task.cancel()
+                
+                # 等待所有任务完成或被取消
+                if self._running_tasks:
+                    await asyncio.gather(*self._running_tasks, return_exceptions=True)
+            
+            # 4. 关闭线程池
+            bot_logger.info("正在关闭线程池...")
+            self.thread_pool.shutdown(wait=True)
+            
+            # 5. 调用父类的关闭方法
+            await super().close()
+            
+        except Exception as e:
+            bot_logger.error(f"关闭机器人时发生错误: {str(e)}")
+            raise
+        finally:
+            bot_logger.info("机器人已完全关闭")
 
     async def _wait_message_result(self, future):
         """等待消息处理结果"""
@@ -385,6 +441,8 @@ async def check_ip():
     from utils.base_api import BaseAPI
     import aiohttp
     import ssl
+    from aiohttp import ClientTimeout
+    import asyncio
     
     # 获取代理配置
     proxy_url = BaseAPI._get_proxy_url()
@@ -399,30 +457,68 @@ async def check_ip():
     connector = aiohttp.TCPConnector(
         ssl=ssl_ctx,
         force_close=True,
-        limit=10
-    )
-    session = aiohttp.ClientSession(
-        connector=connector,
-        timeout=aiohttp.ClientTimeout(total=20)
+        limit=10,
+        enable_cleanup_closed=True  # 自动清理关闭的连接
     )
     
+    # 设置更短的超时时间
+    timeout = ClientTimeout(
+        total=10,  # 总超时时间
+        connect=5  # 连接超时时间
+    )
+    
+    session = aiohttp.ClientSession(
+        connector=connector,
+        timeout=timeout
+    )
+    
+    # IP检查服务列表
+    ip_services = [
+        "https://api.ipify.org?format=json",
+        "https://ifconfig.me/ip",
+        "https://api.myip.com",
+        "https://ip.seeip.org/json"
+    ]
+    
+    async def try_get_ip(url):
+        """尝试从单个服务获取IP"""
+        try:
+            async with session.get(url, proxy=proxy_url, ssl=ssl_ctx) as response:
+                if response.status == 200:
+                    if url.endswith('json'):
+                        data = await response.json()
+                        return data.get('ip') or data.get('query')
+                    else:
+                        return (await response.text()).strip()
+        except Exception as e:
+            bot_logger.debug(f"[Botpy] 从 {url} 获取IP失败: {str(e)}")
+            return None
+    
     try:
-        async with session.get(
-            url="https://api.ipify.org?format=json",
-            proxy=proxy_url,
-            ssl=ssl_ctx
-        ) as response:
-            data = await response.json()
-            ip = data.get("ip")
-            bot_logger.info(f"||||||||||||||||||| 当前出口IP: {ip} |||||||||||||||||||||||||||||||||")
+        # 尝试所有服务
+        for service in ip_services:
+            for retry in range(2):  # 每个服务最多重试1次
+                ip = await try_get_ip(service)
+                if ip:
+                    bot_logger.info(f"||||||||||||||||||| 当前出口IP: {ip} |||||||||||||||||||||||||||||||||")
+                    return
+                if retry < 1:  # 重试前等待
+                    await asyncio.sleep(1)
+        
+        bot_logger.warning("[Botpy] 无法获取出口IP，但这不影响机器人运行")
+        
     except Exception as e:
-        bot_logger.error(f"[Botpy] 检查出口IP失败: {e}")
+        bot_logger.error(f"[Botpy] 检查出口IP时发生错误: {str(e)}")
     finally:
         await session.close()
 
 async def async_main():
     """异步主函数"""
     try:
+        # 过滤掉 SDK 的已知无害错误
+        import logging
+        logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+        
         # 显示启动logo
         print("="*50)
         print("We  are")
@@ -457,7 +553,39 @@ async def async_main():
         bot_logger.info("正在启动机器人...")
         bot_logger.debug("正在连接到QQ服务器...")
         
-        await client.start(appid=settings.BOT_APPID, secret=settings.BOT_SECRET)
+        # 创建停止事件
+        stop_event = asyncio.Event()
+        
+        async def run_bot():
+            """在单独的任务中运行机器人"""
+            try:
+                await client.start(appid=settings.BOT_APPID, secret=settings.BOT_SECRET)
+            except Exception as e:
+                bot_logger.error(f"机器人运行时发生错误: {e}")
+                stop_event.set()
+                raise
+                
+        # 启动机器人任务
+        bot_task = asyncio.create_task(run_bot())
+        
+        # 等待停止信号
+        try:
+            await stop_event.wait()
+        except asyncio.CancelledError:
+            bot_logger.info("收到取消信号...")
+        finally:
+            # 取消机器人任务
+            if not bot_task.done():
+                bot_task.cancel()
+                try:
+                    await bot_task
+                except asyncio.CancelledError:
+                    pass
+            
+            # 关闭客户端
+            await client.close()
+            
+        return client
         
     except Exception as e:
         bot_logger.error(f"运行时发生错误：{str(e)}")
@@ -466,22 +594,63 @@ async def async_main():
             bot_logger.error("1. AppID 和 Secret 是否正确")
             bot_logger.error("2. 是否已在 QQ 开放平台完成机器人配置")
             bot_logger.error("3. Secret 是否已过期")
-        sys.exit(1)
+        raise
 
 def main():
     """主函数"""
+    client = None
+    loop = None
     try:
+        # 过滤掉 SDK 的已知无害错误
+        import logging
+        logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+        
         # 创建新的event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
         # 运行异步主函数
-        loop.run_until_complete(async_main())
-    except KeyboardInterrupt:
-        bot_logger.info("收到退出信号,正在关闭...")
+        main_task = loop.create_task(async_main())
+        
+        try:
+            client = loop.run_until_complete(main_task)
+        except KeyboardInterrupt:
+            bot_logger.info("收到 CTRL+C，正在关闭...")
+            # 取消主任务
+            main_task.cancel()
+            try:
+                loop.run_until_complete(main_task)
+            except asyncio.CancelledError:
+                pass
+            
+    except Exception as e:
+        bot_logger.error(f"发生错误: {e}")
     finally:
-        # 清理event loop
-        loop.close()
+        if loop and not loop.is_closed():
+            # 清理所有待处理的任务
+            pending = asyncio.all_tasks(loop)
+            if pending:
+                # 设置较短的超时时间
+                try:
+                    loop.run_until_complete(
+                        asyncio.wait_for(
+                            asyncio.gather(*pending, return_exceptions=True),
+                            timeout=5
+                        )
+                    )
+                except asyncio.TimeoutError:
+                    bot_logger.warning("清理任务超时，强制关闭...")
+                except Exception as e:
+                    bot_logger.error(f"清理任务时发生错误: {e}")
+            
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except Exception as e:
+                bot_logger.debug(f"关闭异步生成器时发生错误: {e}")
+            
+            loop.close()
+        
+        bot_logger.info("机器人已完全关闭")
 
 if __name__ == "__main__":
     main()
