@@ -15,7 +15,7 @@ class DFQuery:
         self.season = "s5"
         self.platform = "crossplay"
         self.db_path = Path("data/leaderboard.db")
-        self.cache_duration = timedelta(hours=3)
+        self.cache_duration = timedelta(minutes=10)
         self.daily_save_time = "23:55"  # 每天保存数据的时间
         self._init_db()
         self._daily_save_task = None
@@ -209,7 +209,7 @@ class DFQuery:
         message.extend([
             "",
             "💡 小贴士:",
-            "1. 数据每3小时更新一次",
+            "1. 数据每10分钟更新一次",
             "2. 每天23:55保存历史数据",
             "3. 分数变化基于前一天的数据"
         ])
