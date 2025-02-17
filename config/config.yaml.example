@@ -2,7 +2,7 @@ bot:
   appid: ""
   token: ""
   secret: ""  # 可选，用于oauth场景
-  sandbox: true  # 是否使用沙箱环境
+  sandbox: false  # 是否使用沙箱环境
 
 max_concurrent: 5  # 最大并发数
 max_workers: 10  # 最大工作线程数
@@ -11,3 +11,19 @@ debug:
   enabled: false  # 是否启用调试模式
   test_reply: false  # 是否启用调试回复功能
   message_id: false  # 是否在消息中显示消息ID
+
+proxy:
+  enabled: false  # 是否启用代理
+  host: "127.0.0.1"  # 代理主机
+  port: 7890  # 代理端口(Clash默认)
+  type: "http"  # 代理类型(http/socks5)
+
+# API配置
+api:
+  use_proxy: false  # 是否使用代理API
+  # 标准API源
+  standard:
+    base_url: "https://api.the-finals-leaderboard.com/v1"
+  # 代理API源
+  proxy:
+    base_url: ""
