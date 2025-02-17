@@ -287,54 +287,54 @@ async def check_ip():
     connector = aiohttp.TCPConnector(
         ssl=ssl_ctx,
         force_close=True,
-        limit=10,
-        enable_cleanup_closed=True  # 自动清理关闭的连接
+        limit=5, 
+        ttl_dns_cache=300, 
+        enable_cleanup_closed=True
     )
     
-    # 设置更短的超时时间
     timeout = ClientTimeout(
-        total=10,  # 总超时时间
-        connect=5  # 连接超时时间
+        total=10,
+        connect=5
     )
     
-    session = aiohttp.ClientSession(
-        connector=connector,
-        timeout=timeout
-    )
-    
-    # IP检查服务列表
-    ip_services = [
-        "https://httpbin.org/ip",  # Cloudflare CDN，全球可用
-        "http://ip-api.com/json",  # 全球可用的备选服务
-        "https://api64.ipify.org?format=json"  # IPv6 备选
-    ]
-    
-    async def try_get_ip(url):
-        """尝试从单个服务获取IP"""
-        try:
-            async with session.get(url, proxy=proxy_url, ssl=ssl_ctx) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # 根据不同服务返回格式处理
-                    if 'origin' in data:  # httpbin
-                        return data['origin']
-                    elif 'query' in data:  # ip-api
-                        return data['query']
-                    elif 'ip' in data:  # ipify
-                        return data['ip']
-        except Exception as e:
-            bot_logger.debug(f"[Botpy] 从 {url} 获取IP失败: {str(e)}")
-            return None
-    
+    session = None
     try:
+        session = aiohttp.ClientSession(
+            connector=connector,
+            timeout=timeout
+        )
+        
+        # IP检查服务列表
+        ip_services = [
+            "https://httpbin.org/ip",
+            "http://ip-api.com/json",
+            "https://api64.ipify.org?format=json"
+        ]
+        
+        async def try_get_ip(url):
+            """尝试从单个服务获取IP"""
+            try:
+                async with session.get(url, proxy=proxy_url, ssl=ssl_ctx) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if 'origin' in data:
+                            return data['origin']
+                        elif 'query' in data:
+                            return data['query']
+                        elif 'ip' in data:
+                            return data['ip']
+            except Exception as e:
+                bot_logger.debug(f"[Botpy] 从 {url} 获取IP失败: {str(e)}")
+                return None
+        
         # 尝试所有服务
         for service in ip_services:
-            for retry in range(2):  # 每个服务最多重试1次
+            for retry in range(2):
                 ip = await try_get_ip(service)
                 if ip:
                     bot_logger.info(f"||||||||||||||||||| 当前出口IP: {ip} |||||||||||||||||||||||||||||||||")
                     return
-                if retry < 1:  # 重试前等待
+                if retry < 1:
                     await asyncio.sleep(1)
         
         bot_logger.warning("[Botpy] 无法获取出口IP，但这不影响机器人运行")
@@ -342,7 +342,22 @@ async def check_ip():
     except Exception as e:
         bot_logger.error(f"[Botpy] 检查出口IP时发生错误: {str(e)}")
     finally:
-        await session.close()
+        if session:
+            try:
+                # 等待所有进行中的请求完成
+                await asyncio.sleep(0.1)
+                
+                # 关闭所有连接
+                if not connector.closed:
+                    await connector.close()
+                
+                # 安全关闭session
+                if not session.closed:
+                    await session.close()
+                    
+            except Exception as e:
+                bot_logger.debug(f"[Botpy] 关闭连接时发生错误: {str(e)}")
+                # 忽略关闭错误,不影响主流程
 
 async def async_main():
     """异步主函数"""
@@ -449,40 +464,49 @@ def main():
         except KeyboardInterrupt:
             bot_logger.info("收到 CTRL+C，正在关闭...")
             # 取消主任务
-            main_task.cancel()
-            try:
-                loop.run_until_complete(main_task)
-            except asyncio.CancelledError:
-                pass
+            if not main_task.done():
+                main_task.cancel()
+                try:
+                    loop.run_until_complete(main_task)
+                except asyncio.CancelledError:
+                    pass
             
     except Exception as e:
         bot_logger.error(f"发生错误: {e}")
     finally:
-        if loop and not loop.is_closed():
-            # 清理所有待处理的任务
-            pending = asyncio.all_tasks(loop)
-            if pending:
-                # 设置较短的超时时间
-                try:
-                    loop.run_until_complete(
-                        asyncio.wait_for(
-                            asyncio.gather(*pending, return_exceptions=True),
-                            timeout=5
+        try:
+            if loop and not loop.is_closed():
+                # 清理所有待处理的任务
+                pending = asyncio.all_tasks(loop)
+                if pending:
+                    # 设置较短的超时时间
+                    try:
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                asyncio.gather(*pending, return_exceptions=True),
+                                timeout=5
+                            )
                         )
-                    )
-                except asyncio.TimeoutError:
-                    bot_logger.warning("清理任务超时，强制关闭...")
+                    except (asyncio.TimeoutError, RuntimeError):
+                        bot_logger.warning("清理任务超时或循环已关闭，强制关闭...")
+                    except Exception as e:
+                        bot_logger.error(f"清理任务时发生错误: {e}")
+                
+                try:
+                    if not loop.is_closed():
+                        loop.run_until_complete(loop.shutdown_asyncgens())
                 except Exception as e:
-                    bot_logger.error(f"清理任务时发生错误: {e}")
-            
-            try:
-                loop.run_until_complete(loop.shutdown_asyncgens())
-            except Exception as e:
-                bot_logger.debug(f"关闭异步生成器时发生错误: {e}")
-            
-            loop.close()
-        
-        bot_logger.info("机器人已完全关闭")
+                    bot_logger.debug(f"关闭异步生成器时发生错误: {e}")
+                
+                try:
+                    if not loop.is_closed():
+                        loop.close()
+                except Exception as e:
+                    bot_logger.debug(f"关闭事件循环时发生错误: {e}")
+        except Exception as e:
+            bot_logger.error(f"清理资源时发生错误: {e}")
+        finally:
+            bot_logger.info("机器人已完全关闭")
 
 if __name__ == "__main__":
     main()
