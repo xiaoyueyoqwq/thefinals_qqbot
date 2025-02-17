@@ -287,8 +287,8 @@ async def check_ip():
     connector = aiohttp.TCPConnector(
         ssl=ssl_ctx,
         force_close=True,
-        limit=5, 
-        ttl_dns_cache=300, 
+        limit=5,  # 减少并发连接数
+        ttl_dns_cache=300,  # DNS缓存时间
         enable_cleanup_closed=True
     )
     
