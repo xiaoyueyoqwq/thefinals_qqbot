@@ -15,11 +15,15 @@ class DFPlugin(Plugin):
         
     def start_tasks(self):
         """返回需要启动的任务列表"""
-        return self.df_query.start_tasks()
+        bot_logger.debug(f"[{self.name}] 调用 start_tasks()")
+        tasks = self.df_query.start_tasks()
+        bot_logger.debug(f"[{self.name}] 从 DFQuery 获取到 {len(tasks)} 个任务")
+        return tasks
         
     async def on_load(self):
         """插件加载时的处理"""
-        await super().on_load()
+        bot_logger.debug(f"[{self.name}] 开始加载底分查询插件")
+        await super().on_load()  # 等待父类的 on_load 完成
         bot_logger.info(f"[{self.name}] 底分查询插件已加载")
         
     async def on_unload(self):
