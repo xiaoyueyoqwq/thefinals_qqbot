@@ -1,14 +1,17 @@
 # TheFinals Bot
 
 ## 简介
-TheFinals 工具箱机器人，提供排名查询、世界巡回赛查询等功能。现已支持API服务器，可通过HTTP接口访问机器人功能。
+TheFinals 工具箱机器人，提供排名查询、世界巡回赛查询等功能。支持 QQ 机器人指令和 HTTP API 双重访问方式。
 
 ## 功能特性
-- 排名查询
-- 世界巡回赛查询
-- 玩家ID绑定
-- API服务器支持
-- 更多功能开发中...
+- 排位数据查询
+- 世界巡回赛数据查询
+- 玩家 ID 绑定
+- 当前赛季底分查询
+- 神奇海螺问答
+- 机器人状态监控
+- HTTP API 服务
+- 插件化架构
 
 ## 环境要求
 - Python 3.8+
@@ -30,7 +33,7 @@ pip install -r requirements.txt
 3. 配置机器人
 - 复制 `config.yaml.example` 为 `config.yaml`
 - 填写机器人配置信息
-- 配置API服务器（可选）：
+- 配置 API 服务器（可选）：
   ```yaml
   server:
     api:
@@ -46,18 +49,28 @@ python bot.py
 
 ## 使用说明
 ### 机器人命令
-- `/rank` - 查询排名
-- `/wt` - 查询世界巡回赛
-- `/bind` - 绑定游戏ID
-- `/help` - 查看帮助
+- `/rank <ID> [赛季]` - 查询排位数据
+- `/wt <ID> [赛季]` - 查询世界巡回赛
+- `/bind <ID>` - 绑定游戏ID
+- `/df` - 查询当前赛季底分
+- `/ask <问题>` - 向神奇海螺提问
+- `/info` - 查看机器人状态
+- `/about` - 关于我们
 
+### API 服务
+机器人提供 HTTP API 服务，可通过 API 接口访问机器人功能：
 
-API接口说明请参考 `docs/api.md`。
+- API 文档访问：`http://127.0.0.1:8000/docs`
+- 支持 RESTful API 接口
+- 插件化 API 设计
+- 自动生成 API 文档
+
+详细 API 接口说明请参考 `docs/api.md`。
 
 ## 开发说明
 请参考 `docs` 目录下的开发文档：
 - `bot.md` - 机器人核心功能
 - `plugin.md` - 插件系统说明
-- `api.md` - API接口说明
+- `api.md` - API 接口说明
 - `message_api.md` - 消息API说明
 - `extension_guide.md` - 扩展开发指南
