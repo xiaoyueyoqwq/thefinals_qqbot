@@ -34,6 +34,11 @@ class Settings:
     API_STANDARD_URL = _config.get("api", {}).get("standard", {}).get("base_url", "https://api.the-finals-leaderboard.com/v1")
     API_PROXY_URL = _config.get("api", {}).get("proxy", {}).get("base_url", "https://thefinals-api.luoxiaohei.cn")
     
+    # 服务器配置
+    SERVER_API_ENABLED = _config.get("server", {}).get("api", {}).get("enabled", True)
+    SERVER_API_HOST = _config.get("server", {}).get("api", {}).get("host", "127.0.0.1")
+    SERVER_API_PORT = _config.get("server", {}).get("api", {}).get("port", 8000)
+    
     @property
     def api_base_url(self) -> str:
         """返回当前使用的API基础URL"""
@@ -47,6 +52,17 @@ class Settings:
             "host": self.PROXY_HOST,
             "port": self.PROXY_PORT,
             "type": self.PROXY_TYPE
+        }
+        
+    @property
+    def server(self) -> dict:
+        """返回服务器配置"""
+        return {
+            "api": {
+                "enabled": self.SERVER_API_ENABLED,
+                "host": self.SERVER_API_HOST,
+                "port": self.SERVER_API_PORT
+            }
         }
 
 settings = Settings()
