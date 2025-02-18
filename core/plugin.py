@@ -168,9 +168,11 @@ class Plugin(ABC):
     """插件基类"""
     
     dependencies: List[str] = []  # 插件依赖列表
+    is_api_plugin: bool = False   # 是否为纯API插件
 
     def __init__(self, **kwargs):
-        self.commands: Dict[str, Dict[str, Any]] = {}  # 命令映射表，包含描述和隐藏标志
+        if not self.is_api_plugin:
+            self.commands: Dict[str, Dict[str, Any]] = {}  # 命令映射表，包含描述和隐藏标志
         self.enabled: bool = True  # 插件是否启用
         self._event_handlers: Dict[str, Set[Callable]] = {}  # 事件处理器映射
         self._event_handlers_lock = Lock()  # 锁用于_event_handlers
@@ -800,16 +802,19 @@ class PluginManager:
                     bot_logger.error(f"插件 {plugin.name} 的依赖 {dependency} 未满足")
                     return
             
-            # 检查命令冲突
-            for cmd in plugin.commands:
-                if cmd in self.commands:
-                    bot_logger.error(f"命令冲突: 插件 {plugin.name} 的命令 {cmd} 已被插件 {self.commands[cmd].name} 注册")
-                    return
+            # 只有非API插件才检查命令
+            if not plugin.is_api_plugin:
+                # 检查命令冲突
+                for cmd in plugin.commands:
+                    if cmd in self.commands:
+                        bot_logger.error(f"命令冲突: 插件 {plugin.name} 的命令 {cmd} 已被插件 {self.commands[cmd].name} 注册")
+                        return
+                
+                # 注册插件的所有命令
+                for cmd in plugin.commands:
+                    self.commands[cmd] = plugin
             
             self.plugins[plugin.name] = plugin
-            # 注册插件的所有命令
-            for cmd in plugin.commands:
-                self.commands[cmd] = plugin
             # 设置插件管理器引用    
             plugin._set_plugin_manager(self)
             

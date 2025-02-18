@@ -79,7 +79,7 @@ class MyBot(botpy.Client):
         self._running_tasks.discard(task)
         try:
             exc = task.exception()
-            if exc:
+            if exc and not isinstance(exc, KeyboardInterrupt):
                 bot_logger.error(f"任务异常: {str(exc)}")
         except asyncio.CancelledError:
             pass

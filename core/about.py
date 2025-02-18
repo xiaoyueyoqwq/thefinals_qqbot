@@ -16,7 +16,7 @@ class AboutUs:
         if self._initialized:
             return
             
-        self.version = "v1.2.1"
+        self.version = "v3.1.0"
         self.github_url = "https://github.com/xiaoyueyoqwq"
         self.api_credit = settings.API_STANDARD_URL.replace("/v1", "")  # 移除版本号
         self._initialized = True

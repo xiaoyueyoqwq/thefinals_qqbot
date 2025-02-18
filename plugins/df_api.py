@@ -23,11 +23,25 @@ class ScoreData(BaseModel):
                 "update_time": "2024-02-18T14:30:00"
             }
         }
+        # 启用任意字符串支持
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+            date: lambda v: v.isoformat()
+        }
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
 
 class CurrentScoreResponse(BaseModel):
     """当前底分响应模型"""
     data: List[ScoreData]
     update_time: datetime
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
 
 class HistoricalScoreData(BaseModel):
     """历史底分数据模型"""
@@ -47,12 +61,26 @@ class HistoricalScoreData(BaseModel):
                 "save_time": "2024-03-20T23:55:00"
             }
         }
+        # 启用任意字符串支持
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+            date: lambda v: v.isoformat()
+        }
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
 
 class HistoricalScoreResponse(BaseModel):
     """历史底分响应模型"""
     data: List[HistoricalScoreData]
     start_date: date
     end_date: date
+    
+    class Config:
+        json_encoders = {
+            date: lambda v: v.isoformat()
+        }
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
 
 class StatsData(BaseModel):
     """统计数据模型"""
@@ -61,11 +89,25 @@ class StatsData(BaseModel):
     rank_10000_score: int
     daily_change_500: Optional[int] = None
     daily_change_10000: Optional[int] = None
+    
+    class Config:
+        json_encoders = {
+            date: lambda v: v.isoformat()
+        }
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
 
 class StatsResponse(BaseModel):
     """统计数据响应模型"""
     data: List[StatsData]
     latest_update: datetime
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
 
 class DFAPIPlugin(Plugin):
     """底分查询 API 插件"""

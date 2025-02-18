@@ -155,7 +155,7 @@ def api_route(
                     return await bound_func(**kwargs)
                 else:
                     bot_logger.error(f"API {path} 找不到插件实例: {plugin_name}")
-                    raise HTTPException(status_code=500, detail="插件未加载")
+                    raise HTTPException(status_code=500, detail="插件未加载，请检查插件加载情况")
             except Exception as e:
                 bot_logger.error(f"API {path} 执行出错: {str(e)}")
                 raise HTTPException(status_code=500, detail=str(e))
