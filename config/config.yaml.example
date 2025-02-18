@@ -27,3 +27,10 @@ api:
   # 代理API源
   proxy:
     base_url: ""
+
+# API服务器配置
+server:
+  api:
+    enabled: true      # 是否启用API服务器
+    host: "0.0.0.0"  # API服务器监听地址
+    port: 8080         # API服务器端口
