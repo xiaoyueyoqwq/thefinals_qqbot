@@ -7,7 +7,7 @@ API System
 from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Callable, Dict, List, Set, Optional, Any, Tuple, Type
 from functools import wraps, partial
 import inspect
@@ -23,6 +23,14 @@ app = FastAPI(
     redoc_url=None    # 禁用默认的redoc
 )
 
+# 挂载静态文件目录
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 根路径重定向到文档
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/docs")
+
 # 添加RapiDoc UI
 @app.get("/docs", include_in_schema=False)
 async def custom_docs():
@@ -32,6 +40,7 @@ async def custom_docs():
     <head>
         <title>Plugin APIs</title>
         <meta charset="utf-8">
+        <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
         <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
         <script src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
         <style>
