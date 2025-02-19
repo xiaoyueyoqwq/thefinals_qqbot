@@ -12,13 +12,61 @@ import shutil
 # 初始化colorama以支持Windows
 init()
 
+class KeyboardInterruptFilter(logging.Filter):
+    """过滤掉 KeyboardInterrupt 相关的日志"""
+    def filter(self, record):
+        # 检查消息内容
+        if "KeyboardInterrupt" in record.getMessage():
+            return False
+            
+        # 检查异常信息
+        if record.exc_info:
+            exc_type = record.exc_info[0]
+            if exc_type and issubclass(exc_type, KeyboardInterrupt):
+                return False
+                
+        # 检查格式化后的异常信息
+        if hasattr(record, 'exc_text') and record.exc_text:
+            if "KeyboardInterrupt" in record.exc_text:
+                return False
+                
+        # 检查特定的关闭消息模式
+        if any(msg in record.getMessage() for msg in [
+            "收到 CTRL+C",
+            "收到取消信号",
+            "清理任务超时",
+            "强制关闭"
+        ]):
+            return False
+            
+        return True
+
 class TeeOutput:
     """同时将输出写入文件和原始流的工具类"""
     def __init__(self, file: TextIO, original_stream: TextIO):
         self.file = file
         self.original_stream = original_stream
+        
+    def _should_filter(self, text: str) -> bool:
+        """检查是否需要过滤该文本"""
+        filter_patterns = [
+            "KeyboardInterrupt",
+            "收到 CTRL+C",
+            "收到取消信号",
+            "清理任务超时",
+            "强制关闭",
+            "Traceback (most recent call last)",  # 过滤整个堆栈跟踪
+            "_overlapped.GetQueuedCompletionStatus",  # Windows 异步 IO 相关
+            "asyncio.windows_events",  # Windows 事件循环相关
+        ]
+        return any(pattern in text for pattern in filter_patterns)
 
     def write(self, text: str) -> None:
+        # 如果是需要过滤的内容，直接返回
+        if self._should_filter(text):
+            return
+            
+        # 否则正常写入
         for stream in (self.file, self.original_stream):
             stream.write(text)
             stream.flush()
@@ -135,6 +183,10 @@ def setup_logger() -> logging.Logger:
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
+    
+    # 添加 KeyboardInterrupt 过滤器
+    interrupt_filter = KeyboardInterruptFilter()
+    logger.addFilter(interrupt_filter)
     
     # 清理旧日志
     cleanup_old_logs()

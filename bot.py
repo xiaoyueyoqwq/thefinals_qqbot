@@ -6,18 +6,25 @@ from functools import partial
 from typing import Optional, Any
 from injectors import inject_all as inject_botpy
 import botpy
+import uvicorn
+import json
 from botpy.message import GroupMessage, Message
 from utils.config import settings
 from utils.logger import bot_logger
 from utils.browser import browser_manager
 from utils.message_handler import MessageHandler
 from core.plugin import PluginManager
+from core.api import get_app
 from enum import IntEnum
 
 # 定义超时常量
 PLUGIN_TIMEOUT = 30  # 插件处理超时时间（秒）
 INIT_TIMEOUT = 60    # 初始化超时时间（秒）
 CLEANUP_TIMEOUT = 10 # 清理超时时间（秒）
+
+# 加载uvicorn日志配置
+with open("uvicorn_log_config.json") as f:
+    UVICORN_LOG_CONFIG = json.load(f)
 
 # 定义消息类型枚举
 class MessageType(IntEnum):
@@ -72,7 +79,7 @@ class MyBot(botpy.Client):
         self._running_tasks.discard(task)
         try:
             exc = task.exception()
-            if exc:
+            if exc and not isinstance(exc, KeyboardInterrupt):
                 bot_logger.error(f"任务异常: {str(exc)}")
         except asyncio.CancelledError:
             pass
@@ -197,7 +204,23 @@ class MyBot(botpy.Client):
                 await self.plugin_manager.auto_discover_plugins(
                     plugins_dir="plugins"
                 )
-                await self.plugin_manager.load_all()
+                
+                # 如果启用了API服务器，则启动它
+                server_config = settings.server
+                if server_config["api"]["enabled"]:
+                    bot_logger.info("正在启动API服务器...")
+                    config = uvicorn.Config(
+                        get_app(),
+                        host=server_config["api"]["host"],
+                        port=server_config["api"]["port"],
+                        log_config=UVICORN_LOG_CONFIG,
+                        reload=False
+                    )
+                    server = uvicorn.Server(config)
+                    # 创建后台任务运行服务器
+                    self.create_task(server.serve(), "api_server")
+                    bot_logger.info(f"API服务器正在启动: http://{config.host}:{config.port}")
+                
         except asyncio.TimeoutError:
             bot_logger.error("插件初始化超时")
             raise

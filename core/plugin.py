@@ -1,11 +1,11 @@
 """
-Plugin CORE [V3]
+Plugin CORE [V3.1.5]
 
 @ Author: Shuakami
 @ Docs: /docs/plugin.md
-@ Date: 2024-12-30
-@ 腾子你🐎死了
+@ Date: 2025-2-18
 """
+
 import inspect
 import importlib.util
 import functools
@@ -94,7 +94,7 @@ def on_command(command: str = None, description: str = None, hidden: bool = Fals
     Args:
         command: 命令名称，默认使用函数名
         description: 命令描述，可选
-        hidden: 是否在命令列表中隐藏，默认False
+        hidden: 是否隐藏命令列表
     """
     def decorator(func):
         @functools.wraps(func)
@@ -168,9 +168,11 @@ class Plugin(ABC):
     """插件基类"""
     
     dependencies: List[str] = []  # 插件依赖列表
+    is_api_plugin: bool = False   # 是否为纯API插件
 
     def __init__(self, **kwargs):
-        self.commands: Dict[str, str] = {}  # 命令映射表
+        if not self.is_api_plugin:
+            self.commands: Dict[str, Dict[str, Any]] = {}  # 命令映射表，包含描述和隐藏标志
         self.enabled: bool = True  # 插件是否启用
         self._event_handlers: Dict[str, Set[Callable]] = {}  # 事件处理器映射
         self._event_handlers_lock = Lock()  # 锁用于_event_handlers
@@ -184,6 +186,7 @@ class Plugin(ABC):
         self._keyword_handlers_lock = Lock()  # 锁用于_keyword_handlers
         self._regex_handlers_lock = Lock()  # 锁用于_regex_handlers
         self._messages: Dict[str, str] = {}  # 可定制消息模板
+        self._running_tasks: Set[asyncio.Task] = set()  # 运行中的任务
         
         # 处理额外的初始化参数
         if 'bind_manager' in kwargs:
@@ -194,7 +197,7 @@ class Plugin(ABC):
         for _, method in inspect.getmembers(self, inspect.ismethod):
             # 使用统一的注册逻辑
             decorators = {
-                '_is_command': (self.register_command, lambda m: (m._command, m._description)),
+                '_is_command': (self.register_command, lambda m: (m._command, m._description, getattr(m, '_hidden', False))),
                 '_is_event_handler': (self.subscribe, lambda m: (m._event_type, m)),
                 '_is_keyword_handler': (self._register_keyword_handler, lambda m: (m._keywords, m)),
                 '_is_regex_handler': (self._register_regex_handler, lambda m: (m._pattern, m))
@@ -238,9 +241,19 @@ class Plugin(ABC):
         """设置插件管理器引用"""
         self._plugin_manager = manager
         
-    def register_command(self, command: str, description: str) -> None:
-        """注册命令"""
-        self.commands[command] = description
+    def register_command(self, command: str, description: str, hidden: bool = False) -> None:
+        """注册命令
+        Args:
+            command: 命令名称
+            description: 命令描述
+            hidden: 是否隐藏命令列表
+        """
+        if command in self.commands:
+            bot_logger.warning(f"插件 {self.name} 的命令 {command} 已被注册，可能会覆盖之前的描述或隐藏标志。")
+        self.commands[command] = {
+            "description": description,
+            "hidden": hidden
+        }
 
     async def subscribe(self, event_type: str, handler: Callable) -> None:
         """订阅事件"""
@@ -294,42 +307,16 @@ class Plugin(ABC):
             except Exception as e:
                 await self._handle_task_error("事件处理", e)
 
-    def should_handle_message(self, content: str) -> bool:
-        """快速判断是否需要处理该消息
-        这个方法会在实际处理消息前调用，用于快速过滤不需要处理的消息
-        """
-        # 检查是否是命令
-        if content.startswith('/'):
-            cmd = content.split()[0][1:]  # 去掉开头的/
-            if cmd in self.commands:
-                return True
-                
-        # 检查是否包含关键词
-        for keyword in self._keyword_handlers.keys():
-            if keyword in content:
-                return True
-                
-        # 检查是否匹配正则
-        for pattern, _ in self._regex_handlers:
-            if pattern.search(content):
-                return True
-                
-        return False
-
     async def handle_message(self, handler: MessageHandler, content: str) -> bool:
         """处理消息
         返回是否有插件处理了该消息
         """
-        # 快速判断是否需要处理
-        if not self.should_handle_message(content):
-            return False
-            
         bot_logger.debug(f"[Plugin] {self.name} handling message: {content}")
         handled = False
         
         # 先检查命令
-        if content.startswith('/'):
-            cmd = content.split()[0][1:]
+        if content.startswith("/"):
+            cmd = content.split()[0].lstrip("/")
             if cmd in self.commands:
                 method = getattr(self, f"_cmd_{cmd}", None)
                 if method:
@@ -343,55 +330,55 @@ class Plugin(ABC):
                             kwargs['content'] = content
                         await method(**kwargs)
                         handled = True
+                        return handled  # 命令处理成功，直接返回
                     except Exception as e:
                         await self._handle_task_error("消息处理", e)
-                        return False
-                    return handled
+                        return False  # 即使处理命令失败，也视为未处理
+        else:
+            # 再检查关键词
+            async with self._keyword_handlers_lock:
+                keyword_handlers = self._keyword_handlers.copy()
+            for keyword, handler_info in keyword_handlers.items():
+                if keyword in content:
+                    try:
+                        bot_logger.debug(f"[Plugin] {self.name} matched keyword: {keyword}")
+                        handler_func, needs_content = handler_info
+                        signature = inspect.signature(handler_func)
+                        kwargs = {}
+                        if 'handler' in signature.parameters:
+                            kwargs['handler'] = handler
+                        if 'content' in signature.parameters:
+                            kwargs['content'] = content
+                        await handler_func(**kwargs)
+                        handled = True
+                        return handled  # 关键词处理器处理后不再继续
+                    except Exception as e:
+                        await self._handle_task_error("关键词处理", e)
+                        return False  # 如果关键词处理失败，视为未处理
+            
+            # 最后检查正则
+            async with self._regex_handlers_lock:
+                regex_handlers = self._regex_handlers.copy()
+            for pattern, handler_info in regex_handlers:
+                match = pattern.search(content)
+                if match:
+                    try:
+                        bot_logger.debug(f"[Plugin] {self.name} matched regex: {pattern.pattern}")
+                        handler_func, needs_content = handler_info
+                        signature = inspect.signature(handler_func)
+                        kwargs = {}
+                        if 'handler' in signature.parameters:
+                            kwargs['handler'] = handler
+                        if 'content' in signature.parameters:
+                            kwargs['content'] = content
+                        await handler_func(**kwargs)
+                        handled = True
+                        return handled  # 正则处理器处理后不再继续
+                    except Exception as e:
+                        await self._handle_task_error("正则处理", e)
+                        return False  # 如果正则处理失败，视为未处理
         
-        # 再检查关键词
-        async with self._keyword_handlers_lock:
-            keyword_handlers = self._keyword_handlers.copy()
-        for keyword, handler_info in keyword_handlers.items():
-            if keyword in content:
-                try:
-                    bot_logger.debug(f"[Plugin] {self.name} matched keyword: {keyword}")
-                    handler_func, needs_content = handler_info
-                    signature = inspect.signature(handler_func)
-                    kwargs = {}
-                    if 'handler' in signature.parameters:
-                        kwargs['handler'] = handler
-                    if 'content' in signature.parameters:
-                        kwargs['content'] = content
-                    await handler_func(**kwargs)
-                    handled = True
-                    return handled
-                except Exception as e:
-                    await self._handle_task_error("关键词处理", e)
-                    return False
-                    
-        # 最后检查正则
-        async with self._regex_handlers_lock:
-            regex_handlers = self._regex_handlers.copy()
-        for pattern, handler_info in regex_handlers:
-            match = pattern.search(content)
-            if match:
-                try:
-                    bot_logger.debug(f"[Plugin] {self.name} matched regex: {pattern.pattern}")
-                    handler_func, needs_content = handler_info
-                    signature = inspect.signature(handler_func)
-                    kwargs = {}
-                    if 'handler' in signature.parameters:
-                        kwargs['handler'] = handler
-                    if 'content' in signature.parameters:
-                        kwargs['content'] = content
-                    await handler_func(**kwargs)
-                    handled = True
-                    return handled
-                except Exception as e:
-                    await self._handle_task_error("正则处理", e)
-                    return False
-        
-        return handled
+        return handled  # 如果未处理，返回False
 
     # 文件操作辅助方法
     def _get_plugin_path(self, *paths) -> Path:
@@ -434,6 +421,8 @@ class Plugin(ABC):
         # 从数据中恢复状态
         self._states = {}
         for key, value in self._data.items():
+            key: str
+            value: Any
             if key.startswith("state_"):
                 self._states[key[6:]] = value
 
@@ -490,7 +479,6 @@ class Plugin(ABC):
             image_data: 图片数据
             use_base64: 是否使用base64方式发送
         """
-        bot_logger.debug(f"[Plugin] {self.name} 回复图片消息, use_base64={use_base64}")
         return await handler.send_image(image_data, use_base64)
         
     async def recall_message(self, handler: MessageHandler) -> bool:
@@ -591,28 +579,80 @@ class Plugin(ABC):
         
     async def unknown_command_response(self, handler: MessageHandler):
         """处理未知命令的响应"""
-        command_list = "\n".join(f"/{cmd} - {desc}" for cmd, desc in self.get_command_list().items())
+        # 从插件管理器获取所有命令列表
+        if self._plugin_manager:
+            all_commands = self._plugin_manager.get_command_list()
+        else:
+            all_commands = self.get_command_list()
+            
+        # 格式化命令列表（按字母顺序排序）
+        command_list = "\n".join(
+            f"/{cmd} - {info['description']}" 
+            for cmd, info in sorted(all_commands.items()) 
+            if not info.get('hidden', False)
+        )
+        
+        # 如果没有可用命令，显示特殊消息
+        if not command_list:
+            command_list = "当前没有可用的命令"
+            
         unknown_command_message = self._messages.get("unknown_command").format(command_list=command_list)
         await self.reply(handler, unknown_command_message)
         
-    def get_command_list(self) -> Dict[str, str]:
-        """获取所有已注册的命令列表（不包含隐藏命令）"""
-        commands = {}
-        for name, method in inspect.getmembers(self):
-            if hasattr(method, '_is_command'):
-                if not getattr(method, '_hidden', False):
-                    commands[getattr(method, '_command')] = getattr(method, '_description')
-        return commands
+    def get_command_list(self) -> Dict[str, Dict[str, Any]]:
+        """获取插件的命令列表"""
+        return self.commands
     
+    def start_tasks(self) -> List[Callable]:
+        """返回需要启动的任务列表
+        子类可以重写此方法返回需要启动的异步任务
+        Returns:
+            List[Callable]: 需要启动的异步任务列表
+        """
+        return []
+
+    async def _start_plugin_tasks(self):
+        """启动插件任务"""
+        tasks = self.start_tasks()
+        if tasks:
+            bot_logger.debug(f"[{self.name}] 获取到 {len(tasks)} 个任务")
+            for task_func in tasks:
+                bot_logger.debug(f"[{self.name}] 准备启动任务: {task_func.__name__}")
+                if asyncio.iscoroutinefunction(task_func):
+                    bot_logger.debug(f"[{self.name}] 任务 {task_func.__name__} 是异步函数，开始执行")
+                    try:
+                        task = asyncio.create_task(task_func())
+                        self._running_tasks.add(task)
+                        bot_logger.info(f"[{self.name}] 已启动任务: {task_func.__name__}")
+                    except Exception as e:
+                        bot_logger.error(f"[{self.name}] 启动任务 {task_func.__name__} 失败: {str(e)}")
+                else:
+                    bot_logger.warning(f"[{self.name}] 任务 {task_func.__name__} 不是异步函数，跳过")
+            bot_logger.info(f"[{self.name}] 已启动 {len(tasks)} 个任务")
+
+    async def _stop_plugin_tasks(self):
+        """停止插件任务"""
+        if self._running_tasks:
+            for task in self._running_tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*self._running_tasks, return_exceptions=True)
+            self._running_tasks.clear()
+            bot_logger.info(f"[{self.name}] 已停止所有任务")
+
     # 生命周期方法
     async def on_load(self) -> None:
         """插件加载时调用"""
         await self._register_decorators()  # 先注册装饰器
         await self.load_data()
         await self.load_config()
+        await self._start_plugin_tasks()  # 启动插件任务
         
     async def on_unload(self) -> None:
         """插件卸载时调用"""
+        # 停止所有任务
+        await self._stop_plugin_tasks()
+        
         # 保存数据
         await self.save_data()
             
@@ -642,8 +682,6 @@ class Plugin(ABC):
         signature = inspect.signature(handler)
         needs_content = 'content' in signature.parameters
         
-        bot_logger.debug(f"[Plugin] {self.name} registering keyword handler: needs_content={needs_content}")
-        
         async with self._keyword_handlers_lock:
             for keyword in keywords:
                 self._keyword_handlers[keyword] = (handler, needs_content)
@@ -657,8 +695,6 @@ class Plugin(ABC):
         # 检查处理器是否需要content参数
         signature = inspect.signature(handler)
         needs_content = 'content' in signature.parameters
-        
-        bot_logger.debug(f"[Plugin] {self.name} registering regex handler: pattern={pattern}, needs_content={needs_content}")
         
         compiled_pattern = re.compile(pattern)
         async with self._regex_handlers_lock:
@@ -716,6 +752,33 @@ class Plugin(ABC):
             bot_logger.error(f"插件 {self.name} 热重载失败: {str(e)}")
             raise
 
+    def should_handle_message(self, content: str) -> bool:
+        """判断是否应该处理消息
+        
+        Args:
+            content: 消息内容
+            
+        Returns:
+            bool: 是否应该处理该消息
+        """
+        # 检查命令
+        if content.startswith("/"):
+            cmd = content.split()[0].lstrip("/")
+            if cmd in self.commands:
+                return True
+                
+        # 检查关键词
+        for keyword in self._keyword_handlers:
+            if keyword in content:
+                return True
+                
+        # 检查正则
+        for pattern, _ in self._regex_handlers:
+            if pattern.search(content):
+                return True
+                
+        return False
+
 
 class PluginManager:
     """插件管理器"""
@@ -729,37 +792,43 @@ class PluginManager:
         self._temp_handlers: List[Callable[[Message, MessageHandler, str], asyncio.Future]] = []
         self._temp_handlers_lock = Lock()  # 锁用于_temp_handlers
         self._plugin_load_lock = Lock()  # 锁用于插件加载
-        self._loaded_plugins = set()  # 记录已加载的插件
-        
+
     async def register_plugin(self, plugin: Plugin) -> None:
         """注册插件"""
         async with self._plugin_load_lock:
-            # 检查插件是否已加载
-            if plugin.name in self._loaded_plugins:
-                bot_logger.debug(f"插件 {plugin.name} 已经加载，跳过")
-                return
-                
             # 检查依赖
             for dependency in plugin.dependencies:
                 if dependency not in self.plugins:
                     bot_logger.error(f"插件 {plugin.name} 的依赖 {dependency} 未满足")
                     return
             
+            # 只有非API插件才检查命令
+            if not plugin.is_api_plugin:
+                # 检查命令冲突
+                for cmd in plugin.commands:
+                    if cmd in self.commands:
+                        bot_logger.error(f"命令冲突: 插件 {plugin.name} 的命令 {cmd} 已被插件 {self.commands[cmd].name} 注册")
+                        return
+                
+                # 注册插件的所有命令
+                for cmd in plugin.commands:
+                    self.commands[cmd] = plugin
+            
             self.plugins[plugin.name] = plugin
-            # 注册插件的所有命令
-            for cmd in plugin.commands:
-                self.commands[cmd] = plugin
             # 设置插件管理器引用    
             plugin._set_plugin_manager(self)
+            
+            # 注册API实例
+            from core.api import register_plugin_instance
+            register_plugin_instance(plugin)
+            
             await plugin.on_load()
-            # 标记插件为已加载
-            self._loaded_plugins.add(plugin.name)
             bot_logger.info(f"插件 {plugin.name} 已注册并加载")
             
             # 发布插件加载事件
             event = Event(type=EventType.PLUGIN_LOADED, data={"plugin": plugin.name})
             await self.dispatch_event(event)
-            
+
     async def unregister_plugin(self, plugin_name: str) -> None:
         """注销插件"""
         async with self._plugin_load_lock:
@@ -782,15 +851,13 @@ class PluginManager:
                 # 清理插件管理器引用
                 plugin._set_plugin_manager(None)
                 await plugin.on_unload()
-                # 从已加载集合中移除
-                self._loaded_plugins.discard(plugin_name)
                 del self.plugins[plugin_name]
                 bot_logger.info(f"插件 {plugin_name} 已注销并卸载")
                 
                 # 发布插件卸载事件
                 event = Event(type=EventType.PLUGIN_UNLOADED, data={"plugin": plugin_name})
                 await self.dispatch_event(event)
-                
+
     async def register_event_handler(self, event_type: str, plugin: Plugin) -> None:
         """注册事件处理器"""
         async with self._event_handlers_lock:
@@ -865,34 +932,35 @@ class PluginManager:
                     bot_logger.error(f"插件 {plugin.name} 处理消息失败: {str(e)}")
                     continue
         
-        # 只在消息以/开头且不是任何插件的命令时，才显示提示
-        if not handled and content.startswith('/'):
-            cmd = content.split()[0][1:]  # 去掉开头的/
-            if not any(cmd in plugin.commands for plugin in self.plugins.values()):
-                try:
-                    await handler.send_text("❓ 未知的命令。输入 /about 获取帮助。")
-                    handled = True
-                except Exception as e:
-                    bot_logger.error(f"发送未知命令提示失败: {str(e)}")
+        if not handled:
+            # 让第一个具有 unknown_command_response 的插件处理未知命令
+            for plugin in self.plugins.values():
+                if hasattr(plugin, 'unknown_command_response') and plugin.enabled:
+                    try:
+                        await plugin.unknown_command_response(handler)
+                        handled = True
+                        break
+                    except Exception as e:
+                        bot_logger.error(f"插件 {plugin.name} 处理未知命令失败: {str(e)}")
+                        continue
         
         return handled
                 
-    def get_command_list(self) -> Dict[str, str]:
-        """获取所有已注册的命令列表"""
+    def get_command_list(self) -> Dict[str, Dict[str, Any]]:
+        """获取所有已注册的命令列表（不包含隐藏命令）"""
         commands = {}
         for plugin in self.plugins.values():
             if plugin.enabled:
-                commands.update(plugin.commands)
+                for cmd, info in plugin.commands.items():
+                    if not info.get('hidden', False):
+                        commands[cmd] = info
         return commands
             
     async def load_all(self) -> None:
         """加载所有插件"""
         async with self._plugin_load_lock:
             for plugin in self.plugins.values():
-                if plugin.name not in self._loaded_plugins:
-                    await plugin.on_load()
-                    self._loaded_plugins.add(plugin.name)
-                    bot_logger.debug(f"插件 {plugin.name} 已加载")
+                await plugin.on_load()
                 
     async def unload_all(self) -> None:
         """卸载所有插件"""

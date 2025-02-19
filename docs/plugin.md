@@ -1,69 +1,26 @@
-# Plugin CORE V3.1.0 插件开发指南
+# Plugin CORE V3.1.5 插件开发指南
 
 这是一个简单好用的插件框架,帮你轻松实现各种机器人功能。不管是新手还是老手,都能快速上手。
 
-## 最新特性 (V3.1.0)
+## 最新特性 (V3.1.5)
 
-### 命令隐藏功能
-现在你可以创建隐藏命令了！这些命令不会在命令列表中显示，但仍然可以使用：
+#### 后台任务
 
-```python
-@on_command("secret", "这是个隐藏命令", hidden=True)
-async def secret_command(self, handler, content):
-    await self.reply(handler, "你发现了隐藏命令！")
-```
+你可以使用 `start_tasks()` 方法来运行后台任务。
 
-### 优化的未知命令处理
-- 更智能的命令提示
-- 按字母顺序排序的命令列表
-- 隐藏命令不会显示在提示中
-- 防止多个插件同时响应未知命令
-
-### 增强的并发处理
-更稳定的并发任务处理：
+这些任务会在插件加载时自动启动，并在插件卸载时自动停止：
 
 ```python
-# 创建多个并发任务
-tasks = []
-for i in range(5):
-    tasks.append(self._process_task(handler, i))
+def start_tasks(self):
+    return [self.my_task]  # 返回你要运行的任务列表
     
-# 等待所有任务完成
-await asyncio.gather(*tasks)
+async def my_task(self):
+    while True:
+        await self.do_something()
+        await asyncio.sleep(60)
 ```
 
-### 可靠的状态管理
-改进的状态持久化机制：
-
-```python
-# 设置状态（自动保存）
-await self.set_state("user_status", "online")
-
-# 获取状态（带默认值）
-status = self.get_state("user_status", "offline")
-
-# 清除状态（自动保存）
-await self.clear_state("user_status")
-```
-
----
-
-## 快速上手：创建插件
-
-创建插件超简单,继承 `Plugin` 类就行了:
-
-```python
-from core.plugin import Plugin, on_command
-
-class HelloPlugin(Plugin):
-    """一个简单的问候插件"""
-    
-    @on_command("hello", "打个招呼")
-    async def say_hello(self, handler, content):
-        await self.reply(handler, "你好呀~")
-```
-
-把这个文件放到 `plugins/` 目录下,系统就会自动加载它。删除文件就会自动卸载,方便得很。
+任务函数必须是**异步函数**，否则无法正常运行。
 
 ## 主要功能
 
@@ -229,5 +186,47 @@ class MyPlugin(Plugin):
 | on_load | 加载回调 | 插件被加载时 |
 | on_unload | 卸载回调 | 插件被卸载时 |
 | reload | 热重载 | 手动调用时 |
+| start_tasks | 后台任务启动 | 插件加载完成后 |
 
+### 后台任务管理
 
+| 方法 | 说明 | 参数 | 返回值 |
+|------|------|------|--------|
+| start_tasks | 启动后台任务 | 无 | List[Coroutine]: 要运行的任务列表 |
+| _start_plugin_tasks | 内部方法：启动所有任务 | 无 | None |
+| _stop_plugin_tasks | 内部方法：停止所有任务 | 无 | None |
+
+## 历史版本
+
+### V3.1.0 更新记录
+
+#### 命令隐藏功能
+
+现在你可以创建隐藏命令了。
+
+这些命令不会在命令列表中显示，但仍然可以被命令调用：
+
+```python
+@on_command("secret", "这是个隐藏命令", hidden=True)
+async def secret_command(self, handler, content):
+    await self.reply(handler, "你发现了隐藏命令！")
+```
+
+---
+
+## 快速上手：创建插件
+
+创建插件超简单,继承 `Plugin` 类就行了:
+
+```python
+from core.plugin import Plugin, on_command
+
+class HelloPlugin(Plugin):
+    """一个简单的问候插件"""
+    
+    @on_command("hello", "打个招呼")
+    async def say_hello(self, handler, content):
+        await self.reply(handler, "你好呀~")
+```
+
+把这个文件放到 `plugins/` 目录下,系统就会自动加载它。删除文件就会自动卸载,方便得很。
