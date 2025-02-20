@@ -37,6 +37,7 @@ class AboutUs:
                 "• /wt <ID> [赛季] - 查询世界巡回赛\n"
                 "• /ps <ID> - 查询平台争霸数据\n"
                 "• /bind <ID> - 绑定游戏ID\n"
+                "• /unbind <ID> - 解绑游戏ID\n"
                 "• /df - 查询当前赛季底分\n"
                 "• /ask <问题> - 向神奇海螺提问\n"
                 "• /info - 查看机器人状态\n"
