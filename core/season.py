@@ -18,7 +18,7 @@ class SeasonConfig:
     CURRENT_SEASON = settings.CURRENT_SEASON
     
     # API配置
-    API_PREFIX = settings.API_PREFIX
+    API_PREFIX = "/v1/leaderboard"
     API_TIMEOUT = settings.API_TIMEOUT
     API_BASE_URL = settings.api_base_url
     
@@ -46,6 +46,14 @@ class SeasonConfig:
     def is_cb_season(cls, season_id: str) -> bool:
         """判断是否为CB赛季"""
         return season_id.lower().startswith("cb")
+
+    @staticmethod
+    def get_api_url(season_id: str) -> str:
+        """获取API URL"""
+        url = f"{SeasonConfig.API_PREFIX}/{season_id}"
+        if not SeasonConfig.is_cb_season(season_id):
+            url += "/crossplay"
+        return url
 
 class Season:
     """当前赛季数据管理"""
@@ -131,10 +139,7 @@ class Season:
             bot_logger.info(f"[Season] 开始更新赛季 {self.season_id} 数据")
             
             # 1. 从API获取数据
-            url = f"{self.api_prefix}/{self.season_id}"
-            if not SeasonConfig.is_cb_season(self.season_id):
-                url += "/crossplay"
-                
+            url = SeasonConfig.get_api_url(self.season_id)
             response = await self.api.get(url)
             if not response or response.status_code != 200:
                 bot_logger.error(f"[Season] API请求失败: {self.season_id}")
@@ -362,10 +367,7 @@ class HistorySeason:
                 
             # 3. 从API获取数据
             bot_logger.info(f"[HistorySeason] 从API获取数据 - {self.season_id}")
-            url = f"{SeasonConfig.API_PREFIX}/{self.season_id}"
-            if not SeasonConfig.is_cb_season(self.season_id):
-                url += "/crossplay"
-                
+            url = SeasonConfig.get_api_url(self.season_id)
             bot_logger.info(f"[HistorySeason] 请求API - URL: {url}")
             response = await self.api.get(url)
             

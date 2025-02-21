@@ -33,7 +33,7 @@ class Settings:
     API_USE_PROXY = _config.get("api", {}).get("use_proxy", True)
     API_STANDARD_URL = _config.get("api", {}).get("standard", {}).get("base_url", "https://api.the-finals-leaderboard.com/v1")
     API_PROXY_URL = _config.get("api", {}).get("proxy", {}).get("base_url", "https://thefinals-api.luoxiaohei.cn")
-    API_PREFIX = "/v1/leaderboard"  # API路径前缀
+    API_PREFIX = "/leaderboard"  # 移除重复的/v1前缀
     API_TIMEOUT = 10  # API超时时间(秒)
     
     # 服务器配置
