@@ -1,11 +1,12 @@
-from core.plugin import Plugin, on_command, Event, EventType
+from core.plugin import Plugin, on_command
 from utils.message_handler import MessageHandler
-from core.season import SeasonManager, SeasonConfig
 from core.bind import BindManager
+from core.rank_all import RankAll
 from utils.logger import bot_logger
 import json
 import os
 import random
+import re
 
 class RankAllPlugin(Plugin):
     """全赛季排名查询插件"""
@@ -13,7 +14,7 @@ class RankAllPlugin(Plugin):
     def __init__(self):
         """初始化全赛季排名查询插件"""
         super().__init__()
-        self.season_manager = SeasonManager()
+        self.rank_all = RankAll()
         self.bind_manager = BindManager()
         self.tips = self._load_tips()
         self._messages = {
@@ -21,12 +22,24 @@ class RankAllPlugin(Plugin):
                 "\n❌ 未提供玩家ID\n"
                 "━━━━━━━━━━━━━\n"
                 "🎮 使用方法:\n"
-                "- /all 玩家ID\n"
+                "- /all Player#1234\n"
                 "━━━━━━━━━━━━━\n"
                 "💡 小贴士:\n"
-                "1. 支持模糊搜索\n"
+                "1. 必须使用完整ID\n"
                 "2. 可以使用 /bind 绑定ID\n"
-                "3. 会显示所有赛季数据"
+                "3. 如更改过ID请单独查询"
+            ),
+            "invalid_format": (
+                "\n❌ 玩家ID格式错误\n"
+                "━━━━━━━━━━━━━\n"
+                "🚀 正确格式:\n"
+                "- 玩家名#数字ID\n"
+                "- 例如: Playername#1234\n"
+                "━━━━━━━━━━━━━\n"
+                "💡 提示:\n"
+                "1. ID必须为完整ID\n"
+                "2. #号后必须是数字\n"
+                "3. 可以使用/bind绑定完整ID"
             ),
             "query_failed": "\n⚠️ 查询失败，请稍后重试"
         }
@@ -59,52 +72,24 @@ class RankAllPlugin(Plugin):
     def _format_loading_message(self, player_name: str) -> str:
         """格式化加载提示消息"""
         return (
-            f"\n⏰ 正在查询 {player_name} 的全赛季数据...\n"
+            f"\n⏰正在查询 {player_name} 的全赛季数据...\n"
             "━━━━━━━━━━━━━\n"
-            "🤖 你知道吗？\n"
-            f"[ {self._get_random_tip()} ]\n"
+            "🤖你知道吗？\n"
+            f"[ {self._get_random_tip()} ]"
         )
 
-    def _format_season_data(self, season_id: str, data: dict) -> str:
-        """格式化单个赛季数据"""
-        if not data:
-            return f"▎{season_id}: 未上榜"
+    def _validate_embark_id(self, player_id: str) -> bool:
+        """验证embarkID格式
+        
+        Args:
+            player_id: 玩家ID
             
-        rank = data.get("rank", "未知")
-        score = data.get("rankScore", data.get("fame", 0))
-        return f"▎{season_id}: #{rank} (分数: {score:,})"
-
-    async def _format_response(self, player_name: str, all_data: dict) -> str:
-        """格式化响应消息"""
-        if not any(all_data.values()):
-            return (
-                f"\n❌ 未找到 {player_name} 的排名数据\n"
-                "━━━━━━━━━━━━━\n"
-                "可能的原因:\n"
-                "1. 玩家ID输入错误\n"
-                "2. 该玩家暂无排名数据\n"
-                "3. 数据尚未更新\n"
-                "━━━━━━━━━━━━━\n"
-                "💡 提示: 你可以:\n"
-                "1. 检查ID是否正确\n"
-                "2. 尝试使用模糊搜索\n"
-                "━━━━━━━━━━━━━"
-            )
-
-        # 按赛季顺序排列
-        seasons = ["cb1", "cb2", "ob", "s1", "s2", "s3", "s4", "s5"]
-        season_data = []
-        for season in seasons:
-            if season in all_data:
-                season_data.append(self._format_season_data(season, all_data[season]))
-
-        return (
-            f"\n📊 玩家数据 | {player_name}\n"
-            "━━━━━━━━━━━━━\n"
-            "🏆 历史排名:\n"
-            f"{chr(10).join(season_data)}\n"
-            "━━━━━━━━━━━━━"
-        )
+        Returns:
+            bool: 是否是有效的embarkID格式
+        """
+        # 检查基本格式：name#1234
+        pattern = r'^[^#]+#\d+$'
+        return bool(re.match(pattern, player_id))
 
     @on_command("all", "查询全赛季排名信息")
     async def query_all_seasons(self, handler: MessageHandler, content: str) -> None:
@@ -125,26 +110,21 @@ class RankAllPlugin(Plugin):
             else:
                 player_name = parts[1].strip()
             
+            # 验证ID格式
+            if not self._validate_embark_id(player_name):
+                await self.reply(handler, self._messages["invalid_format"])
+                return
+            
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}")
             
             # 发送初始提示消息
             await self.reply(handler, self._format_loading_message(player_name))
             
-            # 查询所有赛季数据
-            all_data = {}
-            for season_id in SeasonConfig.SEASONS:
-                try:
-                    season = await self.season_manager.get_season(season_id)
-                    if season:
-                        data = await season.get_player_data(player_name)
-                        if data:
-                            all_data[season_id] = data
-                except Exception as e:
-                    bot_logger.error(f"[{self.name}] 查询赛季 {season_id} 失败: {str(e)}")
-                    continue
+            # 使用核心功能查询数据
+            all_data = await self.rank_all.query_all_seasons(player_name)
             
-            # 格式化并发送结果
-            response = await self._format_response(player_name, all_data)
+            # 使用核心功能格式化结果
+            response = self.rank_all.format_all_seasons(player_name, all_data)
             await self.reply(handler, response)
             
         except Exception as e:

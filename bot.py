@@ -16,6 +16,84 @@ from utils.message_handler import MessageHandler
 from core.plugin import PluginManager
 from core.api import get_app
 from enum import IntEnum
+import threading
+import time
+import signal
+import gc
+
+
+import faulthandler
+import signal
+import platform
+import traceback
+import os
+import ctypes
+
+# 记录上次Ctrl+C的时间
+_last_sigint_time = 0
+
+def _async_raise(tid, exctype):
+    """向线程注入异常"""
+    if not isinstance(tid, int):
+        tid = tid.ident
+    if tid is None:
+        return
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, ctypes.py_object(exctype))
+    if res > 1:
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
+
+def force_stop_thread(thread):
+    """强制停止线程"""
+    try:
+        _async_raise(thread.ident, SystemExit)
+    except Exception:
+        pass
+
+def cleanup_threads():
+    """清理所有非主线程"""
+    main_thread = threading.main_thread()
+    current_thread = threading.current_thread()
+    
+    # 首先尝试关闭数据库连接
+    try:
+        from utils.db import DatabaseManager
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(DatabaseManager.close_all())
+        loop.close()
+    except Exception:
+        pass
+    
+    # 强制结束所有线程
+    for thread in threading.enumerate():
+        if thread is not main_thread and thread is not current_thread:
+            try:
+                if thread.is_alive():
+                    force_stop_thread(thread)
+            except Exception:
+                pass
+
+def force_exit():
+    """强制退出程序"""
+    print("\n*** 正在清理线程... ***", file=sys.stderr)
+    try:
+        cleanup_thread = threading.Thread(target=cleanup_threads)
+        cleanup_thread.daemon = True
+        cleanup_thread.start()
+        cleanup_thread.join(timeout=0.5)
+    finally:
+        print("*** 强制退出 ***", file=sys.stderr)
+        sys.stderr.flush()
+        sys.stdout.flush()
+        os._exit(1)
+
+def signal_handler(signum, frame):
+    """处理Ctrl+C信号"""
+    force_exit()
+
+# 注册信号处理器
+signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+bot_logger.info("Ctrl+C 强制退出已启用")
 
 # 定义超时常量
 PLUGIN_TIMEOUT = 30  # 插件处理超时时间（秒）
@@ -42,11 +120,79 @@ class FileType(IntEnum):
     AUDIO = 3
     FILE = 4
 
+class SafeThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
+    """增强的线程池执行器,支持更好的关闭控制"""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._tasks = set()
+        self._tasks_lock = threading.Lock()
+        self._shutdown_event = threading.Event()
+        
+    def submit(self, fn, *args, **kwargs):
+        """提交任务到线程池"""
+        if self._shutdown_event.is_set():
+            raise RuntimeError("线程池已关闭")
+            
+        # 包装任务函数以支持中断
+        def task_wrapper():
+            if self._shutdown_event.is_set():
+                return
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                bot_logger.error(f"任务执行出错: {str(e)}")
+            finally:
+                with self._tasks_lock:
+                    self._tasks.discard(threading.current_thread())
+                    
+        # 提交任务
+        with self._tasks_lock:
+            if not self._shutdown:
+                future = super().submit(task_wrapper)
+                self._tasks.add(threading.current_thread())
+                return future
+        raise RuntimeError("线程池已关闭")
+        
+    def shutdown(self, wait=True, timeout=None):
+        """增强的关闭方法"""
+        if self._shutdown:
+            return
+            
+        # 设置关闭标志
+        self._shutdown_event.set()
+        self._shutdown = True
+        
+        if wait:
+            # 等待所有任务完成
+            deadline = None if timeout is None else time.time() + timeout
+            
+            with self._tasks_lock:
+                remaining = list(self._tasks)
+                
+            for thread in remaining:
+                if thread.is_alive():
+                    wait_time = None if deadline is None else max(0, deadline - time.time())
+                    thread.join(timeout=wait_time)
+            
+            # 尝试终止未完成的线程
+            with self._tasks_lock:
+                for thread in self._tasks:
+                    if thread.is_alive():
+                        try:
+                            if hasattr(signal, 'pthread_kill'):
+                                signal.pthread_kill(thread.ident, signal.SIGTERM)
+                        except Exception:
+                            pass
+                            
+            # 清理资源
+            self._tasks.clear()
+            
 class MyBot(botpy.Client):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # 初始化线程池
-        self.thread_pool = concurrent.futures.ThreadPoolExecutor(
+        # 使用增强的线程池
+        self.thread_pool = SafeThreadPoolExecutor(
             max_workers=settings.MAX_WORKERS if hasattr(settings, 'MAX_WORKERS') else 10,
             thread_name_prefix="bot_worker"
         )
@@ -297,9 +443,13 @@ class MyBot(botpy.Client):
         """清理所有资源"""
         # 定义各阶段超时时间
         TASK_CANCEL_TIMEOUT = 3    # 取消任务超时
+        SEASON_CLEANUP_TIMEOUT = 5  # Season清理超时
         BROWSER_CLEANUP_TIMEOUT = 5 # 浏览器清理超时
         PLUGIN_CLEANUP_TIMEOUT = 5  # 插件清理超时
-        THREAD_POOL_TIMEOUT = 2    # 线程池关闭超时
+        THREAD_POOL_TIMEOUT = 5    # 线程池关闭超时
+        CACHE_CLEANUP_TIMEOUT = 5   # 缓存清理超时
+        API_CLEANUP_TIMEOUT = 5    # API连接池清理超时
+        PERSISTENCE_CLEANUP_TIMEOUT = 5  # 持久化管理器清理超时
         
         async with self._cleanup_lock:
             if self._cleanup_done:
@@ -309,9 +459,73 @@ class MyBot(botpy.Client):
                 bot_logger.info("开始清理资源...")
                 
                 # 第一阶段：停止接收新消息
-                self._healthy = False  # 标记为不健康，停止接收新消息
+                self._healthy = False
                 
-                # 第二阶段：取消所有运行中的任务
+                # 第二阶段：停止所有Season任务
+                try:
+                    from core.season import SeasonManager
+                    async with asyncio.timeout(SEASON_CLEANUP_TIMEOUT):
+                        season_manager = SeasonManager()
+                        await season_manager.stop_all()
+                        bot_logger.debug("所有Season任务已停止")
+                except asyncio.TimeoutError:
+                    bot_logger.warning("停止Season任务超时")
+                except Exception as e:
+                    bot_logger.error(f"停止Season任务时出错: {str(e)}")
+
+                # 第三阶段：清理缓存管理器
+                from utils.cache_manager import CacheManager
+                try:
+                    async with asyncio.timeout(CACHE_CLEANUP_TIMEOUT):
+                        cache_manager = CacheManager()
+                        await cache_manager.cleanup()
+                        bot_logger.debug("缓存管理器已关闭")
+                except asyncio.TimeoutError:
+                    bot_logger.warning("关闭缓存管理器超时")
+                except Exception as e:
+                    bot_logger.error(f"关闭缓存管理器时出错: {str(e)}")
+
+                # 第四阶段：清理持久化管理器
+                from utils.persistence import PersistenceManager
+                from utils.db import DatabaseManager
+                try:
+                    async with asyncio.timeout(PERSISTENCE_CLEANUP_TIMEOUT):
+                        persistence_manager = PersistenceManager()
+                        await persistence_manager.close_all()
+                        # 关闭所有数据库连接池
+                        await DatabaseManager.close_all()
+                        bot_logger.debug("持久化管理器和数据库连接已关闭")
+                except asyncio.TimeoutError:
+                    bot_logger.warning("关闭持久化管理器超时")
+                except Exception as e:
+                    bot_logger.error(f"关闭持久化管理器时出错: {str(e)}")
+                
+                # 第五阶段：清理API连接池
+                from utils.base_api import BaseAPI
+                from core.rank import RankAPI
+                from core.df import DFAPI
+                from core.powershift import PowerShiftAPI
+                from core.world_tour import WorldTourAPI
+                
+                try:
+                    async with asyncio.timeout(API_CLEANUP_TIMEOUT):
+                        # 清理所有API实例的连接池
+                        api_classes = [RankAPI, DFAPI, PowerShiftAPI, WorldTourAPI]
+                        for api_class in api_classes:
+                            try:
+                                await api_class.close_all_clients()
+                            except Exception as e:
+                                bot_logger.error(f"清理 {api_class.__name__} 连接池时出错: {str(e)}")
+                        
+                        # 清理基类的连接池
+                        await BaseAPI.close_all_clients()
+                        bot_logger.debug("所有API连接池已清理")
+                except asyncio.TimeoutError:
+                    bot_logger.warning("清理API连接池超时")
+                except Exception as e:
+                    bot_logger.error(f"清理API连接池时出错: {str(e)}")
+                
+                # 第六阶段：取消所有运行中的任务
                 try:
                     async with asyncio.timeout(TASK_CANCEL_TIMEOUT):
                         task_count = len(self._running_tasks)
@@ -330,7 +544,7 @@ class MyBot(botpy.Client):
                 finally:
                     self._running_tasks.clear()
                 
-                # 第三阶段：关闭浏览器实例
+                # 第七阶段：关闭浏览器实例
                 if self.browser_manager:
                     try:
                         async with asyncio.timeout(BROWSER_CLEANUP_TIMEOUT):
@@ -341,7 +555,7 @@ class MyBot(botpy.Client):
                     except Exception as e:
                         bot_logger.error(f"关闭浏览器时出错: {str(e)}")
                 
-                # 第四阶段：关闭插件管理器
+                # 第八阶段：关闭插件管理器
                 if self.plugin_manager:
                     try:
                         async with asyncio.timeout(PLUGIN_CLEANUP_TIMEOUT):
@@ -352,31 +566,19 @@ class MyBot(botpy.Client):
                     except Exception as e:
                         bot_logger.error(f"关闭插件管理器时出错: {str(e)}")
                 
-                # 第五阶段：关闭线程池
+                # 第九阶段：关闭线程池
                 if self.thread_pool:
                     try:
-                        # 使用线程池的shutdown方法，设置超时
+                        # 使用增强的shutdown方法
                         self.thread_pool.shutdown(wait=True, timeout=THREAD_POOL_TIMEOUT)
                         bot_logger.debug("线程池已关闭")
                     except TimeoutError:
                         bot_logger.warning("关闭线程池超时")
                     except Exception as e:
                         bot_logger.error(f"关闭线程池时出错: {str(e)}")
-                    finally:
-                        # 确保线程池被标记为关闭
-                        self.thread_pool._shutdown = True
                 
-                # 第六阶段：确保所有资源被释放
+                # 第十阶段：最终资源清理
                 try:
-                    # 关闭所有打开的文件
-                    import gc
-                    for obj in gc.get_objects():
-                        try:
-                            if hasattr(obj, 'close') and hasattr(obj, 'closed') and not obj.closed:
-                                obj.close()
-                        except Exception:
-                            pass
-                    
                     # 强制进行垃圾回收
                     gc.collect()
                     
@@ -389,10 +591,7 @@ class MyBot(botpy.Client):
             except Exception as e:
                 bot_logger.error(f"资源清理过程中发生错误: {str(e)}")
             finally:
-                # 确保清理标记被设置
                 self._cleanup_done = True
-                
-                # 确保重要的集合被清空
                 self._running_tasks.clear()
                 if hasattr(self, 'plugins'):
                     self.plugins.clear()
@@ -717,44 +916,20 @@ def main():
                 
                 # 第四阶段：最终清理
                 try:
-                    # 导入所需模块
-                    import gc
-                    import threading
-                    import multiprocessing
-                    
-                    # 清理线程
-                    for thread in threading.enumerate():
-                        if thread is not threading.current_thread():
-                            try:
-                                thread.join(timeout=1)
-                            except Exception:
-                                pass
-                    
-                    # 清理进程
-                    for process in multiprocessing.active_children():
-                        try:
-                            process.terminate()
-                            process.join(timeout=1)
-                        except Exception:
-                            pass
-                            
-                    # 清理文件句柄
-                    import psutil
-                    try:
-                        process = psutil.Process()
-                        for handler in process.open_files():
-                            try:
-                                handler.close()
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    
-                    # 强制垃圾回收
+                    # 强制进行垃圾回收
                     gc.collect()
                     
                 except Exception as e:
                     bot_logger.error(f"最终清理时发生错误: {e}")
+                finally:
+                    # 清空所有集合
+                    # 注意: 这里不再使用 self
+                    for name in ['plugins', 'commands', '_running_tasks']:
+                        try:
+                            if name in locals():
+                                locals()[name].clear()
+                        except Exception:
+                            pass
                 
         except Exception as e:
             bot_logger.error(f"清理资源时发生错误: {e}")

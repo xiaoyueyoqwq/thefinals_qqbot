@@ -5,31 +5,18 @@ import json
 from pathlib import Path
 from utils.logger import bot_logger
 from utils.db import DatabaseManager, with_database, DatabaseError
-from typing import Dict, Any, List
-from utils.base_api import BaseAPI
+from typing import Dict, Any, List, Optional
 from utils.config import settings
-
-class DFAPI(BaseAPI):
-    """底分查询API封装"""
-    
-    def __init__(self):
-        super().__init__(settings.api_base_url, timeout=10)
-        self.headers = {
-            "Accept": "application/json",
-            "User-Agent": "TheFinals-Bot/1.0"
-        }
-        self.api_prefix = settings.API_PREFIX
+from core.season import SeasonManager, SeasonConfig
 
 class DFQuery:
     """底分查询功能类"""
     
     def __init__(self):
         """初始化底分查询"""
-        self.api = DFAPI()
-        self.season = settings.CURRENT_SEASON
-        self.platform = "crossplay"
-        self.db_path = Path("data/leaderboard.db")
-        self.cache_duration = timedelta(minutes=10)
+        self.season_manager = SeasonManager()
+        self.db_path = Path("data/df_history.db")
+        self.cache_duration = timedelta(minutes=2)  # 2分钟更新一次
         self.daily_save_time = "23:55"  # 每天保存数据的时间
         self.max_retries = 3  # 最大重试次数
         self.retry_delay = 300  # 重试延迟（秒）
@@ -37,30 +24,15 @@ class DFQuery:
         # 初始化数据库管理器
         self.db = DatabaseManager(self.db_path)
         
-        self._init_db()
+        # 初始化其他属性
         self._save_lock = asyncio.Lock()  # 添加保存锁
         self._last_save_date = None
         self._save_task = None
         self._should_stop = asyncio.Event()
         self._running_tasks = set()
+        self._update_task = None
         
-        # 同步方式初始化 _last_save_date
-        conn = self.db.get_connection()
-        try:
-            c = conn.cursor()
-            c.execute('''SELECT last_save_date 
-                        FROM save_status 
-                        ORDER BY last_save_date DESC LIMIT 1''')
-            result = c.fetchone()
-            if result:
-                self._last_save_date = datetime.strptime(result[0], '%Y-%m-%d').date()
-                bot_logger.debug(f"[DFQuery] 初始化时加载上次保存日期: {self._last_save_date}")
-        except Exception as e:
-            bot_logger.error(f"[DFQuery] 初始化加载保存状态失败: {str(e)}")
-        finally:
-            conn.close()
-        
-    def _init_db(self):
+    async def _init_db(self):
         """初始化SQLite数据库"""
         # 确保数据目录存在
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -91,44 +63,90 @@ class DFQuery:
         ]
         
         # 执行表创建
-        conn = self.db.get_connection()
+        for sql in tables:
+            try:
+                await self.db.execute_simple(sql)
+            except Exception as e:
+                bot_logger.error(f"[DFQuery] 创建表失败: {str(e)}")
+                raise
+            
+        # 初始化 _last_save_date
+        result = await self.db.fetch_one(
+            '''SELECT last_save_date 
+               FROM save_status 
+               ORDER BY last_save_date DESC LIMIT 1'''
+        )
+        if result:
+            self._last_save_date = datetime.strptime(result[0], '%Y-%m-%d').date()
+            bot_logger.debug(f"[DFQuery] 初始化时加载上次保存日期: {self._last_save_date}")
+            
+    async def start(self):
+        """启动DFQuery，初始化数据库和更新任务"""
         try:
-            c = conn.cursor()
-            for sql in tables:
-                c.execute(sql)
-            conn.commit()
+            # 初始化赛季管理器
+            await self.season_manager.initialize()
+            
+            # 初始化数据库
+            await self._init_db()
+            
+            # 启动更新任务
+            if not self._update_task:
+                self._update_task = asyncio.create_task(self._update_loop())
+                bot_logger.info("[DFQuery] 数据更新任务已启动")
+                
+        except Exception as e:
+            bot_logger.error(f"[DFQuery] 启动失败: {str(e)}")
+            raise
+            
+    async def _update_loop(self):
+        """数据更新循环"""
+        try:
+            while not self._should_stop.is_set():
+                try:
+                    # 更新数据
+                    await self.fetch_leaderboard()
+                    
+                    # 等待2分钟
+                    await asyncio.sleep(120)
+                    
+                except Exception as e:
+                    if self._should_stop.is_set():
+                        return
+                    bot_logger.error(f"[DFQuery] 更新循环错误: {str(e)}")
+                    await asyncio.sleep(5)
+                    
         finally:
-            conn.close()
+            bot_logger.info("[DFQuery] 数据更新循环已停止")
             
     @with_database
     async def fetch_leaderboard(self):
-        """获取排行榜数据"""
+        """获取并更新排行榜数据"""
         try:
-            url = f"{self.api.api_prefix}/{self.season}/{self.platform}"
-            response = await self.api.get(url)
-            
-            if not response or response.status_code != 200:
-                raise Exception(f"API error: {response.status_code}")
+            # 获取当前赛季数据
+            season = await self.season_manager.get_season(SeasonConfig.CURRENT_SEASON)
+            if not season:
+                raise Exception("无法获取当前赛季")
                 
-            data = self.api.handle_response(response)
-            if not data or not data.get('data'):
-                raise Exception("排行榜数据为空")
-            
+            # 获取所有玩家数据
+            all_data = await season.get_all_players()
+            if not all_data:
+                raise Exception("未获取到玩家数据")
+                
             # 准备更新操作
             update_time = datetime.now()
             operations = []
             
             # 只保存第500名和第10000名的数据
             target_ranks = {500, 10000}
-            for entry in data['data']:
-                rank = entry.get('rank')
+            for player_data in all_data:
+                rank = player_data.get('rank')
                 if rank in target_ranks:
                     operations.append((
                         '''INSERT OR REPLACE INTO leaderboard
                            (rank, player_id, score, update_time)
                            VALUES (?, ?, ?, ?)''',
-                        (rank, entry.get('name'), 
-                         entry.get('rankScore'), update_time)
+                        (rank, player_data.get('name'), 
+                         player_data.get('rankScore'), update_time)
                     ))
             
             # 执行更新
@@ -137,6 +155,30 @@ class DFQuery:
             
         except Exception as e:
             bot_logger.error(f"[DFQuery] 获取排行榜数据失败: {str(e)}")
+            raise
+            
+    @with_database
+    async def get_bottom_scores(self) -> Dict[str, Any]:
+        """获取底分数据"""
+        try:
+            # 从数据库获取最新数据
+            results = await self.db.fetch_all(
+                '''SELECT rank, player_id, score, update_time 
+                   FROM leaderboard'''
+            )
+            
+            scores = {}
+            for row in results:
+                rank, player_id, score, update_time = row
+                scores[str(rank)] = {
+                    "player_id": player_id,
+                    "score": score,
+                    "update_time": datetime.fromisoformat(update_time)
+                }
+            return scores
+            
+        except Exception as e:
+            bot_logger.error(f"[DFQuery] 获取底分数据失败: {str(e)}")
             raise
             
     @with_database
@@ -247,55 +289,6 @@ class DFQuery:
         )
             
     @with_database
-    async def get_bottom_scores(self) -> Dict[str, Any]:
-        """获取底分数据，优先使用本地缓存"""
-        try:
-            # 先从本地数据库查询
-            results = await self.db.fetch_all(
-                '''SELECT rank, player_id, score, update_time 
-                   FROM leaderboard
-                   WHERE update_time > ?''',
-                (datetime.now() - self.cache_duration,)
-            )
-            
-            if results:
-                # 如果有未过期的缓存数据，直接使用
-                bot_logger.debug("[DFQuery] 使用本地缓存数据")
-                scores = {}
-                for row in results:
-                    rank, player_id, score, update_time = row
-                    scores[str(rank)] = {
-                        "player_id": player_id,
-                        "score": score,
-                        "update_time": datetime.fromisoformat(update_time)
-                    }
-                return scores
-                
-            # 缓存过期或没有数据，从API获取新数据
-            bot_logger.info("[DFQuery] 本地数据已过期，从API获取")
-            await self.fetch_leaderboard()
-            
-            # 重新查询更新后的数据
-            results = await self.db.fetch_all(
-                '''SELECT rank, player_id, score, update_time 
-                   FROM leaderboard'''
-            )
-            
-            scores = {}
-            for row in results:
-                rank, player_id, score, update_time = row
-                scores[str(rank)] = {
-                    "player_id": player_id,
-                    "score": score,
-                    "update_time": datetime.fromisoformat(update_time)
-                }
-            return scores
-            
-        except Exception as e:
-            bot_logger.error(f"[DFQuery] 获取底分数据失败: {str(e)}")
-            raise
-            
-    @with_database
     async def get_historical_data(
         self,
         start_date: date,
@@ -338,81 +331,69 @@ class DFQuery:
             raise
             
     @with_database
-    async def get_stats_data(
-        self,
-        days: int = 7
-    ) -> List[Dict[str, Any]]:
-        """获取统计数据"""
+    async def get_stats_data(self, days: int = 7) -> List[Dict[str, Any]]:
+        """获取统计数据
+        
+        Args:
+            days (int, optional): 获取天数. Defaults to 7.
+            
+        Returns:
+            List[Dict[str, Any]]: 统计数据列表
+        """
         try:
-            end_date = date.today()
+            # 计算日期范围
+            end_date = date.today() - timedelta(days=1)
             start_date = end_date - timedelta(days=days-1)
             
-            # 执行查询
-            results = await self.db.fetch_all(
-                '''SELECT date, rank, score
-                   FROM leaderboard_history
-                   WHERE date BETWEEN ? AND ?
-                   ORDER BY date, rank''',
-                (start_date.isoformat(), end_date.isoformat())
-            )
-            
-            if not results:
+            # 获取历史数据
+            historical_data = await self.get_historical_data(start_date, end_date)
+            if not historical_data:
                 return []
-            
-            # 处理数据
-            stats_by_date = {}
-            for row in results:
-                try:
-                    current_date = datetime.strptime(row[0], '%Y-%m-%d').date()
-                    rank = row[1]
-                    score = row[2]
+                
+            # 按日期分组
+            data_by_date = {}
+            for entry in historical_data:
+                record_date = entry["date"]
+                if record_date not in data_by_date:
+                    data_by_date[record_date] = {"date": record_date}
                     
-                    if current_date not in stats_by_date:
-                        stats_by_date[current_date] = {
-                            "date": current_date,
-                            "rank_500_score": None,
-                            "rank_10000_score": None,
-                            "daily_change_500": None,
-                            "daily_change_10000": None
-                        }
-                        
-                    if rank == 500:
-                        stats_by_date[current_date]["rank_500_score"] = score
-                    elif rank == 10000:
-                        stats_by_date[current_date]["rank_10000_score"] = score
-                except Exception as e:
-                    bot_logger.error(f"[DFQuery] 处理统计数据行时出错: {str(e)}, row={row}")
-                    continue
-            
+                rank = entry["rank"]
+                if rank == 500:
+                    data_by_date[record_date]["rank_500_score"] = entry["score"]
+                elif rank == 10000:
+                    data_by_date[record_date]["rank_10000_score"] = entry["score"]
+                    
             # 计算日变化
-            dates = sorted(stats_by_date.keys())
-            for i, current_date in enumerate(dates):
-                if i > 0:
-                    prev_date = dates[i-1]
-                    current_stats = stats_by_date[current_date]
-                    prev_stats = stats_by_date[prev_date]
+            dates = sorted(data_by_date.keys())
+            for i in range(1, len(dates)):
+                curr_date = dates[i]
+                prev_date = dates[i-1]
+                curr_data = data_by_date[curr_date]
+                prev_data = data_by_date[prev_date]
+                
+                # 计算500名变化
+                if "rank_500_score" in curr_data and "rank_500_score" in prev_data:
+                    curr_data["daily_change_500"] = curr_data["rank_500_score"] - prev_data["rank_500_score"]
+                else:
+                    curr_data["daily_change_500"] = None
                     
-                    if (current_stats["rank_500_score"] is not None and 
-                        prev_stats["rank_500_score"] is not None):
-                        current_stats["daily_change_500"] = (
-                            current_stats["rank_500_score"] - 
-                            prev_stats["rank_500_score"]
-                        )
-                        
-                    if (current_stats["rank_10000_score"] is not None and 
-                        prev_stats["rank_10000_score"] is not None):
-                        current_stats["daily_change_10000"] = (
-                            current_stats["rank_10000_score"] - 
-                            prev_stats["rank_10000_score"]
-                        )
+                # 计算10000名变化
+                if "rank_10000_score" in curr_data and "rank_10000_score" in prev_data:
+                    curr_data["daily_change_10000"] = curr_data["rank_10000_score"] - prev_data["rank_10000_score"]
+                else:
+                    curr_data["daily_change_10000"] = None
+                    
+            # 转换为列表并按日期倒序排序
+            stats = list(data_by_date.values())
+            stats.sort(key=lambda x: x["date"], reverse=True)
             
-            return [stats_by_date[d] for d in dates]
+            return stats
             
         except Exception as e:
             bot_logger.error(f"[DFQuery] 获取统计数据失败: {str(e)}")
-            raise
+            return []
 
-    def format_score_message(self, data: Dict[str, Any]) -> str:
+    async def format_score_message(self, data: Dict[str, Any]) -> str:
         """格式化分数消息
         Args:
             data: 包含分数数据的字典
@@ -445,15 +426,12 @@ class DFQuery:
                 # 获取昨天的数据
                 try:
                     yesterday = date.today() - timedelta(days=1)
-                    conn = self.db.get_connection()
-                    c = conn.cursor()
-                    c.execute('''
+                    sql = '''
                         SELECT score 
                         FROM leaderboard_history 
                         WHERE date = ? AND rank = ?
-                    ''', (yesterday.isoformat(), rank))  # 使用整数rank
-                    result = c.fetchone()
-                    conn.close()
+                    '''
+                    result = await self.db.fetch_one(sql, (yesterday.isoformat(), rank))
                     
                     if result:
                         yesterday_score = result[0]
@@ -490,7 +468,7 @@ class DFQuery:
             "3. 分数变化基于前一天的数据"
         ])
         
-        return "\n".join(message) 
+        return "\n".join(message)
 
     def start_tasks(self) -> list:
         """返回需要启动的任务列表"""
@@ -502,6 +480,14 @@ class DFQuery:
         """停止所有任务"""
         bot_logger.debug("[DFQuery] 正在停止所有任务")
         self._should_stop.set()
+        
+        # 取消更新任务
+        if self._update_task and not self._update_task.done():
+            self._update_task.cancel()
+            try:
+                await self._update_task
+            except asyncio.CancelledError:
+                pass
         
         # 取消所有运行中的任务
         for task in self._running_tasks:

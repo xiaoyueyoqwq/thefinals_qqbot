@@ -1,6 +1,6 @@
 from core.plugin import Plugin
 from core.api import api_route
-from core.rank import RankAPI
+from core.season import SeasonManager, SeasonConfig
 from utils.logger import bot_logger
 from typing import List, Optional, Dict
 from pydantic import BaseModel
@@ -29,34 +29,26 @@ class RankAPIPlugin(Plugin):
     def __init__(self):
         super().__init__()
         bot_logger.debug("[RankAPIPlugin] 初始化排位查询API插件")
-        self.rank_api = RankAPI()
+        self.season_manager = SeasonManager()
         self.commands = {}  # 初始化commands属性
         
     async def on_load(self):
         """插件加载时的回调"""
         bot_logger.debug("[RankAPIPlugin] 开始加载排位查询API插件")
         
-        # 调用start_tasks获取任务
-        tasks = await self.start_tasks()
-        if tasks:
-            bot_logger.debug(f"[RankAPIPlugin] 从 RankAPI 获取到 {len(tasks)} 个任务")
-            
+        # 初始化赛季管理器
+        await self.season_manager.initialize()
         bot_logger.info("[RankAPIPlugin] 排位查询API插件已加载")
         
     async def on_unload(self):
         """插件卸载时的回调"""
         bot_logger.debug("[RankAPIPlugin] 开始卸载排位查询API插件")
         
-        # 停止自动更新任务
-        await self.rank_api.stop()
-        bot_logger.debug("[RankAPIPlugin] 自动更新任务已停止")
+        # 停止所有赛季任务
+        await self.season_manager.stop_all()
+        bot_logger.debug("[RankAPIPlugin] 所有赛季任务已停止")
         
         bot_logger.info("[RankAPIPlugin] 排位查询API插件已卸载")
-        
-    async def start_tasks(self) -> List[asyncio.Task]:
-        """启动插件任务"""
-        tasks = []
-        return tasks
         
     @api_route(
         "/api/rank/player/{player_id}/{season}",
@@ -88,9 +80,20 @@ class RankAPIPlugin(Plugin):
     async def get_player_stats(self, player_id: str, season: str) -> PlayerStatsResponse:
         """获取玩家排位数据"""
         try:
-            data = await self.rank_api.get_player_stats(player_id, season)
+            # 检查赛季是否有效
+            if season not in SeasonConfig.SEASONS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"无效的赛季: {season}"
+                )
+                
+            # 从赛季管理器获取数据
+            data = await self.season_manager.get_player_data(player_id, season)
             if not data:
-                raise HTTPException(status_code=404, detail="未找到玩家数据")
+                raise HTTPException(
+                    status_code=404,
+                    detail="未找到玩家数据"
+                )
                 
             return PlayerStatsResponse(
                 name=data["name"],
@@ -137,7 +140,8 @@ class RankAPIPlugin(Plugin):
     async def get_top_five(self) -> TopPlayersResponse:
         """获取排行榜前5名玩家ID"""
         try:
-            data = await self.rank_api.get_top_five()
+            # 从赛季管理器获取当前赛季的前5名玩家
+            data = await self.season_manager.get_top_players(SeasonConfig.CURRENT_SEASON, limit=5)
             return {"data": data or []}
             
         except Exception as e:

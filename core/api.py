@@ -4,7 +4,7 @@ API System
 提供插件API注册能力
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -109,6 +109,15 @@ def _log_route_registration(method: str, path: str, plugin_name: str, func_name:
     
     bot_logger.info(f"[API] {method_str} {path:30s} -> {plugin_name}.{func_name}")
 
+def get_plugin_instance():
+    """获取插件实例的依赖函数"""
+    def _get_instance(plugin_name: str):
+        instance = _plugin_instances.get(plugin_name)
+        if not instance:
+            raise HTTPException(status_code=500, detail="插件未加载")
+        return instance
+    return _get_instance
+
 def api_route(
     path: str,
     *,
@@ -135,58 +144,47 @@ def api_route(
             
         # 检查路由冲突
         if path in _registered_routes:
-            # 检查方法是否冲突
             for method in methods:
                 if method in _registered_routes[path]:
                     raise ValueError(f"路由路径 {path} 的 {method} 方法已被注册")
-            # 添加新方法
             _registered_routes[path].update(methods)
         else:
-            # 新建路由记录
             _registered_routes[path] = set(methods)
-        
-        # 获取函数签名
+            
+        # 获取原始签名
         sig = inspect.signature(func)
-        parameters = list(sig.parameters.values())
         
-        # 如果是实例方法，移除self参数
-        if parameters and parameters[0].name == 'self':
-            parameters = parameters[1:]
-        
-        # 创建一个新的异步函数，只包含实际需要的参数
-        async def endpoint(**kwargs):
+        # 创建新的endpoint函数
+        @wraps(func)
+        async def endpoint(*args, **kwargs):
             try:
                 # 获取插件实例
                 instance = _plugin_instances.get(plugin_name)
-                if instance:
-                    # 绑定方法到实例
-                    bound_func = func.__get__(instance, instance.__class__)
-                    return await bound_func(**kwargs)
-                else:
+                if not instance:
                     bot_logger.error(f"API {path} 找不到插件实例: {plugin_name}")
-                    raise HTTPException(status_code=500, detail="插件未加载，请检查插件加载情况")
+                    raise HTTPException(status_code=500, detail="插件未加载")
+                
+                # 调用原始方法，传入self参数
+                return await func(instance, **kwargs)
+                
+            except HTTPException:
+                raise
             except Exception as e:
                 bot_logger.error(f"API {path} 执行出错: {str(e)}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        # 更新endpoint的签名和文档
-        endpoint.__name__ = func.__name__
-        endpoint.__doc__ = func.__doc__
-        endpoint.__signature__ = sig.replace(parameters=parameters)  # 使用处理后的参数列表
+        # 设置endpoint的签名
+        # 移除self参数，保留其他参数
+        params = [p for name, p in sig.parameters.items() if name != 'self']
+        endpoint.__signature__ = sig.replace(parameters=params)
         
-        # 添加路由，包含插件标签
-        route_kwargs = {
-            "response_model": kwargs.pop("response_model", None),
-            "tags": [plugin_name],
-            **kwargs
-        }
-        
-        # 注册路由
+        # 添加路由
         app.add_api_route(
             path=path,
             endpoint=endpoint,
             methods=methods,
-            **route_kwargs
+            tags=[plugin_name],
+            **kwargs
         )
         
         # 记录路由注册

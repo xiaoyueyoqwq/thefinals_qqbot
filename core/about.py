@@ -16,7 +16,7 @@ class AboutUs:
         if self._initialized:
             return
             
-        self.version = "v3.1.0"
+        self.version = "v3.2.1"
         self.github_url = "https://github.com/xiaoyueyoqwq"
         self.api_credit = settings.API_STANDARD_URL.replace("/v1", "")  # 移除版本号
         self._initialized = True
@@ -34,6 +34,7 @@ class AboutUs:
                 "━━━━━━━━━━━━━\n"
                 "🤖 功能列表:\n"
                 "• /rank <ID> [赛季] - 查询排位数据\n"
+                "• /all <ID> - 查询全赛季数据\n"
                 "• /wt <ID> [赛季] - 查询世界巡回赛\n"
                 "• /ps <ID> - 查询平台争霸数据\n"
                 "• /club <标签> - 查询俱乐部信息\n"

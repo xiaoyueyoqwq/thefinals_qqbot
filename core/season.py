@@ -79,6 +79,10 @@ class Season:
             await self._cache.register_database(self.cache_name)
             bot_logger.info(f"[Season] 缓存注册完成 - {self.cache_name}")
             
+            # 立即更新一次数据
+            bot_logger.info(f"[Season] 初始化时立即更新一次数据")
+            await self._update_data()
+            
             # 创建更新任务
             if not self._update_task:
                 bot_logger.info(f"[Season] 创建数据更新任务 - rotation: {self.rotation}秒")
@@ -193,16 +197,16 @@ class Season:
             # 如果精确匹配没找到，尝试模糊匹配
             if not cached_data:
                 bot_logger.info(f"[Season] 精确匹配未找到，尝试模糊匹配 - {player_name}")
-                # 获取所有缓存键
-                all_keys = await self._cache.get_all_keys(self.cache_name)
+                # 获取所有有效的缓存数据
+                all_data = await self._cache.get_all_valid(self.cache_name)
                 # 过滤出包含玩家名称的键
-                matched_keys = [k for k in all_keys if player_name.lower() in k.lower()]
+                matched_keys = [k for k in all_data.keys() if player_name.lower() in k.lower()]
                 
                 if matched_keys:
                     # 使用第一个匹配的键
                     first_match = matched_keys[0]
                     bot_logger.info(f"[Season] 找到模糊匹配 - {first_match}")
-                    cached_data = await self._cache.get_cache(self.cache_name, first_match)
+                    cached_data = all_data[first_match]
             
             if not cached_data:
                 bot_logger.warning(f"[Season] 未找到玩家数据 - {player_name}")
@@ -258,6 +262,40 @@ class Season:
             except asyncio.CancelledError:
                 pass
             
+    async def get_all_players(self) -> List[Dict[str, Any]]:
+        """获取所有玩家数据
+        
+        Returns:
+            List[Dict[str, Any]]: 所有玩家数据列表
+        """
+        try:
+            bot_logger.info(f"[Season] 开始获取所有玩家数据 - {self.season_id}")
+            
+            # 从缓存获取所有有效数据
+            all_data = await self._cache.get_all_valid(self.cache_name)
+            if not all_data:
+                bot_logger.warning(f"[Season] 缓存中没有玩家数据 - {self.season_id}")
+                return []
+                
+            # 解析所有玩家数据
+            players = []
+            for key, value in all_data.items():
+                if key.startswith("player_"):
+                    try:
+                        player_data = json.loads(value)
+                        players.append(player_data)
+                    except json.JSONDecodeError:
+                        continue
+                        
+            # 按排名排序
+            players.sort(key=lambda x: x.get("rank", float("inf")))
+            bot_logger.info(f"[Season] 成功获取 {len(players)} 个玩家数据")
+            return players
+            
+        except Exception as e:
+            bot_logger.error(f"[Season] 获取所有玩家数据失败: {str(e)}")
+            return []
+
 class HistorySeason:
     """历史赛季数据管理"""
     
@@ -586,6 +624,13 @@ class SeasonManager:
                 await self.rotation.stop_rotation(current_season)
             except Exception as e:
                 bot_logger.error(f"[SeasonManager] 停止轮换任务失败: {str(e)}")
+            
+            # 关闭持久化管理器
+            try:
+                await self.persistence.close_all()
+                bot_logger.info("[SeasonManager] 持久化管理器已关闭")
+            except Exception as e:
+                bot_logger.error(f"[SeasonManager] 关闭持久化管理器失败: {str(e)}")
             
             # 清空赛季字典
             self._seasons.clear()

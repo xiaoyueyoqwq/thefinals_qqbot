@@ -305,7 +305,30 @@ class CacheManager:
         async with self._lock:
             for name in self._caches:
                 await self._save_cache(name)
-                
+
+    async def cleanup(self) -> None:
+        """清理资源并停止自动保存任务"""
+        try:
+            # 取消自动保存任务
+            if self._save_task and not self._save_task.done():
+                self._save_task.cancel()
+                try:
+                    await self._save_task
+                except asyncio.CancelledError:
+                    pass
+                self._save_task = None
+            
+            # 最后一次保存所有缓存
+            await self.save_all()
+            
+            # 清空缓存
+            self._caches.clear()
+            
+            bot_logger.info("[CacheManager] 资源清理完成")
+            
+        except Exception as e:
+            bot_logger.error(f"[CacheManager] 清理资源时出错: {str(e)}")
+            
     def get_registered_databases(self) -> List[str]:
         """获取所有已注册的缓存名称"""
         return list(self._caches.keys())

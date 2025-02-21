@@ -75,9 +75,9 @@ class ClubQuery:
     def _format_loading_message(self, club_tag: str) -> str:
         """格式化加载提示消息"""
         return (
-            f"\n⏰ 正在查询 {club_tag} 的俱乐部数据...\n"
+            f"\n⏰正在查询 {club_tag} 的俱乐部数据...\n"
             "━━━━━━━━━━━━━\n"
-            "🤖 你知道吗？\n"
+            "🤖你知道吗？\n"
             f"[ {self._get_random_tip()} ]\n"
         )
 
@@ -147,7 +147,7 @@ class ClubQuery:
         members_info = await self._format_members_info(members)
         
         return (
-            f"\n🎮 俱乐部信息 | THE FINALS\n"
+            f"\n🎮 战队信息 | THE FINALS\n"
             f"━━━━━━━━━━━━━\n"
             f"📋 标签: {club_tag}\n"
             f"👥 成员列表 (共{len(members)}人):\n"
@@ -166,7 +166,6 @@ class ClubQuery:
                 "━━━━━━━━━━━━━\n"
                 "🎮 使用方法:\n"
                 "1. /club 俱乐部标签\n"
-                "2. /club 标签 (模糊搜索)\n"
                 "━━━━━━━━━━━━━\n"
                 "💡 小贴士:\n"
                 "1. 标签区分大小写\n"
