@@ -36,6 +36,7 @@ class AboutUs:
                 "• /rank <ID> [赛季] - 查询排位数据\n"
                 "• /wt <ID> [赛季] - 查询世界巡回赛\n"
                 "• /ps <ID> - 查询平台争霸数据\n"
+                "• /club <标签> - 查询俱乐部信息\n"
                 "• /bind <ID> - 绑定游戏ID\n"
                 "• /unbind <ID> - 解绑游戏ID\n"
                 "• /df - 查询当前赛季底分\n"
