@@ -6,23 +6,25 @@ import random
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
+from core.rank import RankQuery  # 添加 RankQuery 导入
 
 class ClubAPI(BaseAPI):
     """俱乐部API封装"""
     
     def __init__(self):
-        super().__init__("https://api.the-finals-leaderboard.com", timeout=10)
+        super().__init__(settings.api_base_url, timeout=10)
         self.headers = {
             "Accept": "application/json",
             "User-Agent": "TheFinals-Bot/1.0"
         }
+        self.api_prefix = "/v1"  # 俱乐部API使用不同的前缀
 
     async def get_club_info(self, club_tag: str, exact_match: bool = True) -> Optional[List[dict]]:
         """查询俱乐部信息"""
         try:
             # 构建完整的URL，移除可能的命令前缀
             clean_tag = club_tag.strip().strip('[]')  # 移除空格和中括号
-            url = f"/v1/clubs?clubTagFilter={clean_tag}&exactClubTag={str(exact_match).lower()}"
+            url = f"{self.api_prefix}/clubs?clubTagFilter={clean_tag}&exactClubTag={str(exact_match).lower()}"
             
             response = await self.get(url, headers=self.headers)
             if not response or response.status_code != 200:
@@ -44,6 +46,7 @@ class ClubQuery:
     def __init__(self):
         self.api = ClubAPI()
         self.tips = self._load_tips()
+        self.rank_query = RankQuery()  # 创建 RankQuery 实例
 
     def _load_tips(self) -> list:
         """加载小知识数据"""
@@ -92,15 +95,33 @@ class ClubQuery:
             
         return "\n".join(result)
 
-    def _format_members_info(self, members: List[dict]) -> str:
+    async def _format_members_info(self, members: List[dict]) -> str:
         """格式化成员列表信息"""
         if not members:
             return "暂无成员数据"
             
-        # 直接连续显示所有成员，使用▎作为前缀
-        return "\n".join(f"▎{member.get('name', '未知')}" for member in members)
+        # 初始化 RankQuery
+        await self.rank_query.initialize()
+        
+        result = []
+        for member in members:
+            name = member.get('name', '未知')
+            try:
+                # 获取玩家当前赛季的数据
+                player_data = await self.rank_query.api.get_player_stats(name)
+                if player_data and player_data.get('rankScore', 0) > 0:
+                    score = player_data.get('rankScore', 0)
+                    score_text = f" [{score:,}]"
+                else:
+                    score_text = " [未上榜]"
+                result.append(f"▎{name}{score_text}")
+            except Exception as e:
+                bot_logger.debug(f"获取玩家 {name} 分数时出错: {str(e)}")  # 改为 debug 级别
+                result.append(f"▎{name} [未上榜]")
+                
+        return "\n".join(result)
 
-    def format_response(self, club_data: List[dict]) -> str:
+    async def format_response(self, club_data: List[dict]) -> str:
         """格式化响应消息"""
         if not club_data:
             return (
@@ -122,12 +143,15 @@ class ClubQuery:
         members = club.get("members", [])
         leaderboards = club.get("leaderboards", [])
         
+        # 异步获取成员信息
+        members_info = await self._format_members_info(members)
+        
         return (
             f"\n🎮 俱乐部信息 | THE FINALS\n"
             f"━━━━━━━━━━━━━\n"
             f"📋 标签: {club_tag}\n"
             f"👥 成员列表 (共{len(members)}人):\n"
-            f"{self._format_members_info(members)}\n"
+            f"{members_info}\n"
             f"━━━━━━━━━━━━━\n"
             f"📊 战队排名:\n"
             f"{self._format_leaderboard_info(leaderboards)}\n"
@@ -159,7 +183,7 @@ class ClubQuery:
                 # 如果没有结果，尝试模糊匹配
                 data = await self.api.get_club_info(club_tag, False)
             
-            return self.format_response(data)
+            return await self.format_response(data)
             
         except Exception as e:
             bot_logger.error(f"处理俱乐部查询命令时出错: {str(e)}")

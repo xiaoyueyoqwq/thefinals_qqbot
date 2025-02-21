@@ -6,14 +6,27 @@ from pathlib import Path
 from utils.logger import bot_logger
 from utils.db import DatabaseManager, with_database, DatabaseError
 from typing import Dict, Any, List
+from utils.base_api import BaseAPI
+from utils.config import settings
+
+class DFAPI(BaseAPI):
+    """底分查询API封装"""
+    
+    def __init__(self):
+        super().__init__(settings.api_base_url, timeout=10)
+        self.headers = {
+            "Accept": "application/json",
+            "User-Agent": "TheFinals-Bot/1.0"
+        }
+        self.api_prefix = settings.API_PREFIX
 
 class DFQuery:
     """底分查询功能类"""
     
     def __init__(self):
         """初始化底分查询"""
-        self.base_url = "https://api.the-finals-leaderboard.com/v1/leaderboard"
-        self.season = "s5"
+        self.api = DFAPI()
+        self.season = settings.CURRENT_SEASON
         self.platform = "crossplay"
         self.db_path = Path("data/leaderboard.db")
         self.cache_duration = timedelta(minutes=10)
@@ -91,38 +104,37 @@ class DFQuery:
     async def fetch_leaderboard(self):
         """获取排行榜数据"""
         try:
-            url = f"{self.base_url}/{self.season}/{self.platform}"
+            url = f"{self.api.api_prefix}/{self.season}/{self.platform}"
+            response = await self.api.get(url)
             
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        raise Exception(f"API error: {resp.status}")
-                        
-                    data = await resp.json()
-                    if not data or not data.get('data'):
-                        raise Exception("排行榜数据为空")
-                    
-                    # 准备更新操作
-                    update_time = datetime.now()
-                    operations = []
-                    
-                    # 只保存第500名和第10000名的数据
-                    target_ranks = {500, 10000}
-                    for entry in data['data']:
-                        rank = entry.get('rank')
-                        if rank in target_ranks:
-                            operations.append((
-                                '''INSERT OR REPLACE INTO leaderboard
-                                   (rank, player_id, score, update_time)
-                                   VALUES (?, ?, ?, ?)''',
-                                (rank, entry.get('name'), 
-                                 entry.get('rankScore'), update_time)
-                            ))
-                    
-                    # 执行更新
-                    await self.db.execute_transaction(operations)
-                    bot_logger.info("[DFQuery] 已更新排行榜数据")
-                    
+            if not response or response.status_code != 200:
+                raise Exception(f"API error: {response.status_code}")
+                
+            data = self.api.handle_response(response)
+            if not data or not data.get('data'):
+                raise Exception("排行榜数据为空")
+            
+            # 准备更新操作
+            update_time = datetime.now()
+            operations = []
+            
+            # 只保存第500名和第10000名的数据
+            target_ranks = {500, 10000}
+            for entry in data['data']:
+                rank = entry.get('rank')
+                if rank in target_ranks:
+                    operations.append((
+                        '''INSERT OR REPLACE INTO leaderboard
+                           (rank, player_id, score, update_time)
+                           VALUES (?, ?, ?, ?)''',
+                        (rank, entry.get('name'), 
+                         entry.get('rankScore'), update_time)
+                    ))
+            
+            # 执行更新
+            await self.db.execute_transaction(operations)
+            bot_logger.info("[DFQuery] 已更新排行榜数据")
+            
         except Exception as e:
             bot_logger.error(f"[DFQuery] 获取排行榜数据失败: {str(e)}")
             raise

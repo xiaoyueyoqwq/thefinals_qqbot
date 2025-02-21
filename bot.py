@@ -65,6 +65,10 @@ class MyBot(botpy.Client):
         # 健康状态
         self._healthy = True
         self._last_message_time = 0
+        
+        # 清理标记
+        self._cleanup_done = False
+        self._cleanup_lock = asyncio.Lock()
 
     def create_task(self, coro, name=None):
         """创建并跟踪异步任务"""
@@ -289,6 +293,126 @@ class MyBot(botpy.Client):
         content = message.content.replace(f"<@!{self.robot.id}>", "").strip()
         await self._handle_message(message, content)
 
+    async def _cleanup(self):
+        """清理所有资源"""
+        # 定义各阶段超时时间
+        TASK_CANCEL_TIMEOUT = 3    # 取消任务超时
+        BROWSER_CLEANUP_TIMEOUT = 5 # 浏览器清理超时
+        PLUGIN_CLEANUP_TIMEOUT = 5  # 插件清理超时
+        THREAD_POOL_TIMEOUT = 2    # 线程池关闭超时
+        
+        async with self._cleanup_lock:
+            if self._cleanup_done:
+                return
+                
+            try:
+                bot_logger.info("开始清理资源...")
+                
+                # 第一阶段：停止接收新消息
+                self._healthy = False  # 标记为不健康，停止接收新消息
+                
+                # 第二阶段：取消所有运行中的任务
+                try:
+                    async with asyncio.timeout(TASK_CANCEL_TIMEOUT):
+                        task_count = len(self._running_tasks)
+                        for task in self._running_tasks:
+                            if not task.done():
+                                task.cancel()
+                                try:
+                                    await task
+                                except (asyncio.CancelledError, Exception):
+                                    pass
+                        bot_logger.debug(f"已取消 {task_count} 个运行中的任务")
+                except asyncio.TimeoutError:
+                    bot_logger.warning("取消任务超时，继续其他清理")
+                except Exception as e:
+                    bot_logger.error(f"取消任务时出错: {str(e)}")
+                finally:
+                    self._running_tasks.clear()
+                
+                # 第三阶段：关闭浏览器实例
+                if self.browser_manager:
+                    try:
+                        async with asyncio.timeout(BROWSER_CLEANUP_TIMEOUT):
+                            await self.browser_manager.cleanup()
+                            bot_logger.debug("浏览器实例已关闭")
+                    except asyncio.TimeoutError:
+                        bot_logger.warning("关闭浏览器超时")
+                    except Exception as e:
+                        bot_logger.error(f"关闭浏览器时出错: {str(e)}")
+                
+                # 第四阶段：关闭插件管理器
+                if self.plugin_manager:
+                    try:
+                        async with asyncio.timeout(PLUGIN_CLEANUP_TIMEOUT):
+                            await self.plugin_manager.cleanup()
+                            bot_logger.debug("插件管理器已关闭")
+                    except asyncio.TimeoutError:
+                        bot_logger.warning("关闭插件管理器超时")
+                    except Exception as e:
+                        bot_logger.error(f"关闭插件管理器时出错: {str(e)}")
+                
+                # 第五阶段：关闭线程池
+                if self.thread_pool:
+                    try:
+                        # 使用线程池的shutdown方法，设置超时
+                        self.thread_pool.shutdown(wait=True, timeout=THREAD_POOL_TIMEOUT)
+                        bot_logger.debug("线程池已关闭")
+                    except TimeoutError:
+                        bot_logger.warning("关闭线程池超时")
+                    except Exception as e:
+                        bot_logger.error(f"关闭线程池时出错: {str(e)}")
+                    finally:
+                        # 确保线程池被标记为关闭
+                        self.thread_pool._shutdown = True
+                
+                # 第六阶段：确保所有资源被释放
+                try:
+                    # 关闭所有打开的文件
+                    import gc
+                    for obj in gc.get_objects():
+                        try:
+                            if hasattr(obj, 'close') and hasattr(obj, 'closed') and not obj.closed:
+                                obj.close()
+                        except Exception:
+                            pass
+                    
+                    # 强制进行垃圾回收
+                    gc.collect()
+                    
+                except Exception as e:
+                    bot_logger.error(f"最终资源清理时出错: {str(e)}")
+                
+                self._cleanup_done = True
+                bot_logger.info("资源清理完成")
+                
+            except Exception as e:
+                bot_logger.error(f"资源清理过程中发生错误: {str(e)}")
+            finally:
+                # 确保清理标记被设置
+                self._cleanup_done = True
+                
+                # 确保重要的集合被清空
+                self._running_tasks.clear()
+                if hasattr(self, 'plugins'):
+                    self.plugins.clear()
+                if hasattr(self, 'commands'):
+                    self.commands.clear()
+
+    async def stop(self):
+        """停止机器人"""
+        try:
+            # 清理资源
+            await self._cleanup()
+            
+            # 调用父类的stop方法
+            await super().stop()
+            
+        except Exception as e:
+            bot_logger.error(f"停止机器人时发生错误: {str(e)}")
+        finally:
+            bot_logger.info("机器人已完全关闭")
+
 async def check_ip():
     """检查当前出口IP"""
     from utils.base_api import BaseAPI
@@ -423,51 +547,86 @@ async def async_main():
         bot_logger.info("正在启动机器人...")
         bot_logger.debug("正在连接到QQ服务器...")
         
-        # 创建停止事件
-        stop_event = asyncio.Event()
-        
-        async def run_bot():
-            """在单独的任务中运行机器人"""
-            try:
-                await client.start(appid=settings.BOT_APPID, secret=settings.BOT_SECRET)
-            except Exception as e:
-                bot_logger.error(f"机器人运行时发生错误: {e}")
-                stop_event.set()
-                raise
-                
-        # 启动机器人任务
-        bot_task = asyncio.create_task(run_bot())
-        
-        # 等待停止信号
+        # 启动机器人
         try:
-            await stop_event.wait()
-        except asyncio.CancelledError:
-            bot_logger.info("收到取消信号...")
-        finally:
-            # 取消机器人任务
-            if not bot_task.done():
-                bot_task.cancel()
-                try:
-                    await bot_task
-                except asyncio.CancelledError:
-                    pass
+            await client.start(appid=settings.BOT_APPID, secret=settings.BOT_SECRET)
+            return client
+        except Exception as e:
+            bot_logger.error(f"机器人运行时发生错误: {e}")
+            if "invalid appid or secret" in str(e).lower():
+                bot_logger.error("认证失败！检查：")
+                bot_logger.error("1. AppID 和 Secret 是否正确")
+                bot_logger.error("2. 是否已在 QQ 开放平台完成机器人配置")
+                bot_logger.error("3. Secret 是否已过期")
+            raise
             
-            # 关闭客户端
-            await client.close()
-            
-        return client
-        
     except Exception as e:
         bot_logger.error(f"运行时发生错误：{str(e)}")
-        if "invalid appid or secret" in str(e).lower():
-            bot_logger.error("认证失败！检查：")
-            bot_logger.error("1. AppID 和 Secret 是否正确")
-            bot_logger.error("2. 是否已在 QQ 开放平台完成机器人配置")
-            bot_logger.error("3. Secret 是否已过期")
         raise
+
+def setup_signal_handlers(loop, client):
+    """设置信号处理器"""
+    import platform
+    import signal
+    import os
+    import sys
+    import threading
+    import time
+    
+    def force_exit():
+        """强制退出进程"""
+        bot_logger.warning("强制退出进程...")
+        # 给一点时间让日志写入
+        time.sleep(0.5)
+        os._exit(1)
+    
+    def delayed_force_exit():
+        """延迟3秒后强制退出"""
+        time.sleep(3)
+        force_exit()
+    
+    def signal_handler():
+        """统一的信号处理函数"""
+        bot_logger.info("收到退出信号，开始关闭...")
+        
+        # 启动强制退出线程
+        force_exit_thread = threading.Thread(target=delayed_force_exit)
+        force_exit_thread.daemon = True
+        force_exit_thread.start()
+        
+        # 停止接受新的任务
+        if not loop.is_closed():
+            loop.stop()
+        
+        # 取消所有任务
+        for task in asyncio.all_tasks(loop):
+            task.cancel()
+        
+        # 设置关闭标志
+        if not loop.is_closed():
+            loop.call_soon_threadsafe(loop.stop)
+    
+    if platform.system() == "Windows":
+        # Windows 平台使用 signal.signal
+        try:
+            signal.signal(signal.SIGINT, lambda signum, frame: signal_handler())
+            signal.signal(signal.SIGTERM, lambda signum, frame: signal_handler())
+            bot_logger.debug("Windows 信号处理器已设置")
+        except Exception as e:
+            bot_logger.error(f"设置 Windows 信号处理器失败: {e}")
+    else:
+        # Linux/Unix 平台使用 loop.add_signal_handler
+        try:
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                loop.add_signal_handler(sig, signal_handler)
+            bot_logger.debug("Unix 信号处理器已设置")
+        except Exception as e:
+            bot_logger.error(f"设置 Unix 信号处理器失败: {e}")
 
 def main():
     """主函数"""
+    FINAL_CLEANUP_TIMEOUT = 10  # 最终清理超时时间（秒）
+    
     client = None
     loop = None
     try:
@@ -479,13 +638,27 @@ def main():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
+        # 设置更好的异常处理
+        loop.set_exception_handler(custom_exception_handler)
+        
         # 运行异步主函数
         main_task = loop.create_task(async_main())
         
         try:
             client = loop.run_until_complete(main_task)
+            
+            # 设置信号处理器（在客户端初始化完成后）
+            if client:
+                setup_signal_handlers(loop, client)
+                
+            # 运行事件循环直到收到停止信号
+            loop.run_forever()
+            
         except KeyboardInterrupt:
             bot_logger.info("收到 CTRL+C，正在关闭...")
+        except Exception as e:
+            bot_logger.error(f"运行时发生错误: {e}")
+        finally:
             # 取消主任务
             if not main_task.done():
                 main_task.cancel()
@@ -499,7 +672,7 @@ def main():
     finally:
         try:
             if loop and not loop.is_closed():
-                # 清理所有待处理的任务
+                # 第一阶段：取消所有任务
                 pending = asyncio.all_tasks(loop)
                 if pending:
                     # 设置较短的超时时间
@@ -512,24 +685,95 @@ def main():
                         )
                     except (asyncio.TimeoutError, RuntimeError):
                         bot_logger.warning("清理任务超时或循环已关闭，强制关闭...")
+                        # 强制取消所有任务
+                        for task in pending:
+                            task.cancel()
                     except Exception as e:
                         bot_logger.error(f"清理任务时发生错误: {e}")
                 
+                # 第二阶段：关闭异步生成器
                 try:
                     if not loop.is_closed():
-                        loop.run_until_complete(loop.shutdown_asyncgens())
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                loop.shutdown_asyncgens(),
+                                timeout=3
+                            )
+                        )
                 except Exception as e:
                     bot_logger.debug(f"关闭异步生成器时发生错误: {e}")
                 
+                # 第三阶段：停止事件循环
                 try:
                     if not loop.is_closed():
+                        # 停止接受新的任务
+                        loop.stop()
+                        # 运行一次以处理待处理的回调
+                        loop.run_forever()
+                        # 关闭循环
                         loop.close()
                 except Exception as e:
                     bot_logger.debug(f"关闭事件循环时发生错误: {e}")
+                
+                # 第四阶段：最终清理
+                try:
+                    # 导入所需模块
+                    import gc
+                    import threading
+                    import multiprocessing
+                    
+                    # 清理线程
+                    for thread in threading.enumerate():
+                        if thread is not threading.current_thread():
+                            try:
+                                thread.join(timeout=1)
+                            except Exception:
+                                pass
+                    
+                    # 清理进程
+                    for process in multiprocessing.active_children():
+                        try:
+                            process.terminate()
+                            process.join(timeout=1)
+                        except Exception:
+                            pass
+                            
+                    # 清理文件句柄
+                    import psutil
+                    try:
+                        process = psutil.Process()
+                        for handler in process.open_files():
+                            try:
+                                handler.close()
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    
+                    # 强制垃圾回收
+                    gc.collect()
+                    
+                except Exception as e:
+                    bot_logger.error(f"最终清理时发生错误: {e}")
+                
         except Exception as e:
             bot_logger.error(f"清理资源时发生错误: {e}")
         finally:
             bot_logger.info("机器人已完全关闭")
+
+def custom_exception_handler(loop, context):
+    """自定义异常处理器"""
+    exception = context.get('exception')
+    if isinstance(exception, asyncio.CancelledError):
+        return  # 忽略取消异常
+    
+    message = context.get('message')
+    if not message:
+        message = 'Unhandled exception in event loop'
+    
+    bot_logger.error(f"异步任务异常: {message}")
+    if exception:
+        bot_logger.error(f"异常详情: {str(exception)}")
 
 if __name__ == "__main__":
     main()

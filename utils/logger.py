@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 import platform
 from typing import TextIO
 from colorama import init, Fore, Style
@@ -41,6 +42,24 @@ class KeyboardInterruptFilter(logging.Filter):
             
         return True
 
+class CacheManagerFilter(logging.Filter):
+    """过滤掉 CacheManager 相关的错误日志"""
+    def filter(self, record):
+        # 检查消息内容
+        message = record.getMessage()
+        if "'CacheManager' object has no attribute 'get_all_keys'" in message:
+            return False
+            
+        # 检查异常信息
+        if record.exc_info:
+            exc_type = record.exc_info[0]
+            if exc_type and issubclass(exc_type, AttributeError):
+                exc_str = str(record.exc_info[1])
+                if "'CacheManager' object has no attribute 'get_all_keys'" in exc_str:
+                    return False
+                    
+        return True
+
 class TeeOutput:
     """同时将输出写入文件和原始流的工具类"""
     def __init__(self, file: TextIO, original_stream: TextIO):
@@ -58,6 +77,8 @@ class TeeOutput:
             "Traceback (most recent call last)",  # 过滤整个堆栈跟踪
             "_overlapped.GetQueuedCompletionStatus",  # Windows 异步 IO 相关
             "asyncio.windows_events",  # Windows 事件循环相关
+            "'CacheManager' object has no attribute 'get_all_keys'",  # 添加对 CacheManager 错误的过滤
+            "获取玩家数据失败: 'CacheManager' object has no attribute 'get_all_keys'"  # 添加完整的错误消息过滤
         ]
         return any(pattern in text for pattern in filter_patterns)
 
@@ -184,9 +205,11 @@ def setup_logger() -> logging.Logger:
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
     
-    # 添加 KeyboardInterrupt 过滤器
+    # 添加过滤器
     interrupt_filter = KeyboardInterruptFilter()
+    cache_filter = CacheManagerFilter()  # 添加新的过滤器
     logger.addFilter(interrupt_filter)
+    logger.addFilter(cache_filter)      # 添加新的过滤器
     
     # 清理旧日志
     cleanup_old_logs()

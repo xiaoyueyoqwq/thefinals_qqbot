@@ -30,6 +30,7 @@ class RankAPIPlugin(Plugin):
         super().__init__()
         bot_logger.debug("[RankAPIPlugin] 初始化排位查询API插件")
         self.rank_api = RankAPI()
+        self.commands = {}  # 初始化commands属性
         
     async def on_load(self):
         """插件加载时的回调"""
@@ -40,10 +41,6 @@ class RankAPIPlugin(Plugin):
         if tasks:
             bot_logger.debug(f"[RankAPIPlugin] 从 RankAPI 获取到 {len(tasks)} 个任务")
             
-        # 启动自动更新任务(不需要await)
-        self.rank_api._start_update_task()
-        bot_logger.debug("[RankAPIPlugin] 自动更新任务已启动")
-        
         bot_logger.info("[RankAPIPlugin] 排位查询API插件已加载")
         
     async def on_unload(self):
@@ -59,10 +56,6 @@ class RankAPIPlugin(Plugin):
     async def start_tasks(self) -> List[asyncio.Task]:
         """启动插件任务"""
         tasks = []
-        # 获取RankAPI的更新任务
-        if hasattr(self.rank_api, '_auto_update_task'):
-            # 不在这里创建任务,让RankAPI自己管理
-            bot_logger.debug("[RankAPIPlugin] 检测到自动更新任务")
         return tasks
         
     @api_route(
