@@ -23,7 +23,7 @@ api:
   use_proxy: false  # 是否使用代理API
   # 标准API源
   standard:
-    base_url: "https://api.the-finals-leaderboard.com/v1"
+    base_url: "https://api.the-finals-leaderboard.com"
   # 代理API源
   proxy:
     base_url: ""
