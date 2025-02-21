@@ -57,6 +57,8 @@ user_binds.json
 sdk-guide.txt
 botpy-master
 the-finals-api-main
+*.db-wal
+*.db-shm
 
 # Distribution / packaging
 dist/
