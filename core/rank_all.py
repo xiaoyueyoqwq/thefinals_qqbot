@@ -82,7 +82,7 @@ class RankAll:
         - str: 格式化后的完整消息
         """
         # 按赛季顺序排列
-        seasons = ["cb1", "cb2", "s1", "s2", "s3", "s4", "s5"]
+        seasons = ["cb1", "cb2", "ob", "s1", "s2", "s3", "s4", "s5"]
         season_data = []
         
         # 确保所有赛季都有输出
