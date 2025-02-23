@@ -74,3 +74,6 @@ python bot.py
 - `api.md` - API 接口说明
 - `message_api.md` - 消息API说明
 - `extension_guide.md` - 扩展开发指南
+
+## 许可证
+本项目采用 [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh) 进行许可。
