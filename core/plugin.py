@@ -792,6 +792,8 @@ class PluginManager:
         self._temp_handlers: List[Callable[[Message, MessageHandler, str], asyncio.Future]] = []
         self._temp_handlers_lock = Lock()  # 锁用于_temp_handlers
         self._plugin_load_lock = Lock()  # 锁用于插件加载
+        self._cleanup_lock = Lock()  # 锁用于清理
+        self._cleanup_done = False
 
     async def register_plugin(self, plugin: Plugin) -> None:
         """注册插件"""
@@ -1011,3 +1013,77 @@ class PluginManager:
                 bot_logger.error(f"加载插件模块 {module_name} 失败: {str(e)}")
                 
         bot_logger.info(f"插件扫描完成,共加载 {len(self.plugins)} 个插件") 
+
+    async def cleanup(self):
+        """清理所有插件资源"""
+        CLEANUP_TIMEOUT = 5  # 单个插件清理超时时间（秒）
+        
+        async with self._cleanup_lock:
+            if self._cleanup_done:
+                return
+                
+            try:
+                bot_logger.info("[PluginManager] 开始清理插件资源...")
+                
+                # 第一阶段：尝试正常清理
+                for plugin_name, plugin in list(self.plugins.items()):
+                    try:
+                        # 设置超时的清理
+                        cleanup_task = asyncio.create_task(
+                            plugin.on_unload(),
+                            name=f"cleanup_{plugin_name}"
+                        )
+                        
+                        try:
+                            await asyncio.wait_for(cleanup_task, timeout=CLEANUP_TIMEOUT)
+                            bot_logger.debug(f"[PluginManager] 插件 {plugin_name} 清理完成")
+                        except asyncio.TimeoutError:
+                            bot_logger.warning(f"[PluginManager] 插件 {plugin_name} 清理超时，强制结束")
+                            cleanup_task.cancel()
+                            try:
+                                await cleanup_task
+                            except asyncio.CancelledError:
+                                pass
+                        except Exception as e:
+                            bot_logger.error(f"[PluginManager] 清理插件 {plugin_name} 时出错: {str(e)}")
+                            
+                    except Exception as e:
+                        bot_logger.error(f"[PluginManager] 处理插件 {plugin_name} 清理任务时出错: {str(e)}")
+                    finally:
+                        # 确保从集合中移除
+                        self.plugins.pop(plugin_name, None)
+                
+                # 第二阶段：清理其他资源
+                try:
+                    # 清理命令
+                    command_count = len(self.commands)
+                    self.commands.clear()
+                    bot_logger.debug(f"[PluginManager] 已清理 {command_count} 个命令")
+                    
+                    # 清理事件处理器
+                    handler_count = len(self._event_handlers)
+                    self._event_handlers.clear()
+                    bot_logger.debug(f"[PluginManager] 已清理 {handler_count} 个事件处理器")
+                    
+                    # 清理临时处理器
+                    temp_handler_count = len(self._temp_handlers)
+                    self._temp_handlers.clear()
+                    bot_logger.debug(f"[PluginManager] 已清理 {temp_handler_count} 个临时处理器")
+                    
+                except Exception as e:
+                    bot_logger.error(f"[PluginManager] 清理资源集合时出错: {str(e)}")
+                
+                self._cleanup_done = True
+                bot_logger.info("[PluginManager] 插件资源清理完成")
+                
+            except Exception as e:
+                bot_logger.error(f"[PluginManager] 清理插件资源时发生错误: {str(e)}")
+            finally:
+                # 确保标记设置
+                self._cleanup_done = True
+                
+                # 确保所有集合被清空
+                self.plugins.clear()
+                self.commands.clear()
+                self._event_handlers.clear()
+                self._temp_handlers.clear()

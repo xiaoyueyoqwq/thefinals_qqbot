@@ -23,7 +23,7 @@ api:
   use_proxy: false  # 是否使用代理API
   # 标准API源
   standard:
-    base_url: "https://api.the-finals-leaderboard.com/v1"
+    base_url: "https://api.the-finals-leaderboard.com"
   # 代理API源
   proxy:
     base_url: ""
@@ -34,3 +34,8 @@ server:
     enabled: true      # 是否启用API服务器
     host: "0.0.0.0"  # API服务器监听地址
     port: 8080         # API服务器端口
+
+# 赛季配置
+season:
+  current: "s5"  # 当前赛季
+  update_interval: 90  # 更新间隔(秒)

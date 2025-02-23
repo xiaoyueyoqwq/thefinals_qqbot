@@ -23,7 +23,6 @@ class ScoreData(BaseModel):
                 "update_time": "2024-02-18T14:30:00"
             }
         }
-        # 启用任意字符串支持
         json_encoders = {
             datetime: lambda v: v.isoformat(),
             date: lambda v: v.isoformat()
@@ -85,10 +84,10 @@ class HistoricalScoreResponse(BaseModel):
 class StatsData(BaseModel):
     """统计数据模型"""
     record_date: date
-    rank_500_score: int
-    rank_10000_score: int
-    daily_change_500: Optional[int] = None
-    daily_change_10000: Optional[int] = None
+    rank_500_score: Optional[int]
+    rank_10000_score: Optional[int]
+    daily_change_500: Optional[int]
+    daily_change_10000: Optional[int]
     
     class Config:
         json_encoders = {
@@ -115,6 +114,18 @@ class DFAPIPlugin(Plugin):
     def __init__(self):
         super().__init__()
         self.df_query = DFQuery()
+        
+    async def on_load(self):
+        """插件加载时的回调"""
+        bot_logger.debug("[DFAPIPlugin] 开始加载底分查询API插件")
+        await self.df_query.start()
+        bot_logger.info("[DFAPIPlugin] 底分查询API插件已加载")
+        
+    async def on_unload(self):
+        """插件卸载时的回调"""
+        bot_logger.debug("[DFAPIPlugin] 开始卸载底分查询API插件")
+        await self.df_query.stop()
+        bot_logger.info("[DFAPIPlugin] 底分查询API插件已卸载")
         
     @api_route("/api/df/current", methods=["GET"], 
                response_model=CurrentScoreResponse,
@@ -157,9 +168,6 @@ class DFAPIPlugin(Plugin):
     async def get_current_scores(self) -> CurrentScoreResponse:
         """获取当前底分数据"""
         try:
-            # 确保数据是最新的
-            await self.df_query.fetch_leaderboard()
-            
             # 从数据库获取数据
             scores = await self.df_query.get_bottom_scores()
             
@@ -251,37 +259,26 @@ class DFAPIPlugin(Plugin):
     ) -> HistoricalScoreResponse:
         """获取历史底分数据"""
         try:
-            # 设置默认值为昨天
-            yesterday = date.today() - timedelta(days=1)
-            if end_date is None:
-                end_date = yesterday
-                
-            if start_date is None:
-                start_date = yesterday
+            # 参数处理
+            today = date.today()
+            if not end_date:
+                end_date = today - timedelta(days=1)
+            if not start_date:
+                start_date = end_date
                 
             # 参数验证
+            if end_date > today:
+                raise ValueError("结束日期不能超过今天")
             if start_date > end_date:
                 raise ValueError("开始日期不能晚于结束日期")
                 
-            if end_date > date.today():
-                end_date = date.today()
-                
             # 限制查询范围
             date_range = (end_date - start_date).days
-            if date_range > 30:  # 最多查询30天的数据
+            if date_range > 30:
                 start_date = end_date - timedelta(days=29)
-                bot_logger.warning(f"[DFAPIPlugin] 查询范围超过30天，已自动调整为{start_date}至{end_date}")
                 
-            # 从数据库获取历史数据
+            # 获取历史数据
             historical_data = await self.df_query.get_historical_data(start_date, end_date)
-            
-            # 如果没有数据,返回空列表
-            if not historical_data:
-                return HistoricalScoreResponse(
-                    data=[],
-                    start_date=start_date,
-                    end_date=end_date
-                )
             
             # 转换为响应格式
             data = [

@@ -24,6 +24,7 @@ class DFPlugin(Plugin):
         """插件加载时的处理"""
         bot_logger.debug(f"[{self.name}] 开始加载底分查询插件")
         await super().on_load()  # 等待父类的 on_load 完成
+        await self.df_query.start()  # 初始化DFQuery
         bot_logger.info(f"[{self.name}] 底分查询插件已加载")
         
     async def on_unload(self):
@@ -40,7 +41,7 @@ class DFPlugin(Plugin):
             data = await self.df_query.get_bottom_scores()
             
             # 格式化并发送结果
-            response = self.df_query.format_score_message(data)
+            response = await self.df_query.format_score_message(data)
             await handler.send_text(response)
             
         except Exception as e:
