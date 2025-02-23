@@ -191,33 +191,65 @@ class FlappyBirdCore:
             if not await self.db.fetch_one(verify_sql):
                 raise DatabaseError("分数表不存在,请先初始化数据库")
                 
-            # 开始事务
+            # 检查玩家现有记录
+            check_sql = """SELECT id, score FROM scores 
+                          WHERE player_id = ? 
+                          ORDER BY score DESC LIMIT 1"""
+            existing_record = await self.db.fetch_one(check_sql, (player_id,))
+            
             operations = []
             
-            # 保存分数
-            insert_sql = "INSERT INTO scores (player_id, score) VALUES (?, ?)"
-            operations.append((insert_sql, (player_id, score)))
+            if existing_record:
+                # 如果有现有记录且新分数更高，则更新
+                if score > existing_record[1]:
+                    update_sql = """UPDATE scores 
+                                  SET score = ?, 
+                                      created_at = datetime('now', 'localtime')
+                                  WHERE id = ?"""
+                    operations.append((update_sql, (score, existing_record[0])))
+                    action = "更新"
+                else:
+                    # 如果新分数不是最高分，则不更新
+                    bot_logger.info(f"[FlappyBirdCore] 玩家 {player_id} 的新分数 {score} 未超过历史最高分 {existing_record[1]}")
+                    return {
+                        "message": "分数未超过历史最高分，保持原记录",
+                        "data": {
+                            "id": existing_record[0],
+                            "player_id": player_id,
+                            "score": existing_record[1],
+                            "is_updated": False
+                        }
+                    }
+            else:
+                # 如果没有记录，创建新记录
+                insert_sql = "INSERT INTO scores (player_id, score) VALUES (?, ?)"
+                operations.append((insert_sql, (player_id, score)))
+                action = "创建"
             
             # 执行事务
             await self.db.execute_transaction(operations)
             
-            # 验证插入是否成功
-            verify_sql = """SELECT id, player_id, score, created_at 
-                        FROM scores 
-                        WHERE id = last_insert_rowid()"""
-            result = await self.db.fetch_one(verify_sql)
+            # 获取最新记录
+            result = await self.db.fetch_one(
+                """SELECT id, player_id, score, created_at 
+                   FROM scores 
+                   WHERE player_id = ? 
+                   ORDER BY score DESC LIMIT 1""",
+                (player_id,)
+            )
             
             if not result:
                 raise DatabaseError("分数保存失败,无法获取保存的记录")
                 
-            bot_logger.info(f"[FlappyBirdCore] 成功保存分数: {score}, 玩家ID: {player_id}, 记录ID: {result[0]}")
+            bot_logger.info(f"[FlappyBirdCore] 成功{action}分数: {score}, 玩家ID: {player_id}, 记录ID: {result[0]}")
             return {
-                "message": "分数保存成功",
+                "message": f"分数{action}成功",
                 "data": {
                     "id": result[0],
                     "player_id": result[1],
                     "score": result[2],
-                    "timestamp": result[3]
+                    "timestamp": result[3],
+                    "is_updated": action == "更新"
                 }
             }
             
