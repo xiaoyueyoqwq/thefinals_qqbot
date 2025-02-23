@@ -25,7 +25,7 @@ class WorldTourAPI(BaseAPI):
     async def get_player_stats(self, player_name: str, season: str) -> Optional[dict]:
         """查询玩家在指定赛季的数据"""
         try:
-            url = f"/leaderboard/{season}worldtour/{self.platform}"
+            url = f"/v1/leaderboard/{season}worldtour/{self.platform}"
             params = {"name": player_name}
             
             response = await self.get(url, params=params, headers=self.headers)

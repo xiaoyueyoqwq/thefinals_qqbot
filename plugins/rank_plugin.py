@@ -136,8 +136,14 @@ class RankPlugin(Plugin):
             
     async def on_load(self) -> None:
         """插件加载时的处理"""
-        await super().on_load()
-        bot_logger.info(f"[{self.name}] 排名查询插件已加载")
+        try:
+            bot_logger.info(f"[{self.name}] 开始加载排名查询插件")
+            await self.rank_query.initialize()
+            await super().on_load()
+            bot_logger.info(f"[{self.name}] 排名查询插件加载完成")
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 插件加载失败: {str(e)}")
+            raise
         
     async def on_unload(self) -> None:
         """插件卸载时的处理"""

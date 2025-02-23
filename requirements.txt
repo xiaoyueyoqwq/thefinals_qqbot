@@ -16,3 +16,4 @@ requests
 selenium
 uvicorn
 webdriver_manager
+aiosqlite
