@@ -57,6 +57,8 @@ user_binds.json
 sdk-guide.txt
 botpy-master
 the-finals-api-main
+cache/
+persistence/
 
 # Distribution / packaging
 dist/
@@ -74,6 +76,7 @@ coverage.xml
 *.cover
 *.py,cover
 .pytest_cache/
+
 
 # Jupyter Notebook
 .ipynb_checkpoints

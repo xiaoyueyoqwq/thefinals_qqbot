@@ -3,6 +3,7 @@ import aiohttp
 import time
 from datetime import datetime
 from utils.logger import bot_logger
+from utils.config import settings
 
 class StatusMonitor:
     """状态监控类"""
@@ -10,10 +11,9 @@ class StatusMonitor:
     def __init__(self):
         """初始化状态监控"""
         self.start_time = time.time()
-        self.contact_email = "xiaoyueyoqwq@gmail,com"
         self.api_endpoints = {
             "Embark官网": "https://id.embark.games",
-            "排行榜API": "https://api.the-finals-leaderboard.com"
+            "排行榜API": settings.api_base_url
         }
         
     def get_hardware_status(self) -> dict:
@@ -78,10 +78,16 @@ class StatusMonitor:
             "━━━━━━━━━━━━━",
             "⏰ 运行状态",
             f"• 已正常运行: {self.get_uptime()}",
-            "━━━━━━━━━━━━━",
-            "📧 联系方式",
-            f"• 反馈邮箱: {self.contact_email}",
             "━━━━━━━━━━━━━"
         ])
         
-        return "\n".join(message) 
+        return "\n".join(message)
+
+class StatusInfo:
+    """状态信息类"""
+    
+    def __init__(self):
+        self.api_info = {
+            "排行榜API": settings.api_base_url,
+            "代理状态": "已启用" if settings.API_USE_PROXY else "未启用"
+        } 
