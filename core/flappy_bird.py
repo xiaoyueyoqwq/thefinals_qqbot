@@ -136,6 +136,7 @@ class FlappyBirdCore:
             # 创建分数表
             sql = '''CREATE TABLE IF NOT EXISTS scores
                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     player_id TEXT NOT NULL,
                      score INTEGER NOT NULL,
                      created_at TEXT DEFAULT (datetime('now', 'localtime')))'''
                      
@@ -149,7 +150,7 @@ class FlappyBirdCore:
             # 验证表结构
             structure_sql = "PRAGMA table_info(scores)"
             columns = await self.db.fetch_all(structure_sql)
-            expected_columns = {'id', 'score', 'created_at'}
+            expected_columns = {'id', 'player_id', 'score', 'created_at'}
             actual_columns = {col[1] for col in columns}
             if not expected_columns.issubset(actual_columns):
                 raise DatabaseError(f"表结构不正确: 缺少列 {expected_columns - actual_columns}")
@@ -161,11 +162,12 @@ class FlappyBirdCore:
             raise DatabaseError(f"数据库初始化失败: {str(e)}")
         
     @with_database
-    async def save_score(self, score: int) -> Dict:
+    async def save_score(self, score: int, player_id: str) -> Dict:
         """保存游戏分数
         
         Args:
             score: 游戏分数
+            player_id: 玩家ID
             
         Returns:
             Dict: 保存结果
@@ -180,6 +182,10 @@ class FlappyBirdCore:
             if score < 0:
                 raise ValueError("分数不能为负数")
                 
+            # 验证玩家ID
+            if not player_id or not isinstance(player_id, str):
+                raise ValueError("玩家ID不能为空")
+                
             # 验证数据库和表是否存在
             verify_sql = "SELECT name FROM sqlite_master WHERE type='table' AND name='scores'"
             if not await self.db.fetch_one(verify_sql):
@@ -189,14 +195,14 @@ class FlappyBirdCore:
             operations = []
             
             # 保存分数
-            insert_sql = "INSERT INTO scores (score) VALUES (?)"
-            operations.append((insert_sql, (score,)))
+            insert_sql = "INSERT INTO scores (player_id, score) VALUES (?, ?)"
+            operations.append((insert_sql, (player_id, score)))
             
             # 执行事务
             await self.db.execute_transaction(operations)
             
             # 验证插入是否成功
-            verify_sql = """SELECT id, score, created_at 
+            verify_sql = """SELECT id, player_id, score, created_at 
                         FROM scores 
                         WHERE id = last_insert_rowid()"""
             result = await self.db.fetch_one(verify_sql)
@@ -204,13 +210,14 @@ class FlappyBirdCore:
             if not result:
                 raise DatabaseError("分数保存失败,无法获取保存的记录")
                 
-            bot_logger.info(f"[FlappyBirdCore] 成功保存分数: {score}, ID: {result[0]}")
+            bot_logger.info(f"[FlappyBirdCore] 成功保存分数: {score}, 玩家ID: {player_id}, 记录ID: {result[0]}")
             return {
                 "message": "分数保存成功",
                 "data": {
                     "id": result[0],
-                    "score": result[1],
-                    "timestamp": result[2]
+                    "player_id": result[1],
+                    "score": result[2],
+                    "timestamp": result[3]
                 }
             }
             
@@ -238,21 +245,20 @@ class FlappyBirdCore:
             if not await self.db.fetch_one(verify_sql):
                 raise DatabaseError("分数表不存在,请先初始化数据库")
                 
-            # 获取总记录数
-            count_sql = "SELECT COUNT(*) FROM scores"
-            count_result = await self.db.fetch_one(count_sql)
-            if count_result is None:
-                raise DatabaseError("无法获取记录总数")
-                
-            total_scores = count_result[0]
-            
-            # 获取前5名
-            sql = """SELECT score, created_at,
-                    (SELECT COUNT(*) + 1 FROM scores s2 
-                     WHERE s2.score > s1.score) as rank
-                    FROM scores s1
-                    ORDER BY score DESC
-                    LIMIT 5"""
+            # 获取前5名，使用单个查询获取所需数据
+            sql = """
+                WITH RankedScores AS (
+                    SELECT 
+                        player_id,
+                        score,
+                        ROW_NUMBER() OVER (ORDER BY score DESC) as rank
+                    FROM scores
+                )
+                SELECT player_id, score, rank
+                FROM RankedScores
+                WHERE rank <= 5
+                ORDER BY rank
+            """
                     
             results = await self.db.fetch_all(sql)
             if results is None:
@@ -261,15 +267,14 @@ class FlappyBirdCore:
             scores = []
             for row in results:
                 scores.append({
-                    "score": row[0],
-                    "rank": row[2],
-                    "created_at": row[1]
+                    "player_id": row[0],
+                    "score": row[1],
+                    "rank": row[2]
                 })
                 
             bot_logger.info(f"[FlappyBirdCore] 成功获取 {len(scores)} 条分数记录")
             return {
                 "data": scores,
-                "total_scores": total_scores,
                 "update_time": datetime.now().isoformat()
             }
             
