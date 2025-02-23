@@ -4,13 +4,14 @@ API System
 提供插件API注册能力
 """
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from typing import Callable, Dict, List, Set, Optional, Any, Tuple, Type
 from functools import wraps, partial
 import inspect
+from utils.config import Settings
 from utils.logger import bot_logger
 
 # 全局FastAPI实例
@@ -23,48 +24,31 @@ app = FastAPI(
     redoc_url=None    # 禁用默认的redoc
 )
 
-# 挂载静态文件目录
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# 启动事件处理
+@app.on_event("startup")
+async def startup_event():
+    cyan = "\033[96m"
+    bold = "\033[1m"
+    reset = "\033[0m"
+    
+    bot_logger.info(f"{bold}API DOCS ADDRESS:{reset}")
+    bot_logger.info(f"{cyan}http://localhost:{Settings.SERVER_API_PORT}/docs{reset}")
 
-# 根路径重定向到文档
-@app.get("/", include_in_schema=False)
-async def root():
-    return RedirectResponse(url="/docs")
-
-# 添加RapiDoc UI
 @app.get("/docs", include_in_schema=False)
-async def custom_docs():
+async def docs():
     return HTMLResponse("""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Plugin APIs</title>
-        <meta charset="utf-8">
-        <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-        <script src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
-        <style>
-            body { margin: 0; }
-            rapi-doc {
-                width: 100%;
-                height: 100vh;
-            }
-        </style>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
     </head>
     <body>
-        <rapi-doc 
-            spec-url="/openapi.json"
-            theme="dark"
-            bg-color="#1a1a1a"
-            text-color="#f0f0f0"
-            primary-color="#7c4dff"
-            font-family="'JetBrains Mono', monospace"
-            show-header="false"
-            render-style="focused"
-            schema-style="table"
-            schema-description-expanded="true"
-            default-schema-tab="example"
-        > </rapi-doc>
+        <script
+            id="api-reference"
+            data-url="/openapi.json"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
     </body>
     </html>
     """)
@@ -109,15 +93,6 @@ def _log_route_registration(method: str, path: str, plugin_name: str, func_name:
     
     bot_logger.info(f"[API] {method_str} {path:30s} -> {plugin_name}.{func_name}")
 
-def get_plugin_instance():
-    """获取插件实例的依赖函数"""
-    def _get_instance(plugin_name: str):
-        instance = _plugin_instances.get(plugin_name)
-        if not instance:
-            raise HTTPException(status_code=500, detail="插件未加载")
-        return instance
-    return _get_instance
-
 def api_route(
     path: str,
     *,
@@ -144,47 +119,58 @@ def api_route(
             
         # 检查路由冲突
         if path in _registered_routes:
+            # 检查方法是否冲突
             for method in methods:
                 if method in _registered_routes[path]:
                     raise ValueError(f"路由路径 {path} 的 {method} 方法已被注册")
+            # 添加新方法
             _registered_routes[path].update(methods)
         else:
+            # 新建路由记录
             _registered_routes[path] = set(methods)
-            
-        # 获取原始签名
-        sig = inspect.signature(func)
         
-        # 创建新的endpoint函数
-        @wraps(func)
-        async def endpoint(*args, **kwargs):
+        # 获取函数签名
+        sig = inspect.signature(func)
+        parameters = list(sig.parameters.values())
+        
+        # 如果是实例方法，移除self参数
+        if parameters and parameters[0].name == 'self':
+            parameters = parameters[1:]
+        
+        # 创建一个新的异步函数，只包含实际需要的参数
+        async def endpoint(**kwargs):
             try:
                 # 获取插件实例
                 instance = _plugin_instances.get(plugin_name)
-                if not instance:
+                if instance:
+                    # 绑定方法到实例
+                    bound_func = func.__get__(instance, instance.__class__)
+                    return await bound_func(**kwargs)
+                else:
                     bot_logger.error(f"API {path} 找不到插件实例: {plugin_name}")
-                    raise HTTPException(status_code=500, detail="插件未加载")
-                
-                # 调用原始方法，传入self参数
-                return await func(instance, **kwargs)
-                
-            except HTTPException:
-                raise
+                    raise HTTPException(status_code=500, detail="插件未加载，请检查插件加载情况")
             except Exception as e:
                 bot_logger.error(f"API {path} 执行出错: {str(e)}")
                 raise HTTPException(status_code=500, detail=str(e))
         
-        # 设置endpoint的签名
-        # 移除self参数，保留其他参数
-        params = [p for name, p in sig.parameters.items() if name != 'self']
-        endpoint.__signature__ = sig.replace(parameters=params)
+        # 更新endpoint的签名和文档
+        endpoint.__name__ = func.__name__
+        endpoint.__doc__ = func.__doc__
+        endpoint.__signature__ = sig.replace(parameters=parameters)  # 使用处理后的参数列表
         
-        # 添加路由
+        # 添加路由，包含插件标签
+        route_kwargs = {
+            "response_model": kwargs.pop("response_model", None),
+            "tags": [plugin_name],
+            **kwargs
+        }
+        
+        # 注册路由
         app.add_api_route(
             path=path,
             endpoint=endpoint,
             methods=methods,
-            tags=[plugin_name],
-            **kwargs
+            **route_kwargs
         )
         
         # 记录路由注册
