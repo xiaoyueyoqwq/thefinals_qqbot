@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 from typing import Callable, Dict, List, Set, Optional, Any, Tuple, Type
 from functools import wraps, partial
 import inspect
+from utils.config import Settings
 from utils.logger import bot_logger
 
 # 全局FastAPI实例
@@ -23,39 +24,31 @@ app = FastAPI(
     redoc_url=None    # 禁用默认的redoc
 )
 
-# 添加RapiDoc UI
+# 启动事件处理
+@app.on_event("startup")
+async def startup_event():
+    cyan = "\033[96m"
+    bold = "\033[1m"
+    reset = "\033[0m"
+    
+    bot_logger.info(f"{bold}API DOCS ADDRESS:{reset}")
+    bot_logger.info(f"{cyan}http://localhost:{Settings.SERVER_API_PORT}/docs{reset}")
+
 @app.get("/docs", include_in_schema=False)
-async def custom_docs():
+async def docs():
     return HTMLResponse("""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Plugin APIs</title>
-        <meta charset="utf-8">
-        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-        <script src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
-        <style>
-            body { margin: 0; }
-            rapi-doc {
-                width: 100%;
-                height: 100vh;
-            }
-        </style>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
     </head>
     <body>
-        <rapi-doc 
-            spec-url="/openapi.json"
-            theme="dark"
-            bg-color="#1a1a1a"
-            text-color="#f0f0f0"
-            primary-color="#7c4dff"
-            font-family="'JetBrains Mono', monospace"
-            show-header="false"
-            render-style="focused"
-            schema-style="table"
-            schema-description-expanded="true"
-            default-schema-tab="example"
-        > </rapi-doc>
+        <script
+            id="api-reference"
+            data-url="/openapi.json"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
     </body>
     </html>
     """)
