@@ -341,18 +341,35 @@ class DatabaseManager:
         return await self.execute_with_retry(_fetch)
         
     async def backup_database(self) -> Path:
-        """创建数据库备份"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = self.backup_dir / f"{self.db_path.stem}.{timestamp}.bak"
+        """备份数据库
         
-        async def _backup(cur):
-            # 使用SQLite的backup API
-            async with aiosqlite.connect(str(backup_path)) as backup_conn:
-                await self.get_connection().backup(backup_conn)
-                bot_logger.info(f"数据库已备份到: {backup_path}")
-                return backup_path
+        Returns:
+            备份文件路径
+        """
+        # 生成备份文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_path = self.backup_dir / f"{self.db_path.stem}_{timestamp}.db"
+        
+        try:
+            # 获取源数据库连接
+            src_conn = await self.get_connection()
+            
+            # 创建目标数据库连接
+            async with aiosqlite.connect(str(backup_path)) as dst_conn:
+                # 执行备份 - 使用同步方式调用backup
+                await asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    lambda: src_conn.backup(dst_conn)
+                )
                 
-        return await self.execute_with_retry(_backup)
+            bot_logger.info(f"数据库备份成功: {backup_path}")
+            return backup_path
+            
+        except Exception as e:
+            bot_logger.error(f"数据库备份失败: {str(e)}")
+            if backup_path.exists():
+                backup_path.unlink()  # 删除失败的备份文件
+            raise DatabaseError(f"数据库备份失败: {str(e)}")
         
     async def restore_from_backup(self, backup_path: Path = None) -> None:
         """从备份恢复数据库"""
