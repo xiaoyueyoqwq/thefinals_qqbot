@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "servers": [
+    {
+      "name": "Auto PR Server",
+      "description": "自动创建PR的MCP服务器",
+      "type": "sse",
+      "url": "http://localhost:3333/mcp"
+    }
+  ]
+}

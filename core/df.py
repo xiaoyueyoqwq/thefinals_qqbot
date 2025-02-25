@@ -17,7 +17,7 @@ class DFQuery:
         self.season_manager = SeasonManager()
         self.db_path = Path("data/df_history.db")
         self.cache_duration = timedelta(minutes=2)  # 2分钟更新一次
-        self.daily_save_time = "23:55"  # 每天保存数据的时间
+        self.daily_save_time = "10:00"  # 每天保存数据的时间
         self.max_retries = 3  # 最大重试次数
         self.retry_delay = 300  # 重试延迟（秒）
         
