@@ -500,6 +500,7 @@ def get_repo_info() -> dict:
             return info
         
         url = stdout.strip()
+        logger.info(f"原始仓库URL: {url}")
         
         # 解析不同格式的Git URL
         # 格式1: https://github.com/owner/repo.git
@@ -525,11 +526,37 @@ def get_repo_info() -> dict:
                         info["owner"] = repo_parts[0]
                         info["name"] = repo_parts[1]
         
-        logger.info(f"仓库信息: owner={info['owner']}, name={info['name']}")
+        # 检查解析结果，确保仓库名正确
+        logger.info(f"解析后的仓库信息: owner={info['owner']}, name={info['name']}")
+        
+        # 尝试从远程信息再次确认
+        returncode, stdout, stderr = run_command(
+            ["git", "remote", "-v"],
+            silent=True
+        )
+        
+        if returncode == 0 and stdout:
+            # 解析remote -v输出来确认仓库名
+            for line in stdout.strip().split("\n"):
+                if "origin" in line and "(fetch)" in line:
+                    if "github.com" in line:
+                        # 尝试提取仓库名
+                        parts = line.split("github.com/")
+                        if len(parts) > 1:
+                            repo_full = parts[1].split()[0].rstrip(".git")
+                            if "/" in repo_full:
+                                owner, name = repo_full.split("/", 1)
+                                # 优先使用这个结果
+                                info["owner"] = owner
+                                info["name"] = name
+                                logger.info(f"从remote -v确认的仓库信息: owner={info['owner']}, name={info['name']}")
+                                break
+        
         return info
     
     except Exception as e:
         logger.error(f"获取仓库信息时出错: {str(e)}")
+        logger.exception("详细异常信息:")
         return info
 
 @mcp.tool()
