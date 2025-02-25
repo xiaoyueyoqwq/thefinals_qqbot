@@ -385,8 +385,11 @@ def create_github_pr(title: str, body: str, branch: str) -> str:
     try:
         # 获取仓库信息，用于生成手动PR链接
         repo_info = get_repo_info()
-        owner = repo_info.get("owner", "")
-        repo = repo_info.get("name", "")
+        owner = repo_info.get("owner", "xiaoyueyoqwq")  # 设置默认值
+        # 强制修正仓库名称，确保正确
+        repo = "thefinals_qqbot"  # 直接硬编码正确的仓库名称
+        logger.info(f"使用仓库信息: owner={owner}, name={repo}")
+        
         default_branch = get_default_branch()
         
         # 生成手动PR创建链接(URL编码)
