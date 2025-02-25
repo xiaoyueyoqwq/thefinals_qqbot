@@ -383,6 +383,18 @@ def create_github_pr(title: str, body: str, branch: str) -> str:
     返回PR URL或错误信息
     """
     try:
+        # 获取仓库信息，用于生成手动PR链接
+        repo_info = get_repo_info()
+        owner = repo_info.get("owner", "")
+        repo = repo_info.get("name", "")
+        default_branch = get_default_branch()
+        
+        # 生成手动PR创建链接(URL编码)
+        import urllib.parse
+        encoded_title = urllib.parse.quote(title)
+        encoded_body = urllib.parse.quote(body)
+        manual_pr_url = f"https://github.com/{owner}/{repo}/compare/{default_branch}...{branch}?quick_pull=1&title={encoded_title}&body={encoded_body}"
+        
         # 检查GitHub CLI
         returncode, stdout, stderr = run_command(
             ["gh", "--version"],
@@ -391,7 +403,7 @@ def create_github_pr(title: str, body: str, branch: str) -> str:
         
         if returncode != 0:
             logger.error("GitHub CLI未安装或无法运行")
-            return f"无法使用GitHub CLI创建PR，但分支 {branch} 已成功创建并推送。请手动创建PR: 标题 '{title}'"
+            return f"无法使用GitHub CLI创建PR，但分支 {branch} 已成功创建并推送。\n请使用以下链接手动创建PR:\n{manual_pr_url}"
         
         # 检查登录状态
         returncode, stdout, stderr = run_command(
@@ -401,10 +413,9 @@ def create_github_pr(title: str, body: str, branch: str) -> str:
         
         if returncode != 0:
             logger.error(f"GitHub认证状态检查失败: {stderr}")
-            return f"GitHub认证失败，但分支 {branch} 已成功创建并推送。请运行 'gh auth login' 后手动创建PR。"
+            return f"GitHub认证失败，但分支 {branch} 已成功创建并推送。\n请运行 'gh auth login' 或使用以下链接手动创建PR:\n{manual_pr_url}"
         
         # 获取默认分支
-        default_branch = get_default_branch()
         logger.info(f"将创建PR: {branch} -> {default_branch}")
         
         # 创建PR
@@ -437,11 +448,12 @@ def create_github_pr(title: str, body: str, branch: str) -> str:
                         logger.info(f"找到已存在的PR: {stdout}")
                         return stdout.strip()
                 
-                # 如果是网络问题，返回更友好的消息
-                if "timeout" in stderr or "connection" in stderr or "unable to resolve" in stderr:
-                    return f"网络连接问题导致PR创建失败，但分支 {branch} 已成功创建并推送。请稍后手动创建PR。"
+                # 如果是网络问题，返回预填充的手动PR链接
+                if "timeout" in stderr or "connection" in stderr or "unable to resolve" in stderr or "dial tcp" in stderr:
+                    logger.error("检测到网络连接问题")
+                    return f"网络连接问题导致PR创建失败，但分支 {branch} 已成功创建并推送。\n请使用以下链接手动创建PR:\n{manual_pr_url}"
                 
-                return f"无法创建PR: {stderr}，但分支 {branch} 已成功创建并推送。请手动创建PR。"
+                return f"无法创建PR: {stderr}，但分支 {branch} 已成功创建并推送。\n请使用以下链接手动创建PR:\n{manual_pr_url}"
             
             # 成功获取PR URL
             pr_url = stdout.strip()
@@ -450,12 +462,65 @@ def create_github_pr(title: str, body: str, branch: str) -> str:
             
         except Exception as e:
             logger.error(f"执行gh pr create命令过程中发生异常: {str(e)}")
-            return f"创建PR过程中发生错误，但分支 {branch} 已成功创建并推送。请手动创建PR。"
+            return f"创建PR过程中发生错误，但分支 {branch} 已成功创建并推送。\n请使用以下链接手动创建PR:\n{manual_pr_url}"
     
     except Exception as e:
         logger.error(f"创建PR过程中发生异常: {str(e)}")
         logger.exception("详细异常信息:")
-        return f"创建PR过程中发生错误，但分支 {branch} 可能已创建。错误: {str(e)}"
+        return f"创建PR过程中发生错误，但分支 {branch} 可能已创建。请手动检查并创建PR。错误: {str(e)}"
+
+def get_repo_info() -> dict:
+    """
+    获取当前仓库的信息（所有者和名称）
+    
+    Returns:
+        包含owner和name的字典
+    """
+    info = {"owner": "", "name": ""}
+    
+    try:
+        # 获取远程仓库URL
+        returncode, stdout, stderr = run_command(
+            ["git", "remote", "get-url", "origin"],
+            silent=True
+        )
+        
+        if returncode != 0 or not stdout:
+            logger.warning("无法获取远程仓库URL")
+            return info
+        
+        url = stdout.strip()
+        
+        # 解析不同格式的Git URL
+        # 格式1: https://github.com/owner/repo.git
+        # 格式2: git@github.com:owner/repo.git
+        
+        if "github.com" in url:
+            if url.startswith("https://"):
+                # HTTPS URL格式
+                parts = url.split("github.com/")
+                if len(parts) > 1:
+                    repo_part = parts[1].rstrip(".git")
+                    repo_parts = repo_part.split("/")
+                    if len(repo_parts) >= 2:
+                        info["owner"] = repo_parts[0]
+                        info["name"] = repo_parts[1]
+            elif "git@github.com:" in url:
+                # SSH URL格式
+                parts = url.split("git@github.com:")
+                if len(parts) > 1:
+                    repo_part = parts[1].rstrip(".git")
+                    repo_parts = repo_part.split("/")
+                    if len(repo_parts) >= 2:
+                        info["owner"] = repo_parts[0]
+                        info["name"] = repo_parts[1]
+        
+        logger.info(f"仓库信息: owner={info['owner']}, name={info['name']}")
+        return info
+    
+    except Exception as e:
+        logger.error(f"获取仓库信息时出错: {str(e)}")
+        return info
 
 @mcp.tool()
 async def create_pr(title: str, branch: str, changes: str) -> Dict[str, Any]:
