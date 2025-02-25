@@ -395,6 +395,16 @@ def create_github_pr(title: str, body: str, branch: str) -> str:
         encoded_body = urllib.parse.quote(body)
         manual_pr_url = f"https://github.com/{owner}/{repo}/compare/{default_branch}...{branch}?quick_pull=1&title={encoded_title}&body={encoded_body}"
         
+        # 立即打印链接到控制台，确保用户看到
+        logger.info("=" * 80)
+        logger.info(f"PR创建链接(即使命令失败也可使用): {manual_pr_url}")
+        logger.info("=" * 80)
+        
+        # 同时在标准输出打印，确保在控制台中更明显
+        print("\n" + "=" * 80)
+        print(f"【创建PR的链接】: {manual_pr_url}")
+        print("=" * 80 + "\n")
+        
         # 检查GitHub CLI
         returncode, stdout, stderr = run_command(
             ["gh", "--version"],
@@ -612,8 +622,28 @@ async def create_pr(title: str, branch: str, changes: str) -> Dict[str, Any]:
             result["pr_url"] = pr_result
             result["message"] = f"成功创建PR: {pr_result}"
         else:
+            # 检查是否包含PR链接，并提取出来显示在前面
+            pr_link_match = None
+            if "https://github.com/" in pr_result and "?quick_pull=1" in pr_result:
+                import re
+                pr_link_match = re.search(r'(https://github\.com/[^\s]+\?quick_pull=1[^\s]+)', pr_result)
+            
             result["status"] = "partial_success"
-            result["message"] = pr_result
+            
+            if pr_link_match:
+                pr_link = pr_link_match.group(1)
+                # 在消息前面突出显示链接
+                result["message"] = f"【点击下方链接创建PR】:\n\n{pr_link}\n\n详细信息: {pr_result}"
+                # 添加单独的链接字段方便访问
+                result["manual_pr_link"] = pr_link
+            else:
+                result["message"] = pr_result
+        
+        # 将最重要的信息放到前面，确保在终端中立即显示
+        if "manual_pr_link" in result:
+            print("\n" + "=" * 80)
+            print(f"【PR创建链接】: {result['manual_pr_link']}")
+            print("=" * 80 + "\n")
         
         return result
         
