@@ -7,7 +7,7 @@ API System
 from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Callable, Dict, List, Set, Optional, Any, Tuple, Type
 from functools import wraps, partial
 import inspect
@@ -33,6 +33,11 @@ async def startup_event():
     
     bot_logger.info(f"{bold}API DOCS ADDRESS:{reset}")
     bot_logger.info(f"{cyan}http://localhost:{Settings.SERVER_API_PORT}/docs{reset}")
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """将根路径重定向到API文档页面"""
+    return RedirectResponse(url="/docs")
 
 @app.get("/docs", include_in_schema=False)
 async def docs():
