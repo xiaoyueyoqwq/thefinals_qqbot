@@ -13,7 +13,8 @@ class StatusMonitor:
         self.start_time = time.time()
         self.api_endpoints = {
             "Embark官网": "https://id.embark.games",
-            "排行榜API": settings.api_base_url
+            "排行榜API": settings.api_base_url,
+            "Moliatopia API": "https://api.moliatopia.icu:8443"
         }
         
     def get_hardware_status(self) -> dict:
@@ -35,7 +36,7 @@ class StatusMonitor:
         async with aiohttp.ClientSession() as session:
             for name, url in self.api_endpoints.items():
                 try:
-                    async with session.get(url) as response:
+                    async with session.get(url, ssl=False) as response:
                         results[name] = f"{response.status}/{response.reason}"
                 except Exception as e:
                     bot_logger.error(f"[StatusMonitor] 检查API {name} 失败: {str(e)}")
