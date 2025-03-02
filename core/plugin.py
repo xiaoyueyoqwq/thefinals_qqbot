@@ -1007,8 +1007,8 @@ class PluginManager:
             plugin._set_plugin_manager(self)
             
             # 如果有需要的API注册等，此处可执行
-            # from core.api import register_plugin_instance  # 示例
-            # register_plugin_instance(plugin)
+            from core.api import register_plugin_instance  # 示例
+            register_plugin_instance(plugin)
             # 现保留原注释，仅注释掉以避免无法导入的错误
             # --------------------------------------------
             
