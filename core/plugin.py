@@ -9,6 +9,7 @@ Plugin CORE [V3.1.5]
 import inspect
 import importlib.util
 import functools
+import re
 from typing import Dict, List, Optional, Any, Callable, Set, Tuple
 from abc import ABC
 from botpy.message import Message
@@ -16,14 +17,13 @@ from utils.message_handler import MessageHandler
 from utils.logger import bot_logger
 from dataclasses import dataclass, field
 from asyncio import Queue, create_task, Lock
-import json
-import aiofiles
 import asyncio
 from datetime import datetime
 import pytz
 from pathlib import Path
-import re
-
+import platform
+import os
+import aiosqlite
 
 # 预定义事件类型
 class EventType:
@@ -164,6 +164,171 @@ def on_regex(pattern: str):
     return decorator
 
 
+class SQLiteManager:
+    """统一的 SQLite 管理器（单例），用于存储所有插件的数据与配置。"""
+    
+    _instance = None
+    _lock = Lock()
+
+    def __init__(self, db_path: str = "plugins_data.db"):
+        """此处仅初始化 db_path，不在此处真正连接数据库。"""
+        self._db_path = db_path
+        self._db_conn: Optional[aiosqlite.Connection] = None
+
+    @classmethod
+    async def get_instance(cls, db_path: str = "plugins_data.db"):
+        async with cls._lock:
+            if cls._instance is None:
+                instance = cls(db_path=db_path)
+                await instance._init_db()
+                cls._instance = instance
+            return cls._instance
+
+    async def _init_db(self):
+        """实际建立数据库连接，并初始化所需的表。"""
+        if self._db_conn is None:
+            self._db_conn = await aiosqlite.connect(self._db_path)
+        # 初始化两张表：plugin_data、plugin_config
+        create_data_table = """
+        CREATE TABLE IF NOT EXISTS plugin_data (
+            plugin_name TEXT NOT NULL,
+            data_key TEXT NOT NULL,
+            data_value TEXT,
+            UNIQUE(plugin_name, data_key)
+        )
+        """
+        create_config_table = """
+        CREATE TABLE IF NOT EXISTS plugin_config (
+            plugin_name TEXT NOT NULL,
+            config_key TEXT NOT NULL,
+            config_value TEXT,
+            UNIQUE(plugin_name, config_key)
+        )
+        """
+        await self._db_conn.execute(create_data_table)
+        await self._db_conn.execute(create_config_table)
+        await self._db_conn.commit()
+
+    async def close(self):
+        if self._db_conn:
+            await self._db_conn.close()
+            self._db_conn = None
+
+    async def set_data(self, plugin_name: str, key: str, value: str):
+        """设置（或更新）插件数据字典中的某一项。"""
+        if not self._db_conn:
+            return
+        await self._db_conn.execute(
+            """
+            INSERT OR REPLACE INTO plugin_data (plugin_name, data_key, data_value)
+            VALUES (?, ?, ?)
+            """,
+            (plugin_name, key, value)
+        )
+        await self._db_conn.commit()
+
+    async def get_data(self, plugin_name: str, key: str) -> Optional[str]:
+        """获取插件数据中的某一项值。"""
+        if not self._db_conn:
+            return None
+        cursor = await self._db_conn.execute(
+            """
+            SELECT data_value FROM plugin_data
+            WHERE plugin_name = ? AND data_key = ?
+            """,
+            (plugin_name, key)
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        if row:
+            return row[0]
+        return None
+
+    async def delete_data(self, plugin_name: str, key: str):
+        """删除插件数据中的某一项。"""
+        if not self._db_conn:
+            return
+        await self._db_conn.execute(
+            """
+            DELETE FROM plugin_data WHERE plugin_name = ? AND data_key = ?
+            """,
+            (plugin_name, key)
+        )
+        await self._db_conn.commit()
+
+    async def get_all_data(self, plugin_name: str) -> Dict[str, str]:
+        """获取指定插件的所有数据项，返回 dict[str, str]"""
+        if not self._db_conn:
+            return {}
+        cursor = await self._db_conn.execute(
+            """
+            SELECT data_key, data_value FROM plugin_data
+            WHERE plugin_name = ?
+            """,
+            (plugin_name,)
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+        return {k: v for k, v in rows}
+
+    async def set_config(self, plugin_name: str, key: str, value: str):
+        """设置（或更新）插件配置字典中的某一项。"""
+        if not self._db_conn:
+            return
+        await self._db_conn.execute(
+            """
+            INSERT OR REPLACE INTO plugin_config (plugin_name, config_key, config_value)
+            VALUES (?, ?, ?)
+            """,
+            (plugin_name, key, value)
+        )
+        await self._db_conn.commit()
+
+    async def get_config(self, plugin_name: str, key: str) -> Optional[str]:
+        """获取插件配置中的某一项值。"""
+        if not self._db_conn:
+            return None
+        cursor = await self._db_conn.execute(
+            """
+            SELECT config_value FROM plugin_config
+            WHERE plugin_name = ? AND config_key = ?
+            """,
+            (plugin_name, key)
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        if row:
+            return row[0]
+        return None
+
+    async def delete_config(self, plugin_name: str, key: str):
+        """删除插件配置中的某一项。"""
+        if not self._db_conn:
+            return
+        await self._db_conn.execute(
+            """
+            DELETE FROM plugin_config WHERE plugin_name = ? AND config_key = ?
+            """,
+            (plugin_name, key)
+        )
+        await self._db_conn.commit()
+
+    async def get_all_config(self, plugin_name: str) -> Dict[str, str]:
+        """获取指定插件的所有配置项，返回 dict[str, str]"""
+        if not self._db_conn:
+            return {}
+        cursor = await self._db_conn.execute(
+            """
+            SELECT config_key, config_value FROM plugin_config
+            WHERE plugin_name = ?
+            """,
+            (plugin_name,)
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+        return {k: v for k, v in rows}
+
+
 class Plugin(ABC):
     """插件基类"""
     
@@ -177,10 +342,14 @@ class Plugin(ABC):
         self._event_handlers: Dict[str, Set[Callable]] = {}  # 事件处理器映射
         self._event_handlers_lock = Lock()  # 锁用于_event_handlers
         self._plugin_manager = None  # 插件管理器引用
-        self._data: Dict = {}  # 插件数据
-        self._config: Dict = {}  # 插件配置
-        self._cache: Dict = {}  # 插件缓存
+
+        # 以下三个原本由 JSON 文件读写，现在改用 SQLite
+        self._data: Dict = {}   # 插件数据
+        self._config: Dict = {} # 插件配置
         self._states: Dict[str, Any] = {}  # 状态管理
+
+        self._cache: Dict = {}  # 插件缓存
+        
         self._keyword_handlers: Dict[str, Tuple[Callable, bool]] = {}  # 关键词处理器映射
         self._regex_handlers: List[Tuple[re.Pattern, Tuple[Callable, bool]]] = []  # 正则处理器列表
         self._keyword_handlers_lock = Lock()  # 锁用于_keyword_handlers
@@ -197,10 +366,22 @@ class Plugin(ABC):
         for _, method in inspect.getmembers(self, inspect.ismethod):
             # 使用统一的注册逻辑
             decorators = {
-                '_is_command': (self.register_command, lambda m: (m._command, m._description, getattr(m, '_hidden', False))),
-                '_is_event_handler': (self.subscribe, lambda m: (m._event_type, m)),
-                '_is_keyword_handler': (self._register_keyword_handler, lambda m: (m._keywords, m)),
-                '_is_regex_handler': (self._register_regex_handler, lambda m: (m._pattern, m))
+                '_is_command': (
+                    self.register_command, 
+                    lambda m: (m._command, m._description, getattr(m, '_hidden', False))
+                ),
+                '_is_event_handler': (
+                    self.subscribe, 
+                    lambda m: (m._event_type, m)
+                ),
+                '_is_keyword_handler': (
+                    self._register_keyword_handler, 
+                    lambda m: (m._keywords, m)
+                ),
+                '_is_regex_handler': (
+                    self._register_regex_handler, 
+                    lambda m: (m._pattern, m)
+                )
             }
             
             for attr, (register_func, get_args) in decorators.items():
@@ -215,7 +396,6 @@ class Plugin(ABC):
     async def _handle_task_error(self, task_name: str, error: Exception):
         """统一的任务错误处理"""
         bot_logger.error(f"插件 {self.name} 执行 {task_name} 失败: {str(error)}")
-        # 可以在这里添加更多错误处理逻辑
                 
     @property
     def name(self) -> str:
@@ -333,7 +513,7 @@ class Plugin(ABC):
                         return handled  # 命令处理成功，直接返回
                     except Exception as e:
                         await self._handle_task_error("消息处理", e)
-                        return False  # 即使处理命令失败，也视为未处理
+                        return False
         else:
             # 再检查关键词
             async with self._keyword_handlers_lock:
@@ -354,7 +534,7 @@ class Plugin(ABC):
                         return handled  # 关键词处理器处理后不再继续
                     except Exception as e:
                         await self._handle_task_error("关键词处理", e)
-                        return False  # 如果关键词处理失败，视为未处理
+                        return False
             
             # 最后检查正则
             async with self._regex_handlers_lock:
@@ -376,64 +556,98 @@ class Plugin(ABC):
                         return handled  # 正则处理器处理后不再继续
                     except Exception as e:
                         await self._handle_task_error("正则处理", e)
-                        return False  # 如果正则处理失败，视为未处理
+                        return False
         
-        return handled  # 如果未处理，返回False
+        return handled
 
-    # 文件操作辅助方法
     def _get_plugin_path(self, *paths) -> Path:
-        """获取插件相关文件路径"""
-        plugin_dir = Path("data", "plugins", self.name)  # 先创建插件专属目录
-        return plugin_dir.joinpath(*paths).resolve()
-        
+        """
+        获取插件相关文件路径 (原JSON时代用于获取 data/plugins/{plugin_name} 路径的辅助方法)
+        现已使用 SQLite 储存，不再依赖任何文件系统路径，仅保留此方法以兼容可能的旧逻辑调用。
+        """
+        # 这里可以直接返回一个 Path 对象保证编译或兼容不报错，如有特殊需求可自行扩展
+        return Path("data")  # 不做实际作用，仅占位
+
+    # ---------------------------------------------
+    #  以下两个方法仅保留空壳，兼容原本对 JSON 文件的调用
+    #  不再进行任何实际的文件读写操作
+    # ---------------------------------------------
     async def _read_json_file(self, file_path: Path) -> Dict:
-        """读取JSON文件"""
-        try:
-            if not file_path.exists():
-                return {}
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                content = await f.read()
-                return json.loads(content)
-        except Exception as e:
-            await self._handle_task_error(f"读取文件 {file_path}", e)
-            return {}
-            
+        """
+        [兼容保留] 过去用于读取 JSON 文件。
+        现已弃用，改为使用 SQLite，不再做任何实际操作。
+        """
+        bot_logger.debug(f"[Plugin] _read_json_file 已弃用: {file_path}")
+        return {}
+
     async def _write_json_file(self, file_path: Path, data: Dict) -> None:
-        """写入JSON文件"""
-        try:
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(data, ensure_ascii=False, indent=2))
-        except Exception as e:
-            await self._handle_task_error(f"写入文件 {file_path}", e)
-                
-    # 数据持久化
+        """
+        [兼容保留] 过去用于写入 JSON 文件。
+        现已弃用，改为使用 SQLite，不再做任何实际操作。
+        """
+        bot_logger.debug(f"[Plugin] _write_json_file 已弃用: {file_path}")
+        return
+
+    # 数据持久化（改用 SQLite）
     async def save_data(self) -> None:
-        """保存插件数据"""
-        data_file = self._get_plugin_path("data.json")  # 直接在插件目录下保存 data.json
-        await self._write_json_file(data_file, self._data)
-            
+        """
+        保存插件数据到 SQLite 数据库（原先是写入 data.json）。
+        """
+        try:
+            db = await SQLiteManager.get_instance()
+            # 将 self._data 中的 key-value 写入 SQLite
+            for k, v in self._data.items():
+                # 存储时统一转为字符串
+                await db.set_data(self.name, k, str(v))
+
+            bot_logger.debug(f"[Plugin] {self.name} 全部数据已写入SQLite")
+        except Exception as e:
+            await self._handle_task_error("save_data", e)
+
     async def load_data(self) -> None:
-        """加载插件数据"""
-        data_file = self._get_plugin_path("data.json")  # 直接从插件目录下读取 data.json
-        self._data = await self._read_json_file(data_file)
-        
-        # 从数据中恢复状态
-        self._states = {}
-        for key, value in self._data.items():
-            key: str
-            value: Any
-            if key.startswith("state_"):
-                self._states[key[6:]] = value
+        """
+        从 SQLite 数据库加载插件数据（原先是从 data.json 加载）。
+        """
+        try:
+            db = await SQLiteManager.get_instance()
+            all_data = await db.get_all_data(self.name)
+            # 由于存储时是 str(v)，这里可根据需要自行做类型转换。
+            # 若原先是数值/列表/字典，可在此进行自定义转换。
+            # 此处示例：全部以字符串形式存储，按原样放进 self._data
+            self._data = {}
+            for k, val_str in all_data.items():
+                self._data[k] = val_str  # 需要更复杂结构的，可自行做eval或json.loads等转化
+
+            # 从数据中恢复状态
+            self._states = {}
+            for key, value in self._data.items():
+                if key.startswith("state_"):
+                    self._states[key[6:]] = value
+
+            bot_logger.debug(f"[Plugin] {self.name} 数据已从SQLite加载完成")
+        except Exception as e:
+            await self._handle_task_error("load_data", e)
 
     async def load_config(self) -> None:
-        """加载插件配置"""
-        config_file = self._get_plugin_path("config.json")  # 配置文件也放在插件目录下
-        self._config = await self._read_json_file(config_file)
-        
-        # 加载可定制消息模板
-        self._load_custom_messages()
-        
+        """
+        从 SQLite 数据库加载插件配置（原先是从 config.json 加载）。
+        同时加载可定制消息模板。
+        """
+        try:
+            db = await SQLiteManager.get_instance()
+            all_config = await db.get_all_config(self.name)
+            # 同理，这里也全部以字符串形式保留
+            self._config = {}
+            for k, val_str in all_config.items():
+                self._config[k] = val_str
+
+            # 加载可定制消息模板
+            self._load_custom_messages()
+
+            bot_logger.debug(f"[Plugin] {self.name} 配置已从SQLite加载完成")
+        except Exception as e:
+            await self._handle_task_error("load_config", e)
+
     def _load_custom_messages(self):
         """加载自定义消息模板"""
         default_messages = {
@@ -442,7 +656,7 @@ class Plugin(ABC):
             "unknown_command": "❓ 未知的命令\n可用命令列表:\n{command_list}"
         }
         # Merge default messages with config messages
-        config_messages = self._config.get("messages", {})
+        config_messages = self._config.get("messages", {}) if isinstance(self._config.get("messages"), dict) else {}
         for key, default in default_messages.items():
             self._messages[key] = config_messages.get(key, default)
     
@@ -454,6 +668,7 @@ class Plugin(ABC):
     async def set_state(self, key: str, value: Any) -> None:
         """设置状态"""
         self._states[key] = value
+        # 在 self._data 里记录为 state_ 前缀
         self._data[f"state_{key}"] = value
         await self.save_data()  # 自动保存
         
@@ -462,7 +677,7 @@ class Plugin(ABC):
         self._states.pop(key, None)
         self._data.pop(f"state_{key}", None)
         await self.save_data()  # 自动保存
-        
+
     # 消息处理辅助方法
     async def reply(self, handler: MessageHandler, content: str) -> bool:
         """回复消息
@@ -485,12 +700,10 @@ class Plugin(ABC):
         """撤回消息
         Args:
             handler: 消息处理器
-            
         Note:
             由于腾讯API限制,消息发出后即使2秒内也可能无法撤回
-            这是腾讯API的限制(错误码40064004),不是代码bug
         """
-        bot_logger.warning("⚠️ 消息撤回功能非常不稳定，有可能出现无法撤回的情况。无解决办法。")
+        bot_logger.warning("⚠️ 消息撤回功能非常不稳定，受API限制可能失败。")
         return await handler.recall()
 
     # 交互式对话辅助方法
@@ -529,13 +742,13 @@ class Plugin(ABC):
                         new_msg_info.user_id == msg_info.user_id):
                         bot_logger.debug(f"[Plugin] Message matched, putting in queue: {content}")
                         await reply_queue.put(content)
-                        return True  # 表示消息已被处理
+                        return True
                     else:
                         bot_logger.debug(f"[Plugin] Message not matched: group_match={new_msg_info.group_id == msg_info.group_id}, "
                                        f"user_match={new_msg_info.user_id == msg_info.user_id}")
                 except Exception as e:
                     bot_logger.error(f"[Plugin] Error processing message: {str(e)}")
-                return False  # 表示消息未被处理
+                return False
             
             # 将处理器添加到插件管理器
             if self._plugin_manager:
@@ -544,8 +757,6 @@ class Plugin(ABC):
                     self._plugin_manager._temp_handlers.append(message_handler)
             
             try:
-                # 等待回复
-                bot_logger.debug("[Plugin] Waiting for reply from queue")
                 reply = await asyncio.wait_for(reply_queue.get(), timeout)
                 bot_logger.debug(f"[Plugin] Got reply: {reply}")
                 return reply
@@ -579,25 +790,8 @@ class Plugin(ABC):
         
     async def unknown_command_response(self, handler: MessageHandler):
         """处理未知命令的响应"""
-        # 从插件管理器获取所有命令列表
-        if self._plugin_manager:
-            all_commands = self._plugin_manager.get_command_list()
-        else:
-            all_commands = self.get_command_list()
-            
-        # 格式化命令列表（按字母顺序排序）
-        command_list = "\n".join(
-            f"/{cmd} - {info['description']}" 
-            for cmd, info in sorted(all_commands.items()) 
-            if not info.get('hidden', False)
-        )
-        
-        # 如果没有可用命令，显示特殊消息
-        if not command_list:
-            command_list = "当前没有可用的命令"
-            
-        unknown_command_message = self._messages.get("unknown_command").format(command_list=command_list)
-        await self.reply(handler, unknown_command_message)
+        # 未知命令时不回复任何消息
+        pass
         
     def get_command_list(self) -> Dict[str, Dict[str, Any]]:
         """获取插件的命令列表"""
@@ -605,7 +799,7 @@ class Plugin(ABC):
     
     def start_tasks(self) -> List[Callable]:
         """返回需要启动的任务列表
-        子类可以重写此方法返回需要启动的异步任务
+        子类可以重写此方法返回需要启动的异步任务列表
         Returns:
             List[Callable]: 需要启动的异步任务列表
         """
@@ -678,10 +872,8 @@ class Plugin(ABC):
             keywords: 关键词元组
             handler: 处理器函数
         """
-        # 检查处理器是否需要content参数
         signature = inspect.signature(handler)
         needs_content = 'content' in signature.parameters
-        
         async with self._keyword_handlers_lock:
             for keyword in keywords:
                 self._keyword_handlers[keyword] = (handler, needs_content)
@@ -692,7 +884,6 @@ class Plugin(ABC):
             pattern: 正则表达式模式
             handler: 处理器函数
         """
-        # 检查处理器是否需要content参数
         signature = inspect.signature(handler)
         needs_content = 'content' in signature.parameters
         
@@ -701,7 +892,8 @@ class Plugin(ABC):
             self._regex_handlers.append((compiled_pattern, (handler, needs_content)))
 
     async def reload(self) -> None:
-        """热重载插件
+        """
+        热重载插件
         1. 保存当前状态
         2. 重新加载模块
         3. 恢复状态
@@ -754,25 +946,20 @@ class Plugin(ABC):
 
     def should_handle_message(self, content: str) -> bool:
         """判断是否应该处理消息
-        
         Args:
             content: 消息内容
-            
         Returns:
             bool: 是否应该处理该消息
         """
-        # 检查命令
         if content.startswith("/"):
             cmd = content.split()[0].lstrip("/")
             if cmd in self.commands:
                 return True
                 
-        # 检查关键词
         for keyword in self._keyword_handlers:
             if keyword in content:
                 return True
                 
-        # 检查正则
         for pattern, _ in self._regex_handlers:
             if pattern.search(content):
                 return True
@@ -817,12 +1004,13 @@ class PluginManager:
                     self.commands[cmd] = plugin
             
             self.plugins[plugin.name] = plugin
-            # 设置插件管理器引用    
             plugin._set_plugin_manager(self)
             
-            # 注册API实例
-            from core.api import register_plugin_instance
-            register_plugin_instance(plugin)
+            # 如果有需要的API注册等，此处可执行
+            # from core.api import register_plugin_instance  # 示例
+            # register_plugin_instance(plugin)
+            # 现保留原注释，仅注释掉以避免无法导入的错误
+            # --------------------------------------------
             
             await plugin.on_load()
             bot_logger.info(f"插件 {plugin.name} 已注册并加载")
@@ -909,7 +1097,6 @@ class PluginManager:
         
         for temp_handler in temp_handlers:
             try:
-                bot_logger.debug("[PluginManager] Trying temp handler")
                 if await temp_handler(handler.message, handler, content):
                     bot_logger.debug("[PluginManager] Message handled by temp handler")
                     return True
@@ -922,14 +1109,12 @@ class PluginManager:
         for plugin in self.plugins.values():
             if plugin.enabled:
                 try:
-                    # 快速判断是否需要处理
                     if not plugin.should_handle_message(content):
                         continue
-                        
                     result = await plugin.handle_message(handler, content)
                     if result:
                         handled = True
-                        break  # 如果消息已被处理，就不再继续
+                        break
                 except Exception as e:
                     bot_logger.error(f"插件 {plugin.name} 处理消息失败: {str(e)}")
                     continue
@@ -973,22 +1158,17 @@ class PluginManager:
     async def auto_discover_plugins(self, plugins_dir: str = "plugins", **plugin_kwargs) -> None:
         """自动发现并注册插件"""
         bot_logger.debug(f"开始扫描插件目录: {plugins_dir}")
-        
-        # 使用 Path 处理路径
         plugins_path = Path(plugins_dir).resolve()
         if not plugins_path.exists():
             bot_logger.error(f"插件目录不存在: {plugins_path}")
             return
 
-        # 遍历插件目录
         for file_path in plugins_path.glob("*.py"):
             if file_path.name.startswith("__"):
                 continue
                 
             module_name = file_path.stem
-            
             try:
-                # 动态导入模块
                 spec = importlib.util.spec_from_file_location(module_name, str(file_path))
                 if not spec or not spec.loader:
                     continue
@@ -1002,8 +1182,7 @@ class PluginManager:
                         issubclass(item, Plugin) and 
                         item != Plugin):  # 排除基类自身
                         try:
-                            # 实例化插件并注册
-                            plugin_instance = item(**plugin_kwargs)  # 只通过 kwargs 传递参数
+                            plugin_instance = item(**plugin_kwargs)
                             await self.register_plugin(plugin_instance)
                             bot_logger.info(f"成功加载插件: {item_name}")
                         except Exception as e:
@@ -1028,12 +1207,10 @@ class PluginManager:
                 # 第一阶段：尝试正常清理
                 for plugin_name, plugin in list(self.plugins.items()):
                     try:
-                        # 设置超时的清理
                         cleanup_task = asyncio.create_task(
                             plugin.on_unload(),
                             name=f"cleanup_{plugin_name}"
                         )
-                        
                         try:
                             await asyncio.wait_for(cleanup_task, timeout=CLEANUP_TIMEOUT)
                             bot_logger.debug(f"[PluginManager] 插件 {plugin_name} 清理完成")
@@ -1044,46 +1221,44 @@ class PluginManager:
                                 await cleanup_task
                             except asyncio.CancelledError:
                                 pass
-                        except Exception as e:
-                            bot_logger.error(f"[PluginManager] 清理插件 {plugin_name} 时出错: {str(e)}")
-                            
                     except Exception as e:
-                        bot_logger.error(f"[PluginManager] 处理插件 {plugin_name} 清理任务时出错: {str(e)}")
+                        bot_logger.error(f"[PluginManager] 清理插件 {plugin_name} 时出错: {str(e)}")
                     finally:
-                        # 确保从集合中移除
                         self.plugins.pop(plugin_name, None)
                 
                 # 第二阶段：清理其他资源
                 try:
-                    # 清理命令
                     command_count = len(self.commands)
                     self.commands.clear()
                     bot_logger.debug(f"[PluginManager] 已清理 {command_count} 个命令")
                     
-                    # 清理事件处理器
                     handler_count = len(self._event_handlers)
                     self._event_handlers.clear()
                     bot_logger.debug(f"[PluginManager] 已清理 {handler_count} 个事件处理器")
                     
-                    # 清理临时处理器
                     temp_handler_count = len(self._temp_handlers)
                     self._temp_handlers.clear()
                     bot_logger.debug(f"[PluginManager] 已清理 {temp_handler_count} 个临时处理器")
                     
                 except Exception as e:
                     bot_logger.error(f"[PluginManager] 清理资源集合时出错: {str(e)}")
-                
+             
                 self._cleanup_done = True
                 bot_logger.info("[PluginManager] 插件资源清理完成")
                 
             except Exception as e:
                 bot_logger.error(f"[PluginManager] 清理插件资源时发生错误: {str(e)}")
             finally:
-                # 确保标记设置
                 self._cleanup_done = True
-                
-                # 确保所有集合被清空
                 self.plugins.clear()
                 self.commands.clear()
                 self._event_handlers.clear()
                 self._temp_handlers.clear()
+
+                # 尝试关闭数据库连接
+                try:
+                    db = await SQLiteManager.get_instance()
+                    await db.close()
+                    bot_logger.info("[PluginManager] SQLite 数据库连接已关闭")
+                except Exception as e:
+                    bot_logger.error(f"[PluginManager] 关闭 SQLite 连接时出错: {str(e)}")

@@ -59,6 +59,9 @@ botpy-master
 the-finals-api-main
 cache/
 persistence/
+*.db-wal
+*.db-shm
+
 
 # Distribution / packaging
 dist/

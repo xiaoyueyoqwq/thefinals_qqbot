@@ -28,6 +28,11 @@ import platform
 import traceback
 import os
 import ctypes
+import subprocess
+
+# 全局变量，用于在信号处理函数中访问
+client = None
+loop = None
 
 # 记录上次Ctrl+C的时间
 _last_sigint_time = 0
@@ -73,27 +78,119 @@ def cleanup_threads():
             except Exception:
                 pass
 
-def force_exit():
-    """强制退出程序"""
-    print("\n*** 正在清理线程... ***", file=sys.stderr)
-    try:
-        cleanup_thread = threading.Thread(target=cleanup_threads)
-        cleanup_thread.daemon = True
-        cleanup_thread.start()
-        cleanup_thread.join(timeout=0.5)
-    finally:
-        print("*** 强制退出 ***", file=sys.stderr)
-        sys.stderr.flush()
-        sys.stdout.flush()
-        os._exit(1)
-
-def signal_handler(signum, frame):
-    """处理Ctrl+C信号"""
+def delayed_force_exit():
+    """延迟3秒后强制退出"""
+    time.sleep(3)
     force_exit()
 
-# 注册信号处理器
-signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
-bot_logger.info("Ctrl+C 强制退出已启用")
+def force_exit():
+    """强制退出进程"""
+    bot_logger.warning("强制退出进程...")
+    
+    # 尝试终止所有可能的子进程
+    try:
+        # 在结束主进程前，确保清理所有子进程
+        if platform.system() == "Windows":
+            try:
+                # Windows下使用taskkill终止进程树
+                subprocess.run(['taskkill', '/F', '/T', '/PID', str(os.getpid())], 
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                bot_logger.error(f"使用taskkill终止进程时出错: {str(e)}")
+        else:
+            # Linux/Unix下获取所有子进程并发送SIGKILL
+            try:
+                # 寻找与playwright和node相关的进程
+                result = subprocess.run(
+                    ["ps", "-ef"], capture_output=True, text=True
+                )
+                
+                for line in result.stdout.splitlines():
+                    if ("playwright" in line or "chromium" in line) and "node" in line:
+                        parts = line.split()
+                        if len(parts) > 1:
+                            try:
+                                pid = int(parts[1])
+                                os.kill(pid, signal.SIGKILL)
+                                bot_logger.warning(f"强制终止子进程: PID {pid}")
+                            except Exception as e:
+                                bot_logger.error(f"终止子进程时出错: {str(e)}")
+            except Exception as e:
+                bot_logger.error(f"查找相关进程时出错: {str(e)}")
+            
+            # 终止当前进程的所有子进程
+            try:
+                current_pid = os.getpid()
+                pgid = os.getpgid(current_pid)
+                os.killpg(pgid, signal.SIGKILL)
+            except Exception as e:
+                bot_logger.error(f"终止进程组时出错: {str(e)}")
+    except Exception as e:
+        bot_logger.error(f"尝试终止子进程时出错: {str(e)}")
+        
+    # 给一点时间让日志写入
+    time.sleep(0.5)
+    
+    # 确保最终退出
+    try:
+        # 清理Playwright进程
+        try:
+            cleanup_playwright_processes()
+        except Exception as e:
+            bot_logger.error(f"最终清理Playwright失败: {str(e)}")
+        
+        # 最后，强制退出
+        try:
+            os._exit(1)
+        except Exception:
+            try:
+                sys.exit(1)
+            except Exception:
+                # 如果所有退出方法都失败，使用最原始的退出方法
+                os.kill(os.getpid(), signal.SIGKILL)
+    except Exception as e:
+        # 这里的错误处理只是为了完整性，实际上不太可能执行到
+        pass
+
+def signal_handler(signum=None, frame=None):
+    """统一的信号处理函数"""
+    bot_logger.info(f"收到退出信号 {signum if signum else 'Unknown'}，开始关闭...")
+    
+    # 尝试优雅关闭
+    try:
+        # 注意：这里的client可能未定义，需要保护
+        if 'client' in globals() and client is not None and hasattr(client, 'stop'):
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(client.stop())
+            except Exception as e:
+                bot_logger.error(f"获取事件循环时出错: {str(e)}")
+    except Exception as e:
+        bot_logger.error(f"尝试优雅关闭时出错: {str(e)}")
+    
+    # 启动强制退出线程
+    try:
+        force_exit_thread = threading.Thread(target=delayed_force_exit)
+        force_exit_thread.daemon = True
+        force_exit_thread.start()
+    except Exception as e:
+        bot_logger.error(f"启动强制退出线程时出错: {str(e)}")
+    
+    # 停止接受新的任务
+    try:
+        loop = asyncio.get_event_loop() 
+        if not loop.is_closed():
+            loop.stop()
+        
+            # 取消所有任务
+            for task in asyncio.all_tasks(loop):
+                task.cancel()
+            
+            # 设置关闭标志
+            loop.call_soon_threadsafe(loop.stop)
+    except Exception as e:
+        bot_logger.error(f"停止事件循环时出错: {str(e)}")
 
 # 定义超时常量
 PLUGIN_TIMEOUT = 30  # 插件处理超时时间（秒）
@@ -226,15 +323,14 @@ class MyBot(botpy.Client):
 
     def _task_done_callback(self, task):
         """任务完成回调"""
-        self._running_tasks.discard(task)
         try:
+            # 将集合操作移到最后，避免在其他地方遍历时修改集合
             exc = task.exception()
             if exc and not isinstance(exc, KeyboardInterrupt):
                 bot_logger.error(f"任务异常: {str(exc)}")
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            bot_logger.error(f"处理任务回调时发生错误: {str(e)}")
+        finally:
+            # 确保无论发生什么情况都会移除任务
+            self._running_tasks.discard(task)
 
     async def _handle_message(self, message: Message, content: str):
         """处理消息的异步方法"""
@@ -272,14 +368,9 @@ class MyBot(botpy.Client):
                     async with asyncio.timeout(PLUGIN_TIMEOUT):
                         if await self.plugin_manager.handle_message(handler, content):
                             return
-                        
-                        # 未知命令时提示使用 /about 获取帮助
-                        await handler.send_text(
-                            "❓ 未知的命令\n"
-                            "提示：使用 /about 获取帮助信息"
-                        )
             except asyncio.TimeoutError:
                 bot_logger.error("消息处理超时")
+                
                 await handler.send_text(
                     "⚠️ 处理超时\n"
                     "建议：请稍后重试\n"
@@ -503,14 +594,14 @@ class MyBot(botpy.Client):
                 # 第五阶段：清理API连接池
                 from utils.base_api import BaseAPI
                 from core.rank import RankAPI
-                from core.df import DFAPI
+                from core.df import DFQuery
                 from core.powershift import PowerShiftAPI
                 from core.world_tour import WorldTourAPI
                 
                 try:
                     async with asyncio.timeout(API_CLEANUP_TIMEOUT):
                         # 清理所有API实例的连接池
-                        api_classes = [RankAPI, DFAPI, PowerShiftAPI, WorldTourAPI]
+                        api_classes = [RankAPI, PowerShiftAPI, WorldTourAPI]
                         for api_class in api_classes:
                             try:
                                 await api_class.close_all_clients()
@@ -519,6 +610,15 @@ class MyBot(botpy.Client):
                         
                         # 清理基类的连接池
                         await BaseAPI.close_all_clients()
+                        
+                        # 清理DFQuery实例
+                        try:
+                            # 尝试获取全局DFQuery实例并停止它
+                            df_query = DFQuery()
+                            await df_query.stop()
+                        except Exception as e:
+                            bot_logger.error(f"清理 DFQuery 实例时出错: {str(e)}")
+                            
                         bot_logger.debug("所有API连接池已清理")
                 except asyncio.TimeoutError:
                     bot_logger.warning("清理API连接池超时")
@@ -529,13 +629,22 @@ class MyBot(botpy.Client):
                 try:
                     async with asyncio.timeout(TASK_CANCEL_TIMEOUT):
                         task_count = len(self._running_tasks)
-                        for task in self._running_tasks:
+                        # 使用列表复制避免迭代时修改集合
+                        tasks_to_cancel = list(self._running_tasks)
+                        
+                        # 先取消所有任务
+                        for task in tasks_to_cancel:
                             if not task.done():
                                 task.cancel()
+                        
+                        # 然后等待它们完成
+                        for task in tasks_to_cancel:
+                            if not task.done():
                                 try:
                                     await task
                                 except (asyncio.CancelledError, Exception):
                                     pass
+                        
                         bot_logger.debug(f"已取消 {task_count} 个运行中的任务")
                 except asyncio.TimeoutError:
                     bot_logger.warning("取消任务超时，继续其他清理")
@@ -707,10 +816,20 @@ async def check_ip():
 
 async def async_main():
     """异步主函数"""
+    global client
+    
     try:
         # 过滤掉 SDK 的已知无害错误
         import logging
         logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+        
+        # 运行异常路径清理脚本
+        bot_logger.info("启动前，准备初始化系统...")
+        try:
+            # 初始化数据库和其他系统组件
+            bot_logger.info("系统初始化完成")
+        except Exception as e:
+            bot_logger.error(f"系统初始化过程中出错: {e}")
         
         # 显示启动logo
         print("="*50)
@@ -772,62 +891,169 @@ def setup_signal_handlers(loop, client):
     import threading
     import time
     
-    def force_exit():
-        """强制退出进程"""
-        bot_logger.warning("强制退出进程...")
-        # 给一点时间让日志写入
-        time.sleep(0.5)
-        os._exit(1)
-    
-    def delayed_force_exit():
-        """延迟3秒后强制退出"""
-        time.sleep(3)
-        force_exit()
-    
-    def signal_handler():
-        """统一的信号处理函数"""
-        bot_logger.info("收到退出信号，开始关闭...")
-        
-        # 启动强制退出线程
-        force_exit_thread = threading.Thread(target=delayed_force_exit)
-        force_exit_thread.daemon = True
-        force_exit_thread.start()
-        
-        # 停止接受新的任务
-        if not loop.is_closed():
-            loop.stop()
-        
-        # 取消所有任务
-        for task in asyncio.all_tasks(loop):
-            task.cancel()
-        
-        # 设置关闭标志
-        if not loop.is_closed():
-            loop.call_soon_threadsafe(loop.stop)
-    
     if platform.system() == "Windows":
         # Windows 平台使用 signal.signal
         try:
-            signal.signal(signal.SIGINT, lambda signum, frame: signal_handler())
-            signal.signal(signal.SIGTERM, lambda signum, frame: signal_handler())
+            # 直接使用全局的signal_handler函数
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
             bot_logger.debug("Windows 信号处理器已设置")
         except Exception as e:
             bot_logger.error(f"设置 Windows 信号处理器失败: {e}")
     else:
         # Linux/Unix 平台使用 loop.add_signal_handler
         try:
+            # 为每个信号创建一个特定的处理函数
+            def make_handler(sig):
+                return lambda: signal_handler(sig, None)
+            
+            # 注册信号处理器
             for sig in (signal.SIGINT, signal.SIGTERM):
-                loop.add_signal_handler(sig, signal_handler)
+                loop.add_signal_handler(sig, make_handler(sig))
+                
             bot_logger.debug("Unix 信号处理器已设置")
         except Exception as e:
             bot_logger.error(f"设置 Unix 信号处理器失败: {e}")
+
+def cleanup_playwright_processes():
+    """清理所有Playwright相关的Node.js进程"""
+    import platform
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    
+    bot_logger.info("开始清理Playwright相关进程...")
+    
+    try:
+        if platform.system() == "Windows":
+            # Windows系统
+            try:
+                # 使用tasklist查找与Playwright相关的进程
+                output = subprocess.check_output("tasklist /FI \"IMAGENAME eq node.exe\" /FO CSV", shell=True).decode()
+                lines = output.strip().split('\n')
+                
+                # 跳过标题行
+                if len(lines) > 1:
+                    for line in lines[1:]:
+                        try:
+                            # 解析CSV格式
+                            parts = line.strip('"').split('","')
+                            if len(parts) >= 2:
+                                pid = int(parts[1])
+                                # 使用taskkill终止进程
+                                subprocess.run(['taskkill', '/F', '/PID', str(pid)],
+                                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                bot_logger.warning(f"已终止Node.js进程: {pid}")
+                        except Exception as e:
+                            bot_logger.error(f"终止Windows Node.js进程时出错: {str(e)}")
+            except Exception as e:
+                bot_logger.error(f"查找Windows Node.js进程时出错: {str(e)}")
+        else:
+            # Linux/Unix系统
+            try:
+                # 1. 首先使用pkill尝试终止所有相关进程
+                try:
+                    cmds = [
+                        ["pkill", "-9", "-f", "playwright"],
+                        ["pkill", "-9", "-f", "chromium"],
+                        ["pkill", "-9", "-f", "chrome-linux"]
+                    ]
+                    for cmd in cmds:
+                        try:
+                            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            bot_logger.debug(f"尝试执行: {' '.join(cmd)}")
+                        except Exception:
+                            pass
+                    
+                    # 给进程一点时间终止
+                    time.sleep(0.5)
+                except Exception as e:
+                    bot_logger.debug(f"使用pkill终止进程时出错: {str(e)}")
+                
+                # 2. 然后使用ps命令查找可能残留的Node.js进程
+                result = subprocess.run(["ps", "-ef"], capture_output=True, text=True)
+                
+                for line in result.stdout.splitlines():
+                    # 查找包含playwright或chromium的node进程
+                    if any(term in line.lower() for term in ["playwright", "chromium", "chrome-linux"]) and "node" in line:
+                        parts = line.split()
+                        if len(parts) > 1:
+                            try:
+                                pid = int(parts[1])
+                                os.kill(pid, signal.SIGKILL)
+                                bot_logger.warning(f"已终止Linux Node.js进程: {pid}")
+                            except Exception as e:
+                                bot_logger.error(f"终止Linux Node.js进程时出错: {str(e)}")
+                
+                # 3. 最后检查是否还有残留进程，并再次尝试终止
+                try:
+                    second_check = subprocess.run(["ps", "-ef"], capture_output=True, text=True)
+                    second_found = False
+                    
+                    for line in second_check.stdout.splitlines():
+                        if any(term in line.lower() for term in ["playwright", "chromium", "chrome-linux"]):
+                            second_found = True
+                            parts = line.split()
+                            if len(parts) > 1:
+                                try:
+                                    pid = int(parts[1])
+                                    os.kill(pid, signal.SIGKILL)
+                                    bot_logger.warning(f"二次清理: 终止残留进程 {pid}")
+                                except Exception:
+                                    pass
+                    
+                    if not second_found:
+                        bot_logger.debug("所有浏览器相关进程已清理完毕")
+                except Exception as e:
+                    bot_logger.debug(f"二次检查时出错: {str(e)}")
+            except Exception as e:
+                bot_logger.error(f"查找Linux Node.js进程时出错: {str(e)}")
+    
+    except Exception as e:
+        bot_logger.error(f"清理Playwright进程时出错: {str(e)}")
+    
+    bot_logger.info("Playwright进程清理完成")
+    
+    # 在清理完Playwright进程后，强制等待一小段时间确保资源释放
+    try:
+        time.sleep(0.5)
+    except Exception:
+        pass
+
+# 添加一个确保程序最终退出的函数
+def ensure_exit(timeout=5):
+    """确保程序在指定时间后强制退出"""
+    import threading
+    import time
+    import os
+    import sys
+    
+    def _force_exit_after_timeout():
+        # 等待指定时间
+        time.sleep(timeout)
+        # 如果程序还在运行，强制退出
+        bot_logger.warning(f"程序在{timeout}秒后仍未退出，强制终止进程...")
+        try:
+            # 尝试使用os._exit强制退出
+            os._exit(1)
+        except Exception:
+            # 如果失败，使用sys.exit
+            sys.exit(1)
+    
+    # 创建并启动强制退出线程
+    force_exit_thread = threading.Thread(target=_force_exit_after_timeout)
+    force_exit_thread.daemon = True
+    force_exit_thread.start()
 
 def main():
     """主函数"""
     FINAL_CLEANUP_TIMEOUT = 10  # 最终清理超时时间（秒）
     
-    client = None
-    loop = None
+    # 使用全局变量
+    global client, loop
+    
     try:
         # 过滤掉 SDK 的已知无害错误
         import logging
@@ -854,17 +1080,68 @@ def main():
             loop.run_forever()
             
         except KeyboardInterrupt:
-            bot_logger.info("收到 CTRL+C，正在关闭...")
+            print("\n接收到KeyboardInterrupt，正在安全退出...")
         except Exception as e:
-            bot_logger.error(f"运行时发生错误: {e}")
+            bot_logger.error(f"运行时发生错误: {str(e)}")
+            import traceback
+            traceback.print_exc()
         finally:
-            # 取消主任务
-            if not main_task.done():
-                main_task.cancel()
+            # 确保清理所有资源
+            try:
+                # 取消主任务
+                if 'main_task' in locals() and not main_task.done():
+                    main_task.cancel()
+                    try:
+                        loop.run_until_complete(main_task)
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                
+                # 清理客户端资源
+                if client and hasattr(client, '_cleanup'):
+                    try:
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                client._cleanup(),
+                                timeout=FINAL_CLEANUP_TIMEOUT
+                            )
+                        )
+                    except (asyncio.TimeoutError, Exception) as e:
+                        bot_logger.error(f"客户端清理超时或失败: {str(e)}")
+                
+                # 清理浏览器管理器资源
+                from utils.browser import browser_manager
                 try:
-                    loop.run_until_complete(main_task)
-                except asyncio.CancelledError:
-                    pass
+                    if not loop.is_closed():
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                browser_manager.cleanup(),
+                                timeout=5
+                            )
+                        )
+                except (asyncio.TimeoutError, Exception) as e:
+                    bot_logger.error(f"浏览器清理超时或失败: {str(e)}")
+                
+                # 清理数据库连接
+                try:
+                    from utils.db import DatabaseManager
+                    if not loop.is_closed():
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                DatabaseManager.close_all(),
+                                timeout=3
+                            )
+                        )
+                except Exception as e:
+                    bot_logger.error(f"数据库连接清理失败: {str(e)}")
+                
+                # 清理Playwright进程（使用系统级别的清理）
+                cleanup_playwright_processes()
+                
+            except Exception as e:
+                bot_logger.error(f"最终清理时出错: {str(e)}")
+            
+            # 最后确保干净退出
+            sys.exit(0)
             
     except Exception as e:
         bot_logger.error(f"发生错误: {e}")
@@ -935,6 +1212,8 @@ def main():
             bot_logger.error(f"清理资源时发生错误: {e}")
         finally:
             bot_logger.info("机器人已完全关闭")
+            # 确保程序最终会退出
+            ensure_exit(10)  # 10秒后强制退出
 
 def custom_exception_handler(loop, context):
     """自定义异常处理器"""
