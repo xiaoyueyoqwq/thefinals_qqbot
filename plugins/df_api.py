@@ -364,16 +364,18 @@ class DFAPIPlugin(Plugin):
                 )
             
             # 转换为响应格式
-            data = [
-                StatsData(
-                    record_date=entry["date"],
-                    rank_500_score=entry["rank_500_score"],
-                    rank_10000_score=entry["rank_10000_score"],
-                    daily_change_500=entry["daily_change_500"],
-                    daily_change_10000=entry["daily_change_10000"]
-                )
-                for entry in stats
-            ]
+            data = []
+            for entry in stats:
+                if entry is None:
+                    continue  # 跳过无效数据
+                    
+                data.append(StatsData(
+                    record_date=entry.get("date", datetime.now().date()),
+                    rank_500_score=entry.get("rank_500_score", 0),
+                    rank_10000_score=entry.get("rank_10000_score", 0),
+                    daily_change_500=entry.get("daily_change_500", 0),
+                    daily_change_10000=entry.get("daily_change_10000", 0)
+                ))
             
             return StatsResponse(
                 data=data,
