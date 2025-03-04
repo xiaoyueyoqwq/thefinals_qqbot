@@ -109,6 +109,19 @@ class FlappyBirdAPI(Plugin):
         """
         await self.verify_api_key(api_key)
         
+        # 检查是否为默认 player_id
+        if score.player_id == "player id":  # 拦截带空格的默认ID
+            return JSONResponse(
+                status_code=202,  # 使用 202 Accepted 表示请求已接收但未处理
+                content={
+                    "message": "请先设置您的EmbarkID",
+                    "score": score.score,
+                    "player_id": score.player_id,
+                    "timestamp": datetime.now().isoformat(),
+                    "success": False
+                }
+            )
+        
         try:
             result = await self.core.save_score(score.score, score.player_id)
             return JSONResponse(
@@ -117,7 +130,8 @@ class FlappyBirdAPI(Plugin):
                     "message": "分数保存成功",
                     "score": score.score,
                     "player_id": score.player_id,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "success": True
                 }
             )
         except Exception as e:
