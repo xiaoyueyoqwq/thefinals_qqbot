@@ -16,6 +16,7 @@ class PlayerStatsResponse(BaseModel):
     league: Optional[str]
     club_tag: Optional[str]
     update_time: datetime
+    message: Optional[str] = None
 
 class TopPlayersResponse(BaseModel):
     """排行榜响应模型"""
@@ -63,7 +64,7 @@ class RankAPIPlugin(Plugin):
 
 返回说明:
 1. 正常情况: 返回玩家的排位数据
-2. 未找到玩家: 返回404错误
+2. 未找到玩家: 返回提示信息
 3. 其他错误: 返回500错误
 
 示例响应:
@@ -82,17 +83,27 @@ class RankAPIPlugin(Plugin):
         try:
             # 检查赛季是否有效
             if season not in SeasonConfig.SEASONS:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"无效的赛季: {season}"
+                return PlayerStatsResponse(
+                    name=player_id,
+                    rank=None,
+                    score=None,
+                    league=None,
+                    club_tag=None,
+                    update_time=datetime.now(),
+                    message="无效的赛季"
                 )
                 
             # 从赛季管理器获取数据
             data = await self.season_manager.get_player_data(player_id, season)
             if not data:
-                raise HTTPException(
-                    status_code=404,
-                    detail="未找到玩家数据"
+                return PlayerStatsResponse(
+                    name=player_id,
+                    rank=None,
+                    score=None,
+                    league=None,
+                    club_tag=None,
+                    update_time=datetime.now(),
+                    message="未找到玩家数据"
                 )
                 
             return PlayerStatsResponse(
@@ -101,11 +112,10 @@ class RankAPIPlugin(Plugin):
                 score=data.get("rankScore", data.get("fame", 0)),
                 league=data.get("league"),
                 club_tag=data.get("clubTag", ""),
-                update_time=datetime.now()
+                update_time=datetime.now(),
+                message="success"
             )
             
-        except HTTPException:
-            raise
         except Exception as e:
             bot_logger.error(f"获取玩家数据失败: {str(e)}")
             raise HTTPException(
