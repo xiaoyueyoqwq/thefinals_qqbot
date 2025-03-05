@@ -23,10 +23,12 @@ api:
   use_proxy: false  # 是否使用代理API
   # 标准API源
   standard:
-    base_url: "https://api.the-finals-leaderboard.com"
+    base_url: "https://api.the-finals-leaderboard.com/v1"
   # 代理API源
   proxy:
     base_url: ""
+  message: "欢迎使用 THE FINALS BOT API"  # API 欢迎消息
+  tv_ver: "1.0.0"  # 电视固件版本
 
 # API服务器配置
 server:
