@@ -1049,15 +1049,47 @@ def ensure_exit(timeout=5):
 
 def main():
     """主函数"""
-    FINAL_CLEANUP_TIMEOUT = 10  # 最终清理超时时间（秒）
-    
-    # 使用全局变量
-    global client, loop
-    
+    # 检查命令行参数
+    if len(sys.argv) > 1 and sys.argv[1] == '-local':
+        # 启动本地测试服务器
+        bot_logger.info("正在启动本地测试服务器...")
+        try:
+            # 检查必需的依赖是否已安装
+            try:
+                import aiohttp
+                import aiohttp_cors
+            except ImportError:
+                bot_logger.info("正在安装必需的依赖...")
+                import subprocess
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "aiohttp", "aiohttp_cors"])
+                bot_logger.info("依赖安装完成")
+                
+            from tools.command_tester import CommandTester
+            
+            # 创建并启动测试服务器
+            async def start_tester():
+                tester = CommandTester(host="127.0.0.1", port=8000)
+                await tester.start()
+                try:
+                    while True:
+                        await asyncio.sleep(1)
+                except KeyboardInterrupt:
+                    await tester.stop()
+            
+            asyncio.run(start_tester())
+            return
+        except ImportError:
+            bot_logger.error("无法导入command_tester模块，请确保已安装所需依赖")
+            return
+        except Exception as e:
+            bot_logger.error(f"启动本地测试服务器时出错: {str(e)}")
+            return
+            
     try:
-        # 过滤掉 SDK 的已知无害错误
-        import logging
-        logging.getLogger('asyncio').setLevel(logging.CRITICAL)
+        FINAL_CLEANUP_TIMEOUT = 10  # 最终清理超时时间（秒）
+        
+        # 使用全局变量
+        global client, loop
         
         # 创建新的event loop
         loop = asyncio.new_event_loop()
