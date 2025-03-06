@@ -78,7 +78,7 @@ class ClubQuery:
             f"\n⏰正在查询 {club_tag} 的俱乐部数据...\n"
             "━━━━━━━━━━━━━\n"
             "🤖你知道吗？"
-            f"[ {self._get_random_tip()} ]\n"
+            f"[ {self._get_random_tip()} ]"
         )
 
     def _format_leaderboard_info(self, leaderboards: List[dict]) -> str:
