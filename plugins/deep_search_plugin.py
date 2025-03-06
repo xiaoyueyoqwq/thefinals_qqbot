@@ -42,7 +42,7 @@ class DeepSearchPlugin(Plugin):
             on_cooldown, remaining = await self.deep_search.is_on_cooldown(user_id)
             if on_cooldown:
                 error_msg = (
-                    "💡 小贴士: 查询过于频繁\n"
+                    "\n❌ 查询过于频繁\n"
                     "━━━━━━━━━━━━━\n"
                     f"需要等待 {remaining} 秒才能再次查询\n"
                     "请稍后再试"
@@ -58,10 +58,9 @@ class DeepSearchPlugin(Plugin):
             
             if not is_valid:
                 error_msg = (
-                    "💡 小贴士: 查询参数无效\n"
+                    "\n❌ 查询参数无效\n"
                     "━━━━━━━━━━━━━\n"
-                    f"{error_message}\n"
-                    "请检查后重试"
+                    f"💡 小贴士: {error_message}\n"
                 )
                 await handler.send_text(error_msg)
                 return

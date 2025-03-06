@@ -120,10 +120,10 @@ class DeepSearch:
             return False, f"查询ID至少需要{self.min_query_length}个字符"
             
         # 检查是否包含至少三个英文字母
-        letters = re.findall(r'[a-zA-Z]', query)
+        letters = re.findall(r'[a-zA-Z0-9]', query)
         if len(letters) < 3:
             bot_logger.debug(f"[DeepSearch] 英文字母数量不足: {len(letters)}/3")
-            return False, "查询ID必须包含至少三个英文字母"
+            return False, "查询ID必须包含至少三个英文字母或数字"
         
         bot_logger.debug(f"[DeepSearch] 查询验证通过: {query}")
         return True, ""
@@ -296,11 +296,11 @@ class DeepSearch:
         Returns:
             str: 格式化后的消息
         """
-        message = f"🔎 深度搜索 | {query.replace('/ds', '').strip()}\n"
+        message = f"\n🔎 深度搜索 | {query.replace('/ds', '').strip()}\n"
         message += "━━━━━━━━━━━━━\n"
         
         if not results:
-            message += "😕 未找到匹配结果\n"
+            message += "\n❌ 未找到匹配结果\n"
             message += "━━━━━━━━━━━━━"
             return message
         
