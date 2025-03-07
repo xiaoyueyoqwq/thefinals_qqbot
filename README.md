@@ -12,6 +12,7 @@
 - `/bind <ID>` - 绑定游戏ID
 - `/unbind <ID>` - 解绑游戏ID
 - `/df` - 查询当前赛季底分
+- `/ds` - 深度查询玩家ID数据
 - `/ask <问题>` - 向神奇海螺提问
 - `/bird` - 查看 Flappy Bird 游戏排行榜
 - `/info` - 查看机器人状态
@@ -117,6 +118,16 @@ API_BASE_URL=API基础URL
 ## 开发
 
 本项目使用 Python 开发，欢迎贡献代码。
+
+### 本地调试
+
+你可以使用以下命令在本地启动调试模式：
+
+```bash
+python bot.py -local
+```
+
+在本地调试模式下，机器人将使用测试配置，方便开发和测试。
 
 ## 许可证
 本项目采用 [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh) 进行许可。

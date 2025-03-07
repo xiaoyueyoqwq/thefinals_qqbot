@@ -5,6 +5,9 @@ import re
 from utils.logger import bot_logger
 from utils.db import DatabaseManager, with_database
 from pathlib import Path
+import os
+import json
+import random
 from core.season import SeasonManager, SeasonConfig
 from difflib import SequenceMatcher
 
@@ -30,6 +33,9 @@ class DeepSearch:
         
         # 初始化赛季管理器
         self.season_manager = SeasonManager()
+
+        # 初始化小知识列表
+        self.tips = self._load_tips()
         
     async def start(self):
         """启动深度搜索服务"""
@@ -286,6 +292,45 @@ class DeepSearch:
             (user_id, query)
         )
     
+    def _load_tips(self) -> list:
+        """加载小知识数据"""
+        try:
+            tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "did_you_know.json")
+            bot_logger.debug(f"正在加载小知识文件: {tips_path}")
+            
+            # 确保data目录存在
+            os.makedirs(os.path.dirname(tips_path), exist_ok=True)
+            
+            with open(tips_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                tips = data.get("tips", [])
+                bot_logger.info(f"成功加载 {len(tips)} 条小知识")
+                return tips
+        except Exception as e:
+            bot_logger.error(f"加载小知识数据失败: {str(e)}")
+            return []
+
+    def _get_random_tip(self) -> str:
+        """获取随机小知识"""
+        if not self.tips:
+            return "暂无小知识"
+        return random.choice(self.tips)
+
+    def _format_loading_message(self, query: str) -> str:
+        """格式化加载提示消息
+        
+        Args:
+            query: 搜索查询
+            
+        Returns:
+            str: 格式化后的消息
+        """
+        message = f"\n⏰正在深度查询 {query.replace('/ds', '').strip()} 的玩家数据...\n"
+        message += "━━━━━━━━━━━━━\n"
+        message += "🤖你知道吗？\n"
+        message += f"[ {self._get_random_tip()} ]"
+        return message
+
     async def format_search_results(self, query: str, results: List[Dict[str, Any]]) -> str:
         """格式化搜索结果消息
         

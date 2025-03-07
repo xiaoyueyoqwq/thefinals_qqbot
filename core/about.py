@@ -41,6 +41,7 @@ class AboutUs:
                 "• /bind <ID> - 绑定游戏ID\n"
                 "• /unbind <ID> - 解绑游戏ID\n"
                 "• /df - 查询当前赛季底分\n"
+                "• /ds <ID> - 深度搜索\n"
                 "• /ask <问题> - 向神奇海螺提问\n"
                 "• /bird - 查看 Flappy Bird 排行榜\n"
                 "• /info - 查看机器人状态\n"

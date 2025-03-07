@@ -71,6 +71,10 @@ class DeepSearchPlugin(Plugin):
             # 记录搜索历史
             await self.deep_search.add_search_history(user_id, query)
             
+            # 显示加载消息
+            loading_message = self.deep_search._format_loading_message(query)
+            await handler.send_text(loading_message)
+            
             # 执行搜索
             results = await self.deep_search.search(query)
             
