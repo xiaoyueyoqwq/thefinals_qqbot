@@ -7,6 +7,7 @@ from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
 from core.rank import RankQuery  # 添加 RankQuery 导入
+from utils.translator import translator
 
 class ClubAPI(BaseAPI):
     """俱乐部API封装"""
@@ -91,7 +92,11 @@ class ClubQuery:
             season = board.get("leaderboard", "未知")
             rank = board.get("rank", "未知")
             value = board.get("totalValue", 0)
-            result.append(f"▎{season}: #{rank} (总分: {value:,})")
+            
+            # 使用翻译器翻译排行榜类型
+            translated_season = translator.translate_leaderboard_type(season)
+            
+            result.append(f"▎{translated_season}: #{rank} (总分: {value:,})")
             
         return "\n".join(result)
 
