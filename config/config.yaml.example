@@ -41,3 +41,8 @@ server:
 season:
   current: "s5"  # 当前赛季
   update_interval: 90  # 更新间隔(秒)
+
+# 翻译配置
+translation:
+  enabled: true  # 是否启用翻译功能
+  file: "data/translations.json"  # 翻译文件路径

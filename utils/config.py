@@ -47,6 +47,10 @@ class Settings:
     CURRENT_SEASON = _config.get("season", {}).get("current", "s5")  # 当前赛季
     UPDATE_INTERVAL = _config.get("season", {}).get("update_interval", 90)  # 更新间隔(秒)
     
+    # 翻译配置
+    TRANSLATION_ENABLED = _config.get("translation", {}).get("enabled", True)  # 是否启用翻译
+    TRANSLATION_FILE = _config.get("translation", {}).get("file", "data/translations.json")  # 翻译文件路径
+    
     @property
     def api_base_url(self) -> str:
         """返回当前使用的API基础URL"""
