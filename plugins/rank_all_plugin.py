@@ -30,16 +30,16 @@ class RankAllPlugin(Plugin):
                 "3. 如更改过ID请单独查询"
             ),
             "invalid_format": (
-                "\n❌ 玩家ID格式错误\n"
+                "\n❌ 请提供完整ID\n"
                 "━━━━━━━━━━━━━\n"
                 "🚀 正确格式:\n"
                 "- 玩家名#数字ID\n"
                 "- 例如: Playername#1234\n"
                 "━━━━━━━━━━━━━\n"
                 "💡 提示:\n"
-                "1. ID必须为完整ID\n"
-                "2. #号后必须是数字\n"
-                "3. 可以使用/bind绑定完整ID"
+                "1. 必须使用完整ID\n"
+                "2. 如更改过ID请单独查询\n"
+                "3. 可以使用 /bind 绑定ID"
             ),
             "query_failed": "\n⚠️ 查询失败，请稍后重试"
         }
