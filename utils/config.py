@@ -44,7 +44,7 @@ class Settings:
     SERVER_API_PORT = _config.get("server", {}).get("api", {}).get("port", 8000)
     
     # 赛季配置
-    CURRENT_SEASON = _config.get("season", {}).get("current", "s5")  # 当前赛季
+    CURRENT_SEASON = _config.get("season", {}).get("current", "s6")  # 当前赛季
     UPDATE_INTERVAL = _config.get("season", {}).get("update_interval", 90)  # 更新间隔(秒)
     
     # 翻译配置

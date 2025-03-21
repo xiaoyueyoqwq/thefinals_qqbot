@@ -36,15 +36,8 @@ class ClubPlugin(Plugin):
             
             # 提取实际的俱乐部标签
             club_tag = args.replace("/club", "").strip()
-            
-            # 确保club_tag不为空，再发送加载提示
-            if not club_tag:
-                # 如果标签为空，直接返回使用说明
-                result = await self.club_query.process_club_command()
-                await self.reply(handler, result)
-                return
-            
-            # 标签有效，发送加载提示消息
+                
+            # 先发送加载提示消息
             loading_msg = self.club_query._format_loading_message(club_tag)
             await self.reply(handler, loading_msg)
             

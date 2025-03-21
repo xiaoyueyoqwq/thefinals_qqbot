@@ -60,7 +60,7 @@ class RankAPIPlugin(Plugin):
 
 参数说明:
 - player_id: 玩家ID
-- season: 赛季(s1~s5)
+- season: 赛季(s1~s6)
 
 返回说明:
 1. 正常情况: 返回玩家的排位数据

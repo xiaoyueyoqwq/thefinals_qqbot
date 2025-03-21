@@ -3,6 +3,7 @@ import asyncio
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
+from core.season import SeasonManager
 
 class PowerShiftAPI(BaseAPI):
     """平台争霸API封装"""
@@ -10,6 +11,7 @@ class PowerShiftAPI(BaseAPI):
     def __init__(self):
         super().__init__(settings.api_base_url, timeout=10)
         self.platform = "crossplay"
+        self.season_manager = SeasonManager()
         # 支持的平台显示
         self.platforms = {
             "steam": "Steam",
@@ -25,7 +27,8 @@ class PowerShiftAPI(BaseAPI):
     async def get_player_stats(self, player_name: str) -> Optional[dict]:
         """查询玩家数据（支持模糊搜索）"""
         try:
-            url = f"/leaderboard/s5powershift/{self.platform}"
+            season = settings.CURRENT_SEASON
+            url = f"/v1/leaderboard/{season}powershift/{self.platform}"
             params = {"name": player_name}
             
             response = await self.get(url, params=params, headers=self.headers)

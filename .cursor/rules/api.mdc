@@ -1,0 +1,59 @@
+---
+description: --- description: API 相关代码的规范和注意事项，包括 BaseAPI 的正确导入路径和使用方法。 globs: ["**/api*.py", "**/df.py", "**/rank*.py", "**/world_tour.py", "**/powershift.py"] alwaysApply: false ---
+globs: 
+alwaysApply: false
+---
+# API 开发规范
+
+## BaseAPI 导入
+- 正确路径: `from utils.base_api import BaseAPI`
+- 错误路径: `from core.api import BaseAPI`
+
+## API 类继承结构
+```python
+from utils.base_api import BaseAPI
+
+class YourAPI(BaseAPI):
+    def __init__(self):
+        super().__init__(settings.api_base_url, timeout=10)
+        self.platform = "crossplay"  # 如果需要
+        self.headers = {
+            "Accept": "application/json",
+            "User-Agent": "TheFinals-Bot/1.0"
+        }
+```
+
+## 错误处理
+所有 API 调用都应该包含错误处理：
+```python
+try:
+    response = await self.get(endpoint, params=params)
+    return self.handle_response(response)
+except Exception as e:
+    bot_logger.error(f"API调用失败: {str(e)}")
+    return None
+```
+
+## 代理配置
+- 从 `settings` 获取代理配置
+- 不要硬编码代理设置
+
+## 缓存使用
+- 对于频繁调用的 GET 请求使用缓存
+- 通过 `use_cache=True` 参数启用缓存
+
+## 连接池管理
+- 使用 `get_client()` 上下文管理器获取客户端
+- 确保在程序退出时调用 `close_all_clients()`
+
+## 相关文件
+- @utils/base_api.py - BaseAPI 定义
+- @utils/config.py - API 配置
+- @core/api.py - API 路由和中间件
+
+## 注意事项
+1. 总是从 utils.base_api 导入 BaseAPI
+2. 使用 settings 获取配置，不要硬编码
+3. 实现适当的错误处理和重试机制
+4. 使用异步操作提高性能
+5. 保持日志记录的完整性 

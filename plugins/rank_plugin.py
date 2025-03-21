@@ -3,6 +3,7 @@ from utils.message_api import MessageType
 from utils.message_handler import MessageHandler
 from core.rank import RankQuery
 from core.bind import BindManager
+from core.season import SeasonManager, SeasonConfig
 from utils.logger import bot_logger
 import json
 import os
@@ -17,6 +18,7 @@ class RankPlugin(Plugin):
         super().__init__()
         self.rank_query = RankQuery()
         self.bind_manager = BindManager()
+        self.season_manager = SeasonManager()
         self.tips = self._load_tips()
         bot_logger.debug(f"[{self.name}] 初始化排名查询插件")
         
@@ -77,16 +79,16 @@ class RankPlugin(Plugin):
                         "━━━━━━━━━━━━━\n"
                         "💡 小贴士:\n"
                         "1. 可以使用 /bind 绑定ID\n"
-                        "2. 赛季可选: s1~s5\n"
+                        "2. 赛季可选: s1~s6\n"
                         "3. 需要输入完整ID"
                     ))
                     return
                 player_name = bound_id
-                season = "s5"  # 默认赛季
+                season = SeasonConfig.CURRENT_SEASON  # 默认赛季
             else:
                 args = parts[1].split()
                 if len(args) == 1:  # 只有一个参数
-                    if args[0].lower().startswith('s') and args[0].lower() in ["s1", "s2", "s3", "s4", "s5"]:
+                    if args[0].lower().startswith('s') and args[0].lower() in self.season_manager.get_all_seasons():
                         # 参数是赛季，使用绑定ID
                         if not bound_id:
                             await self.reply(handler, "\n❌ 请先绑定游戏ID或提供玩家ID")
@@ -96,7 +98,7 @@ class RankPlugin(Plugin):
                     else:
                         # 参数是玩家ID，使用默认赛季
                         player_name = args[0]
-                        season = "s5"
+                        season = SeasonConfig.CURRENT_SEASON
                 else:  # 有两个参数
                     player_name = args[0]
                     season = args[1].lower()

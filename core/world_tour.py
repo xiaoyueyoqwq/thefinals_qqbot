@@ -1,8 +1,9 @@
 from typing import Optional, Dict, List, Tuple
 import asyncio
 from utils.logger import bot_logger
-from utils.base_api import BaseAPI
 from utils.config import settings
+from utils.base_api import BaseAPI
+from core.season import SeasonManager
 
 class WorldTourAPI(BaseAPI):
     """世界巡回赛API封装"""
@@ -10,17 +11,28 @@ class WorldTourAPI(BaseAPI):
     def __init__(self):
         super().__init__(settings.api_base_url, timeout=10)
         self.platform = "crossplay"
+        self.season_manager = SeasonManager()
         # 支持的赛季列表
         self.seasons = {
-            "s3": ("🎮", "s3", "season 3"),
-            "s4": ("🎯", "s4", "season 4"),
-            "s5": ("🌟", "s5", "season 5")
+            season_id: (self._get_season_icon(season_id), season_id, f"season {season_id[1:]}")
+            for season_id in self.season_manager.get_all_seasons()
+            if season_id.startswith('s') and int(season_id[1:]) >= 3  # 只支持S3及以后的赛季
         }
         # 设置默认请求头
         self.headers = {
             "Accept": "application/json",
             "User-Agent": "TheFinals-Bot/1.0"
         }
+
+    def _get_season_icon(self, season_id: str) -> str:
+        """获取赛季图标"""
+        icons = {
+            "s3": "🎮",
+            "s4": "🎯",
+            "s5": "🌟",
+            "s6": "💫"
+        }
+        return icons.get(season_id, "🎮")
 
     async def get_player_stats(self, player_name: str, season: str) -> Optional[dict]:
         """查询玩家在指定赛季的数据"""
@@ -137,6 +149,10 @@ class WorldTourQuery:
     async def process_wt_command(self, player_name: str = None, season: str = None) -> str:
         """处理世界巡回赛查询命令"""
         if not player_name:
+            # 获取支持的赛季范围
+            supported_seasons = sorted(self.api.seasons.keys(), key=lambda x: int(x[1:]))
+            season_range = f"{supported_seasons[0]}~{supported_seasons[-1]}" if supported_seasons else "无可用赛季"
+            
             return (
                 "\n❌ 未提供玩家ID\n"
                 "━━━━━━━━━━━━━\n"
@@ -145,8 +161,8 @@ class WorldTourQuery:
                 "2. /wt 玩家ID 赛季\n"
                 "━━━━━━━━━━━━━\n"
                 "💡 小贴士:\n"
-                "1. 可以使用 /bind 绑定ID\n"
-                "2. 赛季可选: s3~s5\n"
+                f"1. 可以使用 /bind 绑定ID\n"
+                f"2. 赛季可选: {season_range}\n"
                 "3. 可尝试模糊搜索"
             )
 

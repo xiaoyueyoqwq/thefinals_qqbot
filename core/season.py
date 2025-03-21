@@ -34,7 +34,8 @@ class SeasonConfig:
         "s2": "Season 2",
         "s3": "Season 3",
         "s4": "Season 4",
-        "s5": "Season 5"
+        "s5": "Season 5",
+        "s6": "Season 6"
     }
     
     @classmethod
@@ -56,7 +57,7 @@ class SeasonConfig:
         return url
 
 class Season:
-    """当前赛季数据管理"""
+    """赛季数据管理"""
     
     def __init__(self, season_id: str, display_name: str, api: BaseAPI, cache: CacheManager, rotation: int = 60):
         bot_logger.info(f"[Season] 初始化赛季实例 - season_id: {season_id}, display_name: {display_name}")
@@ -67,25 +68,38 @@ class Season:
         self.rotation = rotation
         self._update_task = None
         self._stop_event = asyncio.Event()
-        self._force_stop = False  # 添加强制停止标志
+        self._force_stop = False
+        
+        # 判断是否需要持久化
+        self._is_current = SeasonConfig.is_current_season(season_id)
+        self._storage = cache if self._is_current else PersistenceManager()
         
         # 添加缺失的属性
         self.api_prefix = SeasonConfig.API_PREFIX
         self.cache_name = f"season_{season_id}"
-        self._cache = cache
         self.update_interval = rotation
         
-        bot_logger.info(f"[Season] 赛季实例初始化完成 - {season_id}, api_prefix: {self.api_prefix}, cache_name: {self.cache_name}")
+        bot_logger.info(f"[Season] 赛季实例初始化完成 - {season_id}, 存储方式: {'缓存' if self._is_current else '持久化'}")
         
     async def initialize(self) -> None:
         """初始化赛季数据"""
         try:
             bot_logger.info(f"[Season] 开始初始化赛季数据 - {self.season_id}")
             
-            # 注册缓存
-            bot_logger.info(f"[Season] 注册缓存 - cache_name: {self.cache_name}")
-            await self._cache.register_database(self.cache_name)
-            bot_logger.info(f"[Season] 缓存注册完成 - {self.cache_name}")
+            # 注册存储
+            if self._is_current:
+                await self._storage.register_database(self.cache_name)
+            else:
+                await self._storage.register_database(
+                    self.cache_name,
+                    tables={
+                        "player_data": {
+                            "player_name": "TEXT PRIMARY KEY",
+                            "data": "TEXT",
+                            "updated_at": "INTEGER"
+                        }
+                    }
+                )
             
             # 立即更新一次数据
             bot_logger.info(f"[Season] 初始化时立即更新一次数据")
@@ -130,10 +144,7 @@ class Season:
             bot_logger.info(f"[Season] 数据更新循环已停止 - {self.season_id}")
             
     async def _update_data(self) -> None:
-        """更新赛季数据
-        
-        从API获取数据并更新到缓存
-        """
+        """更新赛季数据"""
         try:
             start_time = datetime.now()
             bot_logger.info(f"[Season] 开始更新赛季 {self.season_id} 数据")
@@ -155,28 +166,43 @@ class Season:
                 bot_logger.warning(f"[Season] 未获取到玩家数据: {self.season_id}")
                 return
                 
-            # 2. 更新缓存
-            cache_data = {}
-            for player in players:
-                player_name = player.get("name", "").lower()
-                if player_name:
-                    cache_key = f"player_{player_name}"
-                    cache_data[cache_key] = json.dumps(player)
-            
-            await self._cache.batch_set_cache(
-                self.cache_name,
-                cache_data,
-                expire_seconds=self.update_interval * 2
-            )
-            
-            # 3. 更新top_players缓存
-            top_players = [p["name"] for p in players[:5]]
-            await self._cache.set_cache(
-                self.cache_name,
-                "top_players",
-                json.dumps(top_players),
-                expire_seconds=self.update_interval
-            )
+            # 2. 更新存储
+            if self._is_current:
+                # 使用缓存存储
+                cache_data = {}
+                for player in players:
+                    player_name = player.get("name", "").lower()
+                    if player_name:
+                        cache_key = f"player_{player_name}"
+                        cache_data[cache_key] = json.dumps(player)
+                
+                await self._storage.batch_set_cache(
+                    self.cache_name,
+                    cache_data,
+                    expire_seconds=self.update_interval * 2
+                )
+                
+                # 更新top_players缓存
+                top_players = [p["name"] for p in players[:5]]
+                await self._storage.set_cache(
+                    self.cache_name,
+                    "top_players",
+                    json.dumps(top_players),
+                    expire_seconds=self.update_interval
+                )
+            else:
+                # 使用持久化存储
+                operations = []
+                for player in players:
+                    player_name = player.get("name", "").lower()
+                    if player_name:
+                        operations.append((
+                            "INSERT OR REPLACE INTO player_data (player_name, data, updated_at) VALUES (?, ?, ?)",
+                            (player_name, json.dumps(player), int(datetime.now().timestamp()))
+                        ))
+                
+                if operations:
+                    await self._storage.execute_transaction(operations)
             
             duration = (datetime.now() - start_time).total_seconds()
             bot_logger.info(f"[Season] 赛季 {self.season_id} 数据更新完成, 耗时: {duration:.2f}秒")
@@ -185,33 +211,33 @@ class Season:
             bot_logger.error(f"[Season] 更新赛季 {self.season_id} 数据失败: {str(e)}")
             
     async def get_player_data(self, player_name: str) -> Optional[dict]:
-        """获取玩家数据
-        
-        Args:
-            player_name: 玩家ID
-            
-        Returns:
-            Optional[dict]: 玩家数据,如果未找到则返回None
-        """
+        """获取玩家数据"""
         try:
-            # 先尝试精确匹配
-            bot_logger.info(f"[Season] 尝试精确匹配玩家数据 - {player_name}")
-            cache_key = f"player_{player_name.lower()}"
-            cached_data = await self._cache.get_cache(self.cache_name, cache_key)
+            player_name = player_name.lower()
             
-            # 如果精确匹配没找到，尝试模糊匹配
-            if not cached_data:
-                bot_logger.info(f"[Season] 精确匹配未找到，尝试模糊匹配 - {player_name}")
-                # 获取所有有效的缓存数据
-                all_data = await self._cache.get_all_valid(self.cache_name)
-                # 过滤出包含玩家名称的键
-                matched_keys = [k for k in all_data.keys() if player_name.lower() in k.lower()]
+            if self._is_current:
+                # 从缓存获取数据
+                cache_key = f"player_{player_name}"
+                cached_data = await self._storage.get_cache(self.cache_name, cache_key)
                 
-                if matched_keys:
-                    # 使用第一个匹配的键
-                    first_match = matched_keys[0]
-                    bot_logger.info(f"[Season] 找到模糊匹配 - {first_match}")
-                    cached_data = all_data[first_match]
+                if not cached_data:
+                    # 尝试模糊匹配
+                    all_data = await self._storage.get_all_valid(self.cache_name)
+                    matched_keys = [k for k in all_data.keys() if player_name in k.lower()]
+                    if matched_keys:
+                        cached_data = all_data[matched_keys[0]]
+            else:
+                # 从持久化存储获取数据
+                sql = "SELECT data FROM player_data WHERE player_name = ?"
+                row = await self._storage.fetch_one(self.cache_name, sql, (player_name,))
+                if row:
+                    cached_data = row['data']
+                else:
+                    # 尝试模糊匹配
+                    sql = "SELECT data FROM player_data WHERE player_name LIKE ?"
+                    rows = await self._storage.fetch_all(self.cache_name, sql, (f"%{player_name}%",))
+                    if rows:
+                        cached_data = rows[0]['data']
             
             if not cached_data:
                 bot_logger.warning(f"[Season] 未找到玩家数据 - {player_name}")
@@ -222,7 +248,6 @@ class Season:
                 return json.loads(cached_data)
             except json.JSONDecodeError as e:
                 bot_logger.error(f"[Season] JSON解析失败: {str(e)}")
-                await self._cache.delete_cache(self.cache_name, cache_key)
                 return None
                 
         except Exception as e:
@@ -241,7 +266,7 @@ class Season:
         """
         try:
             # 只从缓存获取数据
-            cached_data = await self._cache.get_cache(self.cache_name, "top_players")
+            cached_data = await self._storage.get_cache(self.cache_name, "top_players")
             if cached_data:
                 try:
                     return json.loads(cached_data)[:limit]
@@ -277,7 +302,7 @@ class Season:
             bot_logger.info(f"[Season] 开始获取所有玩家数据 - {self.season_id}")
             
             # 从缓存获取所有有效数据
-            all_data = await self._cache.get_all_valid(self.cache_name)
+            all_data = await self._storage.get_all_valid(self.cache_name)
             if not all_data:
                 bot_logger.warning(f"[Season] 缓存中没有玩家数据 - {self.season_id}")
                 return []
@@ -658,9 +683,7 @@ class SeasonManager:
         if not season:
             bot_logger.error(f"[SeasonManager] 未找到赛季: {season_id}")
             return None
-            
-        # 直接使用 Season/HistorySeason 实例的 get_player_data 方法
-        # 这些方法已经实现了模糊匹配功能
+
         return await season.get_player_data(player_name)
         
     async def get_top_players(self, season_id: str, limit: int = 5) -> List[str]:
@@ -679,7 +702,7 @@ class SeasonManager:
             
         # 根据赛季类型使用不同的数据获取方式
         if SeasonConfig.is_current_season(season_id):
-            # S5: 使用缓存
+            # 当前赛季使用缓存
             cache_name = f"season_{season_id}"
             cached_data = await self.cache.get_cache(cache_name, "top_players")
             if cached_data:

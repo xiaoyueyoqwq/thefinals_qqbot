@@ -7,7 +7,8 @@ from utils.logger import bot_logger
 from utils.db import DatabaseManager, with_database, DatabaseError
 from typing import Dict, Any, List, Optional
 from utils.config import settings
-from core.season import SeasonManager, SeasonConfig
+from core.season import SeasonManager
+from utils.base_api import BaseAPI
 
 class DFQuery:
     """底分查询功能类"""
@@ -123,7 +124,7 @@ class DFQuery:
         """获取并更新排行榜数据"""
         try:
             # 获取当前赛季数据
-            season = await self.season_manager.get_season(SeasonConfig.CURRENT_SEASON)
+            season = await self.season_manager.get_season(settings.CURRENT_SEASON)
             if not season:
                 raise Exception("无法获取当前赛季")
                 
@@ -407,7 +408,7 @@ class DFQuery:
         update_time = datetime.now()
             
         message = [
-            "\n✨s5底分查询 | THE FINALS",
+            f"\n✨{settings.CURRENT_SEASON}底分查询 | THE FINALS",
             f"📊 更新时间: {update_time.strftime('%H:%M:%S')}",
             ""
         ]
@@ -554,3 +555,29 @@ class DFQuery:
                 await asyncio.sleep(300)
                 
         bot_logger.debug("[DFQuery] 每日数据保存任务已停止")
+
+class DFApi:
+    def __init__(self):
+        self.api = BaseAPI()
+        self.season_manager = SeasonManager()
+        self.supported_seasons = self._get_supported_seasons()
+
+    def _get_supported_seasons(self) -> list:
+        """获取支持的赛季列表"""
+        all_seasons = self.season_manager.get_all_seasons()
+        return [s for s in all_seasons if s.startswith('s') and int(s[1:]) >= 3]
+
+    async def get_df(self, player_name: str, season: str = None) -> dict:
+        """获取玩家数据"""
+        season = season or settings.CURRENT_SEASON
+        if season not in self.supported_seasons:
+            raise ValueError(f"不支持的赛季: {season}")
+
+        try:
+            response = await self.api.get_df(player_name, season)
+            if not response:
+                return None
+            return response
+        except Exception as e:
+            bot_logger.error(f"获取数据失败: {e}")
+            return None

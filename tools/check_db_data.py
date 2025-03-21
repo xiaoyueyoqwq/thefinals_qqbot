@@ -7,6 +7,11 @@ from utils.db import DatabaseManager
 from pathlib import Path
 from utils.logger import bot_logger
 
+"""
+数据库数据检查工具
+支持赛季: s1~s6
+"""
+
 async def check_database():
     try:
         # 连接数据库

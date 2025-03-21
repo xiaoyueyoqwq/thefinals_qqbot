@@ -14,7 +14,7 @@ class StatusMonitor:
         self.api_endpoints = {
             "Embark官网": "https://id.embark.games",
             "排行榜API": settings.api_base_url,
-            "小电视API": "https://api.moliatopia.icu:8443"
+            "Moliatopia API": "https://api.moliatopia.icu:8443"
         }
         
     def get_hardware_status(self) -> dict:

@@ -6,6 +6,11 @@ import asyncio
 from utils.db import DatabaseManager
 from pathlib import Path
 
+"""
+数据库检查工具
+支持赛季: s1~s6
+"""
+
 async def check_database():
     # 获取所有赛季数据库
     seasons_db_path = Path("data/persistence")

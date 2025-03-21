@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Dict, Optional, Any
+import re
+from typing import Dict, Optional, Any, List
 from utils.config import settings
 
 class Translator:
@@ -85,6 +86,31 @@ class Translator:
             return default if default is not None else key
             
         category_translations = self.translations.get(category, {})
+        
+        # 检查是否有正则模式
+        if "patterns" in category_translations:
+            patterns = category_translations["patterns"]
+            for pattern_info in patterns:
+                pattern = pattern_info["pattern"]
+                template = pattern_info["template"]
+                match = re.match(pattern, key)
+                if match:
+                    # 使用所有捕获组作为模板参数
+                    groups = match.groups()
+                    named_groups = match.groupdict()
+                    
+                    # 优先使用命名捕获组
+                    if named_groups:
+                        return template.format(**named_groups)
+                    # 其次使用位置捕获组
+                    elif groups:
+                        # 创建位置参数字典 {1: groups[0], 2: groups[1], ...}
+                        params = {str(i+1): v for i, v in enumerate(groups)}
+                        return template.format(**params)
+                    # 如果没有捕获组但模式匹配，直接返回模板
+                    return template
+            
+        # 如果没有匹配的正则模式，返回默认值或原键
         return category_translations.get(key, default if default is not None else key)
     
     def translate_dict(self, data: Dict[str, Any], category: str, keys_to_translate: Optional[list] = None, force: bool = False) -> Dict[str, Any]:
