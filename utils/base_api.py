@@ -83,19 +83,18 @@ class BaseAPI:
                     
                     bot_logger.debug(f"[BaseAPI] 创建新的HTTP客户端, 代理: {proxy_url}")
                     # 创建客户端
-                    proxies = None
+                    transport = None
                     if proxy_url:
-                        proxies = proxy_url
+                        transport = httpx.HTTPTransport(proxy=proxy_url, verify=False)
                     
                     client = httpx.AsyncClient(
                         timeout=30,
-                        proxies=proxies,
+                        transport=transport,
                         limits=httpx.Limits(
                             max_keepalive_connections=20,
                             max_connections=100,
                             keepalive_expiry=30
-                        ),
-                        verify=False  # 禁用SSL验证,避免代理证书问题
+                        )
                     )
                     cls._client_pool.append(client)
                     bot_logger.debug("[BaseAPI] HTTP客户端创建成功")

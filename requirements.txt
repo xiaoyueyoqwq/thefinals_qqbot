@@ -4,7 +4,7 @@ asyncio
 colorama
 croniter
 fastapi
-httpx
+httpx==0.24.1
 jinja2
 pillow
 playwright

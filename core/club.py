@@ -93,6 +93,10 @@ class ClubQuery:
             rank = board.get("rank", "未知")
             value = board.get("totalValue", 0)
             
+            # 检查赛季是否匹配当前赛季
+            if not season.startswith(settings.CURRENT_SEASON):
+                continue
+            
             # 使用翻译器翻译排行榜类型
             translated_season = translator.translate_leaderboard_type(season)
             
