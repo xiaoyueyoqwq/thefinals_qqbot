@@ -44,7 +44,7 @@ class DeepSearchPlugin(Plugin):
                 error_msg = (
                     "\n❌ 查询过于频繁\n"
                     "━━━━━━━━━━━━━\n"
-                    f"需要等待 {remaining} 秒才能再次查询\n"
+                    f"需要等待 {remaining} 秒才能再次查询"
                     "请稍后再试"
                 )
                 await handler.send_text(error_msg)
@@ -60,7 +60,7 @@ class DeepSearchPlugin(Plugin):
                 error_msg = (
                     "\n❌ 查询参数无效\n"
                     "━━━━━━━━━━━━━\n"
-                    f"💡 小贴士: {error_message}\n"
+                    f"💡 小贴士: {error_message}"
                 )
                 await handler.send_text(error_msg)
                 return
@@ -84,7 +84,7 @@ class DeepSearchPlugin(Plugin):
             
         except Exception as e:
             error_msg = (
-                "💡 小贴士: 搜索失败\n"
+                "\n💡 小贴士: 搜索失败\n"
                 "━━━━━━━━━━━━━\n"
                 "可能的原因:\n"
                 "1. 服务器连接超时\n"
