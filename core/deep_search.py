@@ -228,6 +228,7 @@ class DeepSearch:
                         "season": SeasonConfig.CURRENT_SEASON.upper(),
                         "game_rank": player_data.get("rank"),
                         "score": player_data.get("rankScore", player_data.get("fame", 0)),
+                        "club_tag": player_data.get("clubTag", ""),  # 添加俱乐部标签
                         "platforms": {
                             "steam": player_data.get("steamName", ""),
                             "psn": player_data.get("psnName", ""),
@@ -345,7 +346,12 @@ class DeepSearch:
         message += "━━━━━━━━━━━━━\n"
         
         if not results:
-            message += "\n❌ 未找到匹配结果\n"
+            message += "\n❌ 未查询到对应的玩家信息\n"
+            message += "━━━━━━━━━━━━━\n"
+            message += "💡 小贴士:\n"
+            message += "1. 请检查ID是否正确\n"
+            message += "2. 尝试使用不同的搜索关键词\n"
+            message += "3. 该玩家可能不在当前赛季排行榜中\n"
             message += "━━━━━━━━━━━━━"
             return message
         
@@ -354,7 +360,10 @@ class DeepSearch:
         for result in results:
             player_id = result["id"]
             score = result.get("score", 0)
-            message += f"▎{player_id} [{score}]\n"
+            club_tag = result.get("club_tag", "")
+            # 如果有俱乐部标签，则显示
+            player_display = f"[{club_tag}]{player_id}" if club_tag else player_id
+            message += f"▎{player_display} [{score}]\n"
         
         message += "━━━━━━━━━━━━━"
         return message
