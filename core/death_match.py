@@ -5,8 +5,8 @@ from utils.base_api import BaseAPI
 from utils.config import settings
 from core.season import SeasonConfig
 
-class QuickCashAPI(BaseAPI):
-    """快速提现API封装"""
+class DeathMatchAPI(BaseAPI):
+    """死亡竞赛API封装"""
     
     def __init__(self):
         super().__init__("https://api.the-finals-leaderboard.com", timeout=10)
@@ -16,8 +16,8 @@ class QuickCashAPI(BaseAPI):
         }
         self.platform = "crossplay"
         
-    async def get_quick_cash_data(self, player_name: str, season: str = None) -> Optional[dict]:
-        """获取玩家快速提现数据
+    async def get_death_match_data(self, player_name: str, season: str = None) -> Optional[dict]:
+        """获取玩家死亡竞赛数据
         
         Args:
             player_name: 玩家名称
@@ -31,24 +31,24 @@ class QuickCashAPI(BaseAPI):
             season = season or SeasonConfig.CURRENT_SEASON
             
             # 构建API URL
-            url = f"/v1/leaderboard/{season}quickcash/{self.platform}"
+            url = f"/v1/leaderboard/{season}teamdeathmatch/{self.platform}"
             
             # 发送请求
             response = await self.get(url, headers=self.headers)
             if not response or response.status_code != 200:
-                bot_logger.error(f"[QuickCashAPI] API请求失败: {season}")
+                bot_logger.error(f"[DeathMatchAPI] API请求失败: {season}")
                 return None
                 
             # 处理响应数据
             data = response.json()
             if not isinstance(data, dict) or "data" not in data:
-                bot_logger.error(f"[QuickCashAPI] API返回数据格式错误: {season}")
+                bot_logger.error(f"[DeathMatchAPI] API返回数据格式错误: {season}")
                 return None
                 
             # 获取玩家列表
             players = data.get("data", [])
             if not isinstance(players, list):
-                bot_logger.error(f"[QuickCashAPI] API返回数据格式错误: {season}")
+                bot_logger.error(f"[DeathMatchAPI] API返回数据格式错误: {season}")
                 return None
                 
             # 查找玩家数据（支持模糊搜索）
@@ -66,11 +66,11 @@ class QuickCashAPI(BaseAPI):
                 if any(player_name in field for field in name_fields):
                     return player
                     
-            bot_logger.warning(f"[QuickCashAPI] 未找到玩家数据: {player_name}")
+            bot_logger.warning(f"[DeathMatchAPI] 未找到玩家数据: {player_name}")
             return None
             
         except Exception as e:
-            bot_logger.error(f"[QuickCashAPI] 获取快速提现数据失败: {str(e)}")
+            bot_logger.error(f"[DeathMatchAPI] 获取死亡竞赛数据失败: {str(e)}")
             bot_logger.exception(e)
             return None
             
@@ -119,7 +119,7 @@ class QuickCashAPI(BaseAPI):
             
         # 格式化消息
         return (
-            f"\n💰 {SeasonConfig.CURRENT_SEASON}快速提现 | THE FINALS\n"
+            f"\n💰 {SeasonConfig.CURRENT_SEASON}死亡竞赛 | THE FINALS\n"
             f"━━━━━━━━━━━━━\n"
             f"📋 玩家: {name}{club_tag}\n"
             f"🖥️ 平台: {platform}\n"

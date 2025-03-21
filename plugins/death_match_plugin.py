@@ -1,5 +1,5 @@
 from core.plugin import Plugin, on_command
-from core.quick_cash import QuickCashAPI
+from core.death_match import DeathMatchAPI
 from utils.logger import bot_logger
 from utils.config import settings
 from typing import Optional
@@ -8,17 +8,17 @@ import os
 import json
 from core.season import SeasonConfig
 
-class QuickCashPlugin(Plugin):
-    """快速提现查询插件"""
+class DeathMatchPlugin(Plugin):
+    """死亡竞赛查询插件"""
     
     # 在类级别定义属性
-    name = "QuickCashPlugin"
-    description = "查询快速提现数据"
+    name = "DeathMatchPlugin"
+    description = "查询死亡竞赛数据"
     version = "1.0.0"
     
     def __init__(self):
         super().__init__()  # 调用父类初始化
-        self.api = QuickCashAPI()
+        self.api = DeathMatchAPI()
         self.tips = self._load_tips()
         
     def _load_tips(self) -> list:
@@ -50,16 +50,16 @@ class QuickCashPlugin(Plugin):
         """格式化加载提示消息"""
         season = season or settings.CURRENT_SEASON
         message = [
-            f"\n⏰正在查询 {player_name} 的 {season.lower()} 赛季快速提现数据...",
+            f"\n⏰正在查询 {player_name} 的 {season.lower()} 赛季死亡竞赛数据...",
             "━━━━━━━━━━━━━",  # 分割线
             "🤖你知道吗？",
             f"[ {self._get_random_tip()} ]"
         ]
         return "\n".join(message)
         
-    @on_command("qc", "查询快速提现数据")
-    async def handle_quick_cash_command(self, handler, content: str):
-        """处理快速提现查询命令
+    @on_command("dm", "查询死亡竞赛数据")
+    async def handle_death_match_command(self, handler, content: str):
+        """处理死亡竞赛查询命令
         
         参数:
             handler: 消息处理器
@@ -78,31 +78,31 @@ class QuickCashPlugin(Plugin):
                 return
             
             # 提取实际的玩家ID
-            player_name = args.replace("/qc", "").strip()
+            player_name = args.replace("/dm", "").strip()
             
             # 发送加载提示
             loading_message = self._format_loading_message(player_name)
             await self.reply(handler, loading_message)
             
             # 获取数据
-            data = await self.api.get_quick_cash_data(player_name)
+            data = await self.api.get_death_match_data(player_name)
             
             # 格式化并发送结果
             result = self.api.format_player_data(data)
             await self.reply(handler, result)
             
         except Exception as e:
-            error_msg = f"处理快速提现查询命令时出错: {str(e)}"
+            error_msg = f"处理死亡竞赛查询命令时出错: {str(e)}"
             bot_logger.error(error_msg)
             await self.reply(handler, "\n⚠️ 命令处理过程中发生错误，请稍后重试")
             
     def _get_usage_message(self) -> str:
         """获取使用说明消息"""
         return (
-            "\n💡 快速提现查询使用说明\n"
+            "\n💡 死亡竞赛查询使用说明\n"
             "━━━━━━━━━━━━━\n"
-            "▎用法: /qc <玩家ID>\n"
-            "▎示例: /qc BlueWarrior\n"
+            "▎用法: /dm <玩家ID>\n"
+            "▎示例: /dm BlueWarrior\n"
             "━━━━━━━━━━━━━\n"
             "💡 提示:\n"
             "1. 支持模糊搜索\n"
