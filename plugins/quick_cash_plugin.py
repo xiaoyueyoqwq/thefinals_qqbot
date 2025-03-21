@@ -7,6 +7,7 @@ import random
 import os
 import json
 from core.season import SeasonConfig
+from core.bind import BindManager
 
 class QuickCashPlugin(Plugin):
     """快速提现查询插件"""
@@ -19,6 +20,7 @@ class QuickCashPlugin(Plugin):
     def __init__(self):
         super().__init__()  # 调用父类初始化
         self.api = QuickCashAPI()
+        self.bind_manager = BindManager()
         self.tips = self._load_tips()
         
     def _load_tips(self) -> list:
@@ -80,6 +82,25 @@ class QuickCashPlugin(Plugin):
             # 提取实际的玩家ID
             player_name = args.replace("/qc", "").strip()
             
+            # 检查用户是否绑定了embark id
+            bound_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
+            
+            if bound_id:
+                # 如果已绑定，使用绑定的embark id
+                player_name = bound_id
+                bot_logger.info(f"[{self.name}] 使用绑定的embark id: {player_name}")
+            elif not player_name:
+                # 如果没有绑定且没有提供ID，返回错误信息
+                await self.reply(handler, (
+                    "\n⚠️ 未提供玩家ID\n"
+                    "━━━━━━━━━━━━━\n"
+                    "💡 提示:\n"
+                    "1. 请使用 /bind 绑定你的embark id\n"
+                    "2. 或直接输入要查询的玩家ID\n"
+                    "━━━━━━━━━━━━━"
+                ))
+                return
+            
             # 发送加载提示
             loading_message = self._format_loading_message(player_name)
             await self.reply(handler, loading_message)
@@ -107,6 +128,6 @@ class QuickCashPlugin(Plugin):
             "💡 提示:\n"
             "1. 支持模糊搜索\n"
             "2. 不区分大小写\n"
-            "3. 支持Steam/PSN/Xbox玩家\n"
+            "3. 绑定ID后可直接查询\n"
             "━━━━━━━━━━━━━"
         ) 
