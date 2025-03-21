@@ -89,7 +89,7 @@ class BaseAPI:
                     
                     client = httpx.AsyncClient(
                         timeout=30,
-                        proxy=proxies,
+                        proxies=proxies,
                         limits=httpx.Limits(
                             max_keepalive_connections=20,
                             max_connections=100,

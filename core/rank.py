@@ -142,7 +142,8 @@ class RankQuery:
             "s2": "../images/seasons/s2.png",
             "s3": "../images/seasons/s3.png",
             "s4": "../images/seasons/s4.png",
-            "s5": "../images/seasons/s5.png"
+            "s5": "../images/seasons/s5.png",
+            "s6": "../images/seasons/s6.jpg"
         }
         
         # 段位图标映射表
@@ -312,7 +313,7 @@ class RankQuery:
             rank_trend, rank_color = self._get_rank_trend(rank_change)
             
             # 获取赛季背景
-            background = self.season_backgrounds.get(season, "../images/seasons/s5.png")
+            background = self.season_backgrounds.get(season, f"../images/seasons/{SeasonConfig.CURRENT_SEASON}.png")
             
             return {
                 "player_name": player_name,

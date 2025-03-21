@@ -23,12 +23,10 @@ api:
   use_proxy: false  # 是否使用代理API
   # 标准API源
   standard:
-    base_url: "https://api.the-finals-leaderboard.com/v1"
+    base_url: "https://api.the-finals-leaderboard.com"
   # 代理API源
   proxy:
-    base_url: ""
-  message: "欢迎使用 THE FINALS BOT API"  # API 欢迎消息
-  tv_ver: "1.0.0"  # 电视固件版本
+    base_url: "https://thefinals-api.sdjz.wiki"
 
 # API服务器配置
 server:
@@ -39,10 +37,10 @@ server:
 
 # 赛季配置
 season:
-  current: "s5"  # 当前赛季
+  current: "s6"  # 当前赛季
   update_interval: 90  # 更新间隔(秒)
 
 # 翻译配置
 translation:
-  enabled: true  # 是否启用翻译功能
+  enabled: true  # 是否启用翻译
   file: "data/translations.json"  # 翻译文件路径

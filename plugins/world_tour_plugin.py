@@ -2,11 +2,13 @@ from core.plugin import Plugin, on_command, on_keyword, on_regex, Event, EventTy
 from utils.message_handler import MessageHandler
 from core.world_tour import WorldTourQuery
 from core.bind import BindManager
+from core.season import SeasonManager
 from utils.logger import bot_logger
 import re
 import os
 import json
 import random
+from utils.config import settings
 
 class WorldTourPlugin(Plugin):
     """世界巡回赛查询插件"""
@@ -15,6 +17,7 @@ class WorldTourPlugin(Plugin):
         super().__init__()
         self.world_tour_query = WorldTourQuery()
         self.bind_manager = BindManager()
+        self.season_manager = SeasonManager()
         self.tips = self._load_tips()
         self._messages = {
             "not_found": (
@@ -26,7 +29,7 @@ class WorldTourPlugin(Plugin):
                 "━━━━━━━━━━━━━\n"
                 "💡 小贴士:\n"
                 "1. 可以使用 /bind 绑定ID\n"
-                "2. 赛季可选: s3~s5\n"
+                f"2. 赛季可选: s3~{settings.CURRENT_SEASON}\n"
                 "3. 可尝试模糊搜索"
             ),
             "query_failed": "\n⚠️ 查询失败，请稍后重试",
@@ -59,8 +62,9 @@ class WorldTourPlugin(Plugin):
             return "暂无小知识"
         return random.choice(self.tips)
 
-    def _format_loading_message(self, player_name: str, season: str = "s5") -> str:
+    def _format_loading_message(self, player_name: str, season: str = None) -> str:
         """格式化加载提示消息"""
+        season = season or settings.CURRENT_SEASON
         message = [
             f"\n⏰正在查询 {player_name} 的 {season.lower()} 赛季世界巡回赛数据...",
             "━━━━━━━━━━━━━",  # 分割线
@@ -85,11 +89,11 @@ class WorldTourPlugin(Plugin):
                     await self.reply(handler, self._messages["not_found"])
                     return
                 player_name = bound_id
-                season = "s5"  # 默认赛季
+                season = settings.CURRENT_SEASON  # 默认赛季
             else:
                 args = parts[1].split()
                 if len(args) == 1:  # 只有一个参数
-                    if args[0].lower().startswith('s') and args[0].lower() in ["s3", "s4", "s5"]:
+                    if args[0].lower().startswith('s') and args[0].lower() in self.season_manager.get_all_seasons():
                         # 参数是赛季，使用绑定ID
                         if not bound_id:
                             await self.reply(handler, "\n❌ 请先绑定游戏ID或提供玩家ID")
@@ -99,10 +103,10 @@ class WorldTourPlugin(Plugin):
                     else:
                         # 参数是玩家ID
                         player_name = args[0]
-                        season = "s5"  # 默认赛季
+                        season = settings.CURRENT_SEASON  # 默认赛季
                 else:  # 有两个参数，第一个是ID，第二个是赛季
                     player_name = args[0]
-                    season = args[1].lower() if args[1].lower() in ["s3", "s4", "s5"] else "s5"
+                    season = args[1].lower() if args[1].lower() in self.season_manager.get_all_seasons() else settings.CURRENT_SEASON
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
