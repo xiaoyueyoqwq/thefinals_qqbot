@@ -44,6 +44,8 @@ class AboutUs:
                 "• /ds <ID> - 深度搜索\n"
                 "• /ask <问题> - 向神奇海螺提问\n"
                 "• /bird - 查看 Flappy Bird 排行榜\n"
+                "• /qc <ID> - 查询快速提现数据\n"
+                "• /dm <ID> - 查询死亡竞赛数据\n"
                 "• /info - 查看机器人状态\n"
                 "• /about - 关于我们\n\n"
                 "🔧 使用说明:\n"
