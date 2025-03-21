@@ -1,0 +1,129 @@
+---
+description: --- description: 消息格式规范与建议，用于保持THE FINALS QQ机器人消息的一致性和可读性 globs: ["plugins/*.py", "core/*.py", "utils/message*.py"] alwaysApply: true ---
+globs: 
+alwaysApply: false
+---
+# 消息格式规范与建议
+
+## 消息格式的一般规则
+
+1. 消息应使用数组+join形式构建，便于修改和维护：
+```python
+message = [
+    "第一行内容",
+    "第二行内容",
+    "第三行内容"
+]
+return "\n".join(message)
+```
+
+2. 消息头部应包含表情符号，增强视觉识别度
+
+3. 分隔线格式统一使用：
+```
+"━━━━━━━━━━━━━"
+```
+
+4. 消息尾部可以添加额外信息，例如小贴士
+
+## 加载中的消息格式
+
+```python
+def _format_loading_message(self, player_name: str, season: str = None) -> str:
+    """格式化加载提示消息"""
+    season = season or settings.CURRENT_SEASON
+    message = [
+        f"\n⏰正在查询 {player_name} 的 {season.lower()} 赛季数据...",
+        "━━━━━━━━━━━━━",  # 分割线
+        "🤖你知道吗？",
+        f"[ {self._get_random_tip()} ]"
+    ]
+    return "\n".join(message)
+```
+
+## 查询结果的消息格式
+
+```python
+def format_result_message(self, data: Dict[str, Any]) -> str:
+    """格式化结果消息"""
+    if not data:
+        return "⚠️ 获取数据失败"
+        
+    # 获取当前时间作为更新时间
+    update_time = datetime.now()
+        
+    message = [
+        f"\n✨{settings.CURRENT_SEASON}数据查询 | THE FINALS",
+        f"📊 更新时间: {update_time.strftime('%H:%M:%S')}",
+        ""
+    ]
+    
+    # 添加数据内容
+    message.extend([
+        f"▎🏆 排名: {data['rank']}",
+        f"▎👤 玩家 ID: {data['player_id']}",
+        f"▎💯 得分: {data['score']:,}"
+    ])
+    
+    # 添加结尾
+    message.append("━━━━━━━━━━━━━")
+    
+    return "\n".join(message)
+```
+
+## 错误消息格式
+
+错误消息统一存储在`self._messages`字典中：
+
+```python
+self._messages = {
+    "not_found": "\n❌ 玩家未找到\n请检查玩家ID是否正确，或尝试使用/bind命令绑定ID",
+    "query_failed": "\n⚠️ 查询失败，请稍后重试",
+    "invalid_format": "\n❌ 格式错误\n正确格式：/命令 玩家ID [可选参数]"
+}
+```
+
+## 帮助消息格式
+
+```python
+help_message = (
+    "\n❌ 未提供玩家ID\n"
+    "━━━━━━━━━━━━━\n"
+    "✅ 正确用法:\n"
+    "1. /命令 玩家ID\n"
+    "2. /命令 玩家ID 参数\n"
+    "━━━━━━━━━━━━━\n"
+    "💡 小贴士:\n"
+    "1. 可以使用 /bind 绑定ID\n"
+    "2. 参数可选: xxx~xxx\n"
+    "3. 可尝试模糊搜索"
+)
+```
+
+## 消息表情符号使用建议
+
+- ✨: 标题/主要内容
+- 📊: 统计数据/更新时间
+- 🏆: 排名/成就
+- 👤: 玩家信息
+- 💯: 分数/评分
+- ⏰: 加载中/等待
+- ❌: 错误/失败
+- ⚠️: 警告/注意
+- 💡: 提示/小贴士
+- 🤖: 机器人信息
+- 📈: 上升/增加
+- 📉: 下降/减少
+- ➖: 持平/无变化
+- ▎: 列表项的开头
+- 🎮/🎯/🌟/💫: 不同赛季的图标
+
+## 最佳实践
+
+1. 保持消息格式的一致性，同类消息使用相同的模板
+2. 避免硬编码赛季值，使用`settings.CURRENT_SEASON`
+3. 对于数字格式化，使用千位分隔符：`{value:,}`
+4. 消息内容不要过长，保持简洁
+5. 使用表情符号增强可读性，但不要过度使用
+6. 对于较长的消息，使用分隔线分隔不同部分
+7. 所有用户提示应该清晰明了，包含示例 
