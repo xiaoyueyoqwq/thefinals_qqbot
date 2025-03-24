@@ -24,6 +24,14 @@
       {
         "pattern": "^(?P<season>s\\d+)powershift$",
         "template": "{season}争霸"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)teamdeathmatch$",
+        "template": "{season}死斗"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)terminalattack$",
+        "template": "{season}爆破"
       }
     ]
   }
