@@ -24,6 +24,7 @@ from pathlib import Path
 import platform
 import os
 import aiosqlite
+from .core_helper import CoreHelper, PluginValidationError
 
 # 预定义事件类型
 class EventType:
@@ -336,31 +337,40 @@ class Plugin(ABC):
     is_api_plugin: bool = False   # 是否为纯API插件
 
     def __init__(self, **kwargs):
-        if not self.is_api_plugin:
-            self.commands: Dict[str, Dict[str, Any]] = {}  # 命令映射表，包含描述和隐藏标志
-        self.enabled: bool = True  # 插件是否启用
-        self._event_handlers: Dict[str, Set[Callable]] = {}  # 事件处理器映射
-        self._event_handlers_lock = Lock()  # 锁用于_event_handlers
-        self._plugin_manager = None  # 插件管理器引用
+        try:
+            # 在初始化时进行类验证
+            CoreHelper.validate_plugin_class(self.__class__)
+            
+            if not self.is_api_plugin:
+                self.commands: Dict[str, Dict[str, Any]] = {}  # 命令映射表，包含描述和隐藏标志
+            self.enabled: bool = True  # 插件是否启用
+            self._event_handlers: Dict[str, Set[Callable]] = {}  # 事件处理器映射
+            self._event_handlers_lock = Lock()  # 锁用于_event_handlers
+            self._plugin_manager = None  # 插件管理器引用
 
-        # 以下三个原本由 JSON 文件读写，现在改用 SQLite
-        self._data: Dict = {}   # 插件数据
-        self._config: Dict = {} # 插件配置
-        self._states: Dict[str, Any] = {}  # 状态管理
+            # 以下三个原本由 JSON 文件读写，现在改用 SQLite
+            self._data: Dict = {}   # 插件数据
+            self._config: Dict = {} # 插件配置
+            self._states: Dict[str, Any] = {}  # 状态管理
 
-        self._cache: Dict = {}  # 插件缓存
-        
-        self._keyword_handlers: Dict[str, Tuple[Callable, bool]] = {}  # 关键词处理器映射
-        self._regex_handlers: List[Tuple[re.Pattern, Tuple[Callable, bool]]] = []  # 正则处理器列表
-        self._keyword_handlers_lock = Lock()  # 锁用于_keyword_handlers
-        self._regex_handlers_lock = Lock()  # 锁用于_regex_handlers
-        self._messages: Dict[str, str] = {}  # 可定制消息模板
-        self._running_tasks: Set[asyncio.Task] = set()  # 运行中的任务
-        
-        # 处理额外的初始化参数
-        if 'bind_manager' in kwargs:
-            self._set_plugin_manager(kwargs['bind_manager'])
-        
+            self._cache: Dict = {}  # 插件缓存
+            
+            self._keyword_handlers: Dict[str, Tuple[Callable, bool]] = {}  # 关键词处理器映射
+            self._regex_handlers: List[Tuple[re.Pattern, Tuple[Callable, bool]]] = []  # 正则处理器列表
+            self._keyword_handlers_lock = Lock()  # 锁用于_keyword_handlers
+            self._regex_handlers_lock = Lock()  # 锁用于_regex_handlers
+            self._messages: Dict[str, str] = {}  # 可定制消息模板
+            self._running_tasks: Set[asyncio.Task] = set()  # 运行中的任务
+            
+            # 处理额外的初始化参数
+            if 'bind_manager' in kwargs:
+                self._set_plugin_manager(kwargs['bind_manager'])
+            
+        except PluginValidationError as e:
+            error_message = CoreHelper.format_error_message(e)
+            bot_logger.error(f"\n{error_message}")
+            raise
+
     async def _register_decorators(self):
         """注册所有装饰器标记的处理器"""
         for _, method in inspect.getmembers(self, inspect.ismethod):
@@ -687,14 +697,13 @@ class Plugin(ABC):
         """
         return await handler.send_text(content)
         
-    async def reply_image(self, handler: MessageHandler, image_data: bytes, use_base64: bool = False) -> bool:
+    async def reply_image(self, handler: MessageHandler, image_data: bytes) -> bool:
         """回复图片消息
         Args:
             handler: 消息处理器
             image_data: 图片数据
-            use_base64: 是否使用base64方式发送
         """
-        return await handler.send_image(image_data, use_base64)
+        return await handler.send_image(image_data)
         
     async def recall_message(self, handler: MessageHandler) -> bool:
         """撤回消息
@@ -837,10 +846,17 @@ class Plugin(ABC):
     # 生命周期方法
     async def on_load(self) -> None:
         """插件加载时调用"""
-        await self._register_decorators()  # 先注册装饰器
-        await self.load_data()
-        await self.load_config()
-        await self._start_plugin_tasks()  # 启动插件任务
+        try:
+            await self._register_decorators()  # 先注册装饰器
+            await self.load_data()
+            await self.load_config()
+            await self._start_plugin_tasks()  # 启动插件任务
+
+            
+        except PluginValidationError as e:
+            error_message = CoreHelper.format_error_message(e)
+            bot_logger.error(f"\n{error_message}")
+            raise
         
     async def on_unload(self) -> None:
         """插件卸载时调用"""

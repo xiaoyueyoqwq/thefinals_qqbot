@@ -1,4 +1,9 @@
 ---
+description: 
+globs: 
+alwaysApply: false
+---
+---
 description: --- description: 当需要处理赛季(season)相关的代码时，请务必阅读此规则。包含了赛季配置的正确导入方式、赛季管理器的使用方法和注意事项。 globs: ["**/season*.py", "**/world_tour.py", "**/rank*.py", "**/df.py"]  ---
 globs: 
 alwaysApply: false

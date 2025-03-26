@@ -153,7 +153,7 @@ class MyPlugin(Plugin):
 | 方法 | 说明 | 参数 | 返回值 |
 |------|------|------|--------|
 | reply | 回复消息 | handler: 消息处理器<br>content: 回复内容 | bool: 是否成功 |
-| reply_image | 回复图片 | handler: 消息处理器<br>image_data: 图片数据<br>use_base64: 是否使用base64 | bool: 是否成功 |
+| reply_image | 回复图片 | handler: 消息处理器<br>image_data: 图片数据 | bool: 是否成功 |
 | recall_message | 撤回消息 | handler: 消息处理器 | bool: 是否成功 |
 | wait_for_reply | 等待用户回复 | handler: 消息处理器<br>timeout: 超时时间(秒) | str/None: 回复内容 |
 | ask | 询问问题 | handler: 消息处理器<br>prompt: 问题内容<br>timeout: 超时时间(秒) | str/None: 回答内容 |

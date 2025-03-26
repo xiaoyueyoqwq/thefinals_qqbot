@@ -119,17 +119,17 @@ class TestHelloPlugin(Plugin):
             async with aiofiles.open("resources/images/thefinals_logo.png", "rb") as f:
                 image_data = await f.read()
             
-            # 使用base64方式发送
-            bot_logger.debug("开始使用base64方式发送图片")
-            result = await self.reply_image(handler, image_data, use_base64=True)
+            # 发送图片
+            bot_logger.debug("开始发送图片")
+            result = await self.reply_image(handler, image_data)
             
             if result:
-                await self.reply(handler, "✅ base64图片发送成功")
+                await self.reply(handler, "✅ 图片发送成功")
             else:
-                await self.reply(handler, "❌ base64图片发送失败")
+                await self.reply(handler, "❌ 图片发送失败")
                 
         except Exception as e:
-            bot_logger.error(f"base64图片发送测试失败: {str(e)}")
+            bot_logger.error(f"图片发送测试失败: {str(e)}")
             await self.reply(handler, f"❌ 发生错误: {str(e)}")
 
     async def on_load(self) -> None:
