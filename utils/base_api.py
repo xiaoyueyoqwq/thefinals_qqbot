@@ -82,20 +82,38 @@ class BaseAPI:
                     proxy_url = cls._get_proxy_url()
                     
                     bot_logger.debug(f"[BaseAPI] 创建新的HTTP客户端, 代理: {proxy_url}")
-                    # 创建客户端
-                    transport = None
-                    if proxy_url:
-                        transport = httpx.HTTPTransport(proxy=proxy_url, verify=False)
                     
-                    client = httpx.AsyncClient(
-                        timeout=30,
-                        transport=transport,
-                        limits=httpx.Limits(
+                    # 创建基本客户端配置
+                    client_config = {
+                        "timeout": 30,
+                        "limits": httpx.Limits(
                             max_keepalive_connections=20,
                             max_connections=100,
                             keepalive_expiry=30
-                        )
-                    )
+                        ),
+                        "verify": False  # 禁用SSL验证,避免代理证书问题
+                    }
+                    
+                    # 防御性处理代理配置
+                    if proxy_url:
+                        try:
+                            # 新版本httpx的代理配置方式
+                            client_config["proxy"] = proxy_url
+                            client = httpx.AsyncClient(**client_config)
+                        except TypeError:
+                            try:
+                                # 旧版本httpx的代理配置方式
+                                client_config["proxies"] = proxy_url
+                                client = httpx.AsyncClient(**client_config)
+                            except Exception as e:
+                                bot_logger.error(f"[BaseAPI] 代理配置失败: {e}")
+                                # 如果代理配置都失败，尝试不使用代理
+                                client_config.pop("proxy", None)
+                                client_config.pop("proxies", None)
+                                client = httpx.AsyncClient(**client_config)
+                    else:
+                        client = httpx.AsyncClient(**client_config)
+                    
                     cls._client_pool.append(client)
                     bot_logger.debug("[BaseAPI] HTTP客户端创建成功")
                 else:

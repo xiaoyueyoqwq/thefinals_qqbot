@@ -80,12 +80,13 @@ class LeaderboardCore:
             self.logger.error(f"获取玩家历史数据失败: {str(e)}")
             raise
 
-    def generate_trend_chart(self, history_data: List[Dict[str, Any]]) -> bytes:
+    def generate_trend_chart(self, history_data: List[Dict[str, Any]], player_id: str) -> bytes:
         """
         生成走势图
         
         Args:
             history_data: 历史数据列表
+            player_id: 玩家ID
             
         Returns:
             bytes: 图片数据
@@ -131,9 +132,7 @@ class LeaderboardCore:
             ax1.fill_between(timestamps, points, min(points), alpha=0.1, color=points_color)
             
             # 设置标题和样式
-            # TODO: 添加玩家名称
-            # TODO: 有一个玩家数据统计需要改成 ▎玩家: krebel1000#0083 [CLUB]
-            title1 = ax1.set_title('THE FINALS | 玩家排位走势', pad=20, fontsize=16, fontproperties=self.font, color='#FFFFFF')
+            title1 = ax1.set_title(f'THE FINALS | {player_id} 排位走势', pad=20, fontsize=16, fontproperties=self.font, color='#FFFFFF')
             title1.set_path_effects([withStroke(linewidth=3, foreground='#000000', alpha=0.5)])
             
             ax1.set_ylabel('排位分', fontproperties=self.font, color='#FFFFFF', fontsize=12)
