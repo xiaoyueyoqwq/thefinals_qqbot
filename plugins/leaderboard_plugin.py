@@ -2,6 +2,7 @@ from core.plugin import Plugin, on_command
 from core.leaderboard import LeaderboardCore
 from utils.logger import bot_logger
 from core.bind import BindManager
+from core.rank import RankAPI
 import base64
 import traceback
 
@@ -18,6 +19,7 @@ class LeaderboardPlugin(Plugin):
         self.core = LeaderboardCore()
         self.logger = bot_logger
         self.bind_manager = BindManager()
+        self.rank_api = RankAPI()
         self.logger.info(f"[{self.name}] 插件初始化完成")
         
     async def on_load(self):
@@ -136,7 +138,7 @@ class LeaderboardPlugin(Plugin):
             # 生成走势图
             try:
                 self.logger.debug(f"[{self.name}] 开始生成走势图")
-                image_data = self.core.generate_trend_chart(history_data)
+                image_data = self.core.generate_trend_chart(history_data, player_id)
                 self.logger.debug(f"[{self.name}] 走势图生成完成: {len(image_data) if image_data else 0} 字节")
             except Exception as e:
                 self.logger.error(f"[{self.name}] 生成走势图失败: {str(e)}\n{traceback.format_exc()}")
@@ -144,10 +146,19 @@ class LeaderboardPlugin(Plugin):
             
             # 获取最新数据用于显示当前状态
             latest_data = history_data[-1]
+            
+            # 获取玩家的club信息
+            try:
+                player_stats = await self.rank_api.get_player_stats(player_id)
+                club_tag = player_stats.get("clubTag", "") if player_stats else ""
+            except Exception as e:
+                self.logger.error(f"[{self.name}] 获取玩家club信息失败: {str(e)}")
+                club_tag = ""
+            
             status_text = (
                 f"\n📊 s6排位赛 | THE FINALS\n"
                 f"━━━━━━━━━━━━━\n"
-                f"▎玩家: {player_id}\n"
+                f"▎玩家: {player_id}{' [' + club_tag + ']' if club_tag else ''}\n"
                 f"▎当前排名: #{latest_data['rank']}\n"
                 f"▎段位: {latest_data['leagueName']}\n"
                 f"▎分数: {latest_data['points']}\n"
