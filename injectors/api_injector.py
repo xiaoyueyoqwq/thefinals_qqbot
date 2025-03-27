@@ -4,6 +4,7 @@ import functools
 import botpy.api
 import botpy.http
 from utils.logger import bot_logger
+import asyncio
 
 class APIInjector:
     """API功能增强注入器"""
@@ -27,6 +28,10 @@ class APIInjector:
         async def new_post_group_file(self, group_openid: str, file_type: int, 
                                     url: str = None, srv_send_msg: bool = False,
                                     file_data: str = None) -> 'botpy.types.message.Media':
+            # 验证文件类型
+            if file_type not in [1, 2, 3, 4]:
+                raise ValueError(f"不支持的文件类型: {file_type}")
+                
             payload = {
                 "group_openid": group_openid,
                 "file_type": file_type,
@@ -34,13 +39,45 @@ class APIInjector:
                 "srv_send_msg": srv_send_msg,
                 "file_data": file_data
             }
+            
+            # 移除None值
             payload = {k: v for k, v in payload.items() if v is not None}
+            
             route = botpy.http.Route(
                 "POST", 
                 "/v2/groups/{group_openid}/files",
                 group_openid=group_openid
             )
-            return await self._http.request(route, json=payload)
+            
+            max_retries = 3
+            retry_delay = 1
+            timeout = 30  # 设置30秒超时
+            
+            for retry in range(max_retries):
+                try:
+                    bot_logger.debug(f"[APIInjector] 发送文件上传请求 - group_id: {group_openid}, type: {file_type}, 第{retry + 1}次尝试")
+                    response = await asyncio.wait_for(
+                        self._http.request(route, json=payload),
+                        timeout=timeout
+                    )
+                    bot_logger.debug(f"[APIInjector] 文件上传响应: {response}")
+                    return response
+                except asyncio.TimeoutError:
+                    if retry < max_retries - 1:
+                        bot_logger.warning(f"[APIInjector] 请求超时，等待{retry_delay}秒后重试...")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # 指数退避
+                        continue
+                    bot_logger.error("[APIInjector] 文件上传请求多次超时")
+                    raise ValueError("文件上传请求超时") from None
+                except Exception as e:
+                    error_msg = str(e)
+                    if "富媒体文件格式不支持" in error_msg:
+                        raise ValueError("不支持的文件格式，请确保为jpg/png格式") from e
+                    elif "文件大小超过限制" in error_msg:
+                        raise ValueError("文件大小超过限制") from e
+                    raise
+                
         botpy.api.BotAPI.post_group_file = new_post_group_file
         
         # 注入post_group_message方法
@@ -59,20 +96,13 @@ class APIInjector:
             
             # 处理媒体消息
             if media:
-                payload["media"] = media
-            elif image_base64:
-                # 确保 base64 数据有正确的前缀
-                if not image_base64.startswith('data:image/'):
-                    image_base64 = f'data:image/png;base64,{image_base64}'
-                
-                payload["media"] = {
-                    "type": msg_type,
-                    "file_info": {
-                        "type": 1,  # 1 表示图片
-                        "content": image_base64
-                    }
-                }
-                
+                # 确保media对象格式正确
+                if "file_info" in media:
+                    payload["media"] = media
+                else:
+                    bot_logger.warning("[APIInjector] media对象格式不正确，应包含file_info字段")
+                    return None
+                    
             # 移除None值
             payload = {k: v for k, v in payload.items() if v is not None}
             
