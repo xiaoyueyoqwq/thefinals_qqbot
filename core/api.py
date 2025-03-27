@@ -4,15 +4,46 @@ API System
 提供插件API注册能力
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from typing import Callable, Dict, List, Set, Optional, Any, Tuple, Type
 from functools import wraps, partial
 import inspect
 from utils.config import Settings
 from utils.logger import bot_logger
+import os
+import re
+import time
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+
+# 请求计数器
+request_counts = {}
+last_cleanup = time.time()
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # 清理旧的请求记录
+        global last_cleanup
+        now = time.time()
+        if now - last_cleanup > 60:  # 每分钟清理一次
+            request_counts.clear()
+            last_cleanup = now
+            
+        # 获取客户端IP
+        client_ip = request.client.host
+        
+        # 检查请求频率
+        if "/images/" in request.url.path:
+            minute_count = request_counts.get(client_ip, 0)
+            if minute_count > 60:  # 每分钟最多60次请求
+                raise HTTPException(status_code=429, detail="Too many requests")
+            request_counts[client_ip] = minute_count + 1
+            
+        response = await call_next(request)
+        return response
 
 # 全局FastAPI实例
 app = FastAPI(
@@ -23,6 +54,12 @@ app = FastAPI(
     docs_url=None,    # 禁用默认的swagger UI
     redoc_url=None    # 禁用默认的redoc
 )
+
+# 添加中间件
+app.add_middleware(RateLimitMiddleware)
+
+# 挂载静态文件目录
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 启动事件处理
 @app.on_event("startup")
@@ -64,6 +101,66 @@ _registered_routes: Dict[str, Set[str]] = {}
 _plugin_tags: Set[str] = set()
 # 存储插件实例
 _plugin_instances: Dict[str, Any] = {}
+
+# 图片管理器实例
+_image_manager = None
+
+def set_image_manager(manager):
+    """设置图片管理器实例"""
+    global _image_manager
+    _image_manager = manager
+
+@app.get("/images/{image_id}", include_in_schema=False)
+async def get_image(image_id: str, request: Request):
+    """获取图片
+    
+    Args:
+        image_id: 图片ID
+        request: 请求对象
+    """
+    # 验证图片ID格式（只允许UUID格式）
+    if not re.match(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$', image_id, re.I):
+        raise HTTPException(status_code=400, detail="Invalid image ID format")
+    
+    if not _image_manager:
+        raise HTTPException(status_code=500, detail="Image manager not initialized")
+        
+    image_path = _image_manager.get_image_path(image_id)
+    if not image_path:
+        raise HTTPException(status_code=404, detail="Image not found")
+        
+    # 确保图片存在且在允许的目录中
+    try:
+        image_path = os.path.abspath(image_path)
+        base_dir = os.path.abspath(_image_manager.base_dir)
+        if not image_path.startswith(base_dir):
+            raise HTTPException(status_code=403, detail="Access denied")
+            
+        if not os.path.exists(image_path):
+            raise HTTPException(status_code=404, detail="Image file not found")
+            
+        # 检查文件大小
+        file_size = os.path.getsize(image_path)
+        if file_size > 10 * 1024 * 1024:  # 10MB
+            raise HTTPException(status_code=413, detail="Image too large")
+            
+        # 检查文件类型
+        import imghdr
+        if imghdr.what(image_path) not in ['png', 'jpeg', 'gif']:
+            raise HTTPException(status_code=400, detail="Invalid image type")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        bot_logger.error(f"处理图片请求时出错: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+        
+    # 返回图片文件
+    return FileResponse(
+        image_path,
+        media_type="image/png",  # 设置正确的 Content-Type
+        filename=f"{image_id}.png"  # 设置下载文件名
+    )
 
 def _get_plugin_name(func: Callable) -> str:
     """获取方法所属的插件名称"""

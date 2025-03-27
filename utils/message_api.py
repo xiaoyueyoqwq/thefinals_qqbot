@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any, List
-from enum import IntEnum
+from enum import IntEnum, Enum
 import asyncio
 import time
 import random
@@ -9,26 +9,13 @@ from utils.logger import bot_logger
 
 # 消息类型枚举
 class MessageType(IntEnum):
-    """消息类型
-    根据QQ机器人API文档:
-    0: 文本消息
-    1: 图文混排
-    2: markdown
-    3: ark
-    4: embed
-    7: media富媒体
-    """
+    """消息类型"""
     TEXT = 0      # 文本消息
     MIXED = 1     # 图文混排
     MARKDOWN = 2  # markdown
     ARK = 3       # ark模板消息
     EMBED = 4     # embed消息
     MEDIA = 7     # 富媒体消息
-    
-    @classmethod
-    def is_valid(cls, value: int) -> bool:
-        """检查消息类型是否有效"""
-        return value in cls._value2member_map_
 
 class FileType(IntEnum):
     """文件类型
@@ -113,7 +100,7 @@ class QueuedMessage:
     
     def validate(self):
         """验证消息有效性"""
-        if not MessageType.is_valid(self.msg_type):
+        if not self.msg_type in MessageType:
             raise InvalidMessageType(f"Invalid message type: {self.msg_type}")
         if not self.content:
             raise ValueError("Content cannot be empty")
@@ -365,40 +352,83 @@ class MessageAPI:
             bot_logger.error(f"群文件上传失败: {str(e)}")
             return None
             
-    async def send_to_group(self, group_id: str, content: str, msg_type: MessageType, msg_id: str, media: Optional[Dict] = None, image_base64: Optional[str] = None) -> bool:
+    async def send_to_group(
+        self,
+        group_id: str,
+        content: str,
+        msg_type: MessageType,
+        msg_id: str,
+        image_base64: Optional[str] = None,
+        image_url: Optional[str] = None,
+        msg_seq: int = None,
+        media: Optional[dict] = None
+    ) -> bool:
         """发送群消息
+        
         Args:
             group_id: 群ID
             content: 消息内容
             msg_type: 消息类型
             msg_id: 消息ID
-            media: 媒体信息
-            image_base64: 图片base64数据
+            image_base64: base64编码的图片数据
+            image_url: 图片URL
+            msg_seq: 消息序号，用于去重，默认为None时会自动生成
+            media: 媒体对象，可以是完整的media结构
+            
+        Returns:
+            bool: 是否发送成功
         """
         try:
-            # 如果提供了base64图片，先上传 ？？？？？？
-            if image_base64:
-                file_result = await self.upload_group_file(
-                    group_id=group_id,
-                    file_type=FileType.IMAGE,
-                    file_data=image_base64
-                )
-                if not file_result:
-                    return False
-                media = self.create_media_payload(file_result["file_info"])
-                msg_type = MessageType.MEDIA
+            # 如果没有提供msg_seq，生成一个随机的
+            if msg_seq is None:
+                msg_seq = random.randint(1, 100000)
                 
-            message = QueuedMessage(
-                group_id=group_id,
-                msg_type=msg_type,
-                content=content.replace("━", "-"),  # 替换特殊字符
-                msg_id=msg_id,
-                media=media,
-                timestamp=time.time()
-            )
-            return await self.controller.send(message, self._api)
+            msg_data = {
+                "content": content,
+                "msg_type": msg_type.value,
+                "msg_id": msg_id,
+                "msg_seq": msg_seq
+            }
+            
+            if msg_type == MessageType.MEDIA:
+                if media:
+                    # 如果提供了完整的media对象，直接使用
+                    msg_data["media"] = media
+                elif image_base64:
+                    # 如果提供了base64数据，构建media对象
+                    msg_data["media"] = {
+                        "file_info": {
+                            "content": image_base64
+                        }
+                    }
+                elif image_url:
+                    # 如果提供了URL，构建media对象
+                    msg_data["media"] = {
+                        "file_info": {
+                            "url": image_url
+                        }
+                    }
+                else:
+                    raise ValueError("Media message requires either media, image_base64 or image_url")
+                    
+            bot_logger.debug(f"发送群消息数据: {msg_data}")
+            await self._api.post_group_message(group_openid=group_id, **msg_data)
+            return True
         except Exception as e:
             bot_logger.error(f"发送群消息失败: {str(e)}")
+            # 如果是消息序号重复，尝试重新发送
+            if "消息被去重" in str(e) or "msgseq" in str(e).lower():
+                bot_logger.warning("检测到消息序号重复，尝试使用新序号重新发送")
+                return await self.send_to_group(
+                    group_id=group_id,
+                    content=content,
+                    msg_type=msg_type,
+                    msg_id=msg_id,
+                    image_base64=image_base64,
+                    image_url=image_url,
+                    msg_seq=random.randint(100001, 200000),  # 使用不同范围的序号重试
+                    media=media
+                )
             return False
             
     async def recall_group_message(self, group_id: str, message_id: str) -> bool:
@@ -408,37 +438,37 @@ class MessageAPI:
             message_id: 消息ID
         """
         try:
-            await self._api.recall_group_message(
-                group_openid=group_id,
-                message_id=message_id
-            )
+            await self._api.recall_group_message(group_openid=group_id, message_id=message_id)
             return True
         except Exception as e:
             bot_logger.error(f"撤回群消息失败: {str(e)}")
             return False
         
-    async def send_to_user(self, user_id: str, content: str, msg_type: MessageType, msg_id: str, file_image: Optional[bytes] = None) -> bool:
+    async def send_to_user(
+        self,
+        user_id: str,
+        content: str,
+        msg_type: MessageType,
+        msg_id: str,
+        file_image: Optional[bytes] = None
+    ) -> bool:
         """发送私聊消息"""
         try:
-            bot_logger.debug(f"准备发送私聊消息 - user_id: {user_id}, msg_type: {msg_type}, msg_id: {msg_id}")
-            
-            # 构造参数
-            params = {
+            msg_data = {
+                "content": content,
                 "msg_type": msg_type.value,
-                "content": content.replace("━", "-"),  # 替换特殊字符
                 "msg_id": msg_id
             }
             
-            if file_image:
-                params["file_image"] = file_image
-            
-            # 发送消息
-            await self._api.post_c2c_message(
-                openid=user_id,
-                **params
-            )
+            if msg_type == MessageType.MEDIA:
+                if not file_image:
+                    raise ValueError("Media message requires file_image")
+                msg_data["media"] = {
+                    "file_image": file_image
+                }
+                
+            await self._api.post_c2c_message(openid=user_id, **msg_data)
             return True
-            
         except Exception as e:
             bot_logger.error(f"发送私聊消息失败: {str(e)}")
             return False 

@@ -14,7 +14,7 @@ from utils.logger import bot_logger
 from utils.browser import browser_manager
 from utils.message_handler import MessageHandler
 from core.plugin import PluginManager
-from core.api import get_app
+from core.api import get_app, set_image_manager
 from enum import IntEnum
 import threading
 import time
@@ -29,6 +29,7 @@ import traceback
 import os
 import ctypes
 import subprocess
+from utils.image_manager import ImageManager
 
 # 全局变量，用于在信号处理函数中访问
 client = None
@@ -288,6 +289,22 @@ class SafeThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
 class MyBot(botpy.Client):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.tasks = []
+        self.executor = SafeThreadPoolExecutor(max_workers=settings.MAX_WORKERS)
+        self.plugin_manager = PluginManager()
+        self.browser = None
+        self.health_check_task = None
+        self.recovery_task = None
+        self.is_stopping = False
+        
+        # 初始化图片管理器
+        self.image_manager = ImageManager()
+        set_image_manager(self.image_manager)
+        
+        # 创建事件循环
+        self.loop = asyncio.get_event_loop()
+        self.loop.set_exception_handler(custom_exception_handler)
+        
         # 使用增强的线程池
         self.thread_pool = SafeThreadPoolExecutor(
             max_workers=settings.MAX_WORKERS if hasattr(settings, 'MAX_WORKERS') else 10,
@@ -300,7 +317,6 @@ class MyBot(botpy.Client):
         
         # 初始化组件
         self.browser_manager = browser_manager
-        self.plugin_manager = PluginManager()
         
         # 存储所有运行中的任务
         self._running_tasks = set()
@@ -390,27 +406,24 @@ class MyBot(botpy.Client):
                     pass  # 忽略发送错误消息时的异常
 
     async def on_ready(self):
-        """当机器人就绪时触发"""
+        """当机器人就绪时调用"""
+        bot_logger.info(f"机器人已就绪：{self.robot.name}")
+        
         try:
-            bot_logger.debug("开始初始化机器人...")
+            # 启动图片管理器
+            await self.image_manager.start()
             
-            # 并发初始化组件，设置总体超时
-            async with asyncio.timeout(INIT_TIMEOUT):
-                init_tasks = []
-                
-                # 初始化浏览器
-                browser_task = asyncio.create_task(self._init_browser())
-                init_tasks.append(browser_task)
-                
-                # 初始化插件
-                plugins_task = asyncio.create_task(self._init_plugins())
-                init_tasks.append(plugins_task)
-                
-                # 等待所有初始化任务完成
-                await asyncio.gather(*init_tasks)
+            # 初始化浏览器
+            await self._init_browser()
+            
+            # 初始化插件
+            await self._init_plugins()
             
             # 启动健康检查
-            self.create_task(self._health_check(), "health_check")
+            self.health_check_task = self.create_task(
+                self._health_check(),
+                name="health_check"
+            )
             
             bot_logger.info(f"机器人已登录成功：{self.robot.name}")
             bot_logger.debug(f"机器人ID：{self.robot.id}")
@@ -709,17 +722,33 @@ class MyBot(botpy.Client):
 
     async def stop(self):
         """停止机器人"""
+        if self.is_stopping:
+            return
+            
+        self.is_stopping = True
+        bot_logger.info("正在停止机器人...")
+        
         try:
+            # 停止图片管理器
+            await self.image_manager.stop()
+            
+            # 停止健康检查
+            if self.health_check_task:
+                self.health_check_task.cancel()
+                
+            # 停止恢复任务
+            if self.recovery_task:
+                self.recovery_task.cancel()
+                
             # 清理资源
             await self._cleanup()
             
-            # 调用父类的stop方法
-            await super().stop()
-            
         except Exception as e:
-            bot_logger.error(f"停止机器人时发生错误: {str(e)}")
+            bot_logger.error(f"停止机器人时出错: {str(e)}")
+            
         finally:
-            bot_logger.info("机器人已完全关闭")
+            # 调用父类的停止方法
+            await super().stop()
 
 async def check_ip():
     """检查当前出口IP"""

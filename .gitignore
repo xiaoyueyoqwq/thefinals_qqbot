@@ -109,3 +109,5 @@ Project.7z
 
 deploy.py
 changes.txt
+
+/static/temp_images/*
