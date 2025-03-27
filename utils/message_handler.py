@@ -4,6 +4,8 @@ from utils.logger import bot_logger
 from utils.message_api import MessageAPI, MessageType, FileType
 from utils.config import Settings
 from utils.image_manager import ImageManager
+from PIL import Image
+import io
 
 class MessageHandler:
     """消息处理器基类"""
@@ -41,6 +43,35 @@ class MessageHandler:
         if Settings().image["send_method"] == "url":
             self.init_image_manager()
 
+    @staticmethod
+    def ensure_image_format(image_data: bytes) -> bytes:
+        """确保图片格式正确
+        
+        Args:
+            image_data: 原始图片数据
+            
+        Returns:
+            bytes: 处理后的图片数据
+        """
+        try:
+            # 打开图片
+            img = Image.open(io.BytesIO(image_data))
+            # 如果不是PNG或JPEG，转换为PNG
+            if img.format not in ['PNG', 'JPEG']:
+                output = io.BytesIO()
+                # 转换为RGB模式（去除透明通道）
+                if img.mode in ('RGBA', 'LA'):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[-1])
+                    img = background
+                # 保存为PNG
+                img.save(output, format='PNG')
+                image_data = output.getvalue()
+            return image_data
+        except Exception as e:
+            bot_logger.error(f"图片格式处理失败: {str(e)}")
+            return image_data
+
     async def send_text(self, content: str) -> bool:
         """发送文本消息"""
         try:
@@ -74,6 +105,11 @@ class MessageHandler:
             bool: 是否发送成功
         """
         try:
+            # 打印图片前100字节
+            bot_logger.info(f"图片数据前100字节: {image_data[:100]}")
+            # 确保图片格式正确
+            image_data = self.ensure_image_format(image_data)
+            
             if self.is_group:
                 send_method = Settings().image["send_method"]
                 
@@ -87,12 +123,19 @@ class MessageHandler:
                     # 构建图片URL
                     image_url = f"{Settings().SERVER_API_EXTERNAL_URL}/images/{image_id}"
                     
+                    # 先上传文件获取file_info
+                    file_result = await self._api.upload_group_file(
+                        group_id=self.message.group_openid,
+                        file_type=FileType.IMAGE,
+                        url=image_url
+                    )
+                    
+                    if not file_result:
+                        bot_logger.error("上传群文件失败")
+                        return False
+                    
                     # 构建 media 对象
-                    media = {
-                        "file_info": {
-                            "url": image_url
-                        }
-                    }
+                    media = self._api.create_media_payload(file_result["file_info"])
                     
                     # 发送消息
                     await self._api.send_to_group(
@@ -101,7 +144,7 @@ class MessageHandler:
                         msg_type=MessageType.MEDIA,
                         msg_id=self.message.id,
                         msg_seq=getattr(self.message, 'msg_seq', None),
-                        media=media  # 直接使用构建的 media 对象
+                        media=media
                     )
                 else:
                     # 使用base64发送
@@ -109,14 +152,19 @@ class MessageHandler:
                     # 添加 base64 前缀
                     image_base64 = f'data:image/png;base64,{image_base64}'
                     
+                    # 先上传文件获取file_info
+                    file_result = await self._api.upload_group_file(
+                        group_id=self.message.group_openid,
+                        file_type=FileType.IMAGE,
+                        file_data=image_base64
+                    )
+                    
+                    if not file_result:
+                        bot_logger.error("上传群文件失败")
+                        return False
+                    
                     # 构建 media 对象
-                    media = {
-                        "type": MessageType.MEDIA,
-                        "file_info": {
-                            "type": 1,  # 1 表示图片
-                            "content": image_base64
-                        }
-                    }
+                    media = self._api.create_media_payload(file_result["file_info"])
                     
                     await self._api.send_to_group(
                         group_id=self.message.group_openid,

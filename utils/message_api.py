@@ -339,17 +339,48 @@ class MessageAPI:
         """
         try:
             bot_logger.debug(f"群文件上传开始 - group_id: {group_id}, type: {file_type}")
-            result = await self._api.post_group_file(
-                group_openid=group_id,
-                file_type=file_type.value,
-                url=url,
-                file_data=file_data,
-                srv_send_msg=False
-            )
+            
+            # 验证参数
+            if url is None and file_data is None:
+                raise ValueError("必须提供url或file_data其中之一")
+            if url is not None and file_data is not None:
+                raise ValueError("url和file_data不能同时提供")
+                
+            # 构建上传参数
+            upload_params = {
+                "group_openid": group_id,
+                "file_type": file_type.value,
+                "srv_send_msg": False  # 设置为false避免占用主动消息频次
+            }
+            
+            if url:
+                upload_params["url"] = url
+            if file_data:
+                upload_params["file_data"] = file_data
+                
+            # 记录上传参数（去除敏感数据）
+            log_params = upload_params.copy()
+            if "file_data" in log_params:
+                log_params["file_data"] = "base64_data..."
+            bot_logger.debug(f"上传参数: {log_params}")
+            
+            result = await self._api.post_group_file(**upload_params)
+            
+            if not result or "file_info" not in result:
+                bot_logger.error(f"上传响应格式错误: {result}")
+                return None
+                
             bot_logger.debug(f"群文件上传成功: {result}")
             return result
+            
         except Exception as e:
-            bot_logger.error(f"群文件上传失败: {str(e)}")
+            error_msg = str(e)
+            if "富媒体文件格式不支持" in error_msg:
+                bot_logger.error("图片格式不支持，请确保图片为jpg/png格式")
+            elif "文件大小超过限制" in error_msg:
+                bot_logger.error("文件大小超过限制")
+            else:
+                bot_logger.error(f"群文件上传失败: {error_msg}")
             return None
             
     async def send_to_group(
@@ -394,20 +425,20 @@ class MessageAPI:
                 if media:
                     # 如果提供了完整的media对象，直接使用
                     msg_data["media"] = media
-                elif image_base64:
-                    # 如果提供了base64数据，构建media对象
-                    msg_data["media"] = {
-                        "file_info": {
-                            "content": image_base64
-                        }
-                    }
-                elif image_url:
-                    # 如果提供了URL，构建media对象
-                    msg_data["media"] = {
-                        "file_info": {
-                            "url": image_url
-                        }
-                    }
+                elif image_base64 or image_url:
+                    # 先上传文件获取file_info
+                    file_result = await self.upload_group_file(
+                        group_id=group_id,
+                        file_type=FileType.IMAGE,
+                        url=image_url,
+                        file_data=image_base64
+                    )
+                    
+                    if not file_result:
+                        raise ValueError("Failed to upload media file")
+                        
+                    # 使用file_info构建media对象
+                    msg_data["media"] = self.create_media_payload(file_result["file_info"])
                 else:
                     raise ValueError("Media message requires either media, image_base64 or image_url")
                     
