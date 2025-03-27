@@ -42,6 +42,7 @@ class Settings:
     SERVER_API_ENABLED = _config.get("server", {}).get("api", {}).get("enabled", True)
     SERVER_API_HOST = _config.get("server", {}).get("api", {}).get("host", "127.0.0.1")
     SERVER_API_PORT = _config.get("server", {}).get("api", {}).get("port", 8000)
+    SERVER_API_EXTERNAL_URL = _config.get("server", {}).get("api", {}).get("external_url", f"http://{SERVER_API_HOST}:{SERVER_API_PORT}")
     
     # 赛季配置
     CURRENT_SEASON = _config.get("season", {}).get("current", "s6")  # 当前赛季
@@ -50,6 +51,12 @@ class Settings:
     # 翻译配置
     TRANSLATION_ENABLED = _config.get("translation", {}).get("enabled", True)  # 是否启用翻译
     TRANSLATION_FILE = _config.get("translation", {}).get("file", "data/translations.json")  # 翻译文件路径
+    
+    # 图片配置
+    IMAGE_SEND_METHOD = _config.get("image", {}).get("send_method", "url")  # 默认使用url方式
+    IMAGE_STORAGE_PATH = _config.get("image", {}).get("storage", {}).get("path", "static/temp_images")
+    IMAGE_LIFETIME = _config.get("image", {}).get("storage", {}).get("lifetime", 24)
+    IMAGE_CLEANUP_INTERVAL = _config.get("image", {}).get("storage", {}).get("cleanup_interval", 1)
     
     @property
     def api_base_url(self) -> str:
@@ -73,7 +80,8 @@ class Settings:
             "api": {
                 "enabled": self.SERVER_API_ENABLED,
                 "host": self.SERVER_API_HOST,
-                "port": self.SERVER_API_PORT
+                "port": self.SERVER_API_PORT,
+                "external_url": self.SERVER_API_EXTERNAL_URL
             }
         }
         
@@ -83,6 +91,18 @@ class Settings:
         return {
             "current": self.CURRENT_SEASON,
             "update_interval": self.UPDATE_INTERVAL
+        }
+        
+    @property
+    def image(self) -> dict:
+        """返回图片配置"""
+        return {
+            "send_method": self.IMAGE_SEND_METHOD,
+            "storage": {
+                "path": self.IMAGE_STORAGE_PATH,
+                "lifetime": self.IMAGE_LIFETIME,
+                "cleanup_interval": self.IMAGE_CLEANUP_INTERVAL
+            }
         }
 
 settings = Settings()

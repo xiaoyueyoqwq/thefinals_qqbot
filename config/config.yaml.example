@@ -34,6 +34,15 @@ server:
     enabled: true      # 是否启用API服务器
     host: "0.0.0.0"  # API服务器监听地址
     port: 8080         # API服务器端口
+    external_url: "http://your-domain.com"  # 外部访问地址，用于图片URL构建
+
+# 图片发送配置
+image:
+  send_method: "base64"  # 发送方式: base64 或 url
+  storage:
+    path: "static/temp_images"  # 临时图片存储路径
+    lifetime: 24  # 图片生命周期(小时)
+    cleanup_interval: 1  # 清理间隔(小时)
 
 # 赛季配置
 season:
