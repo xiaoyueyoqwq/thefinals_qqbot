@@ -232,6 +232,15 @@ class LeaderboardCore:
             # 自动调整布局
             plt.tight_layout()
             
+            # 获取最新时间
+            latest_time = timestamps[-1].strftime('%H:%M')
+            
+            # 署名
+            fig.text(0.02, 0.02, f'Design by luoxiaohei | Data source: the-finals-leaderboard-tracker | {latest_time} (UTC+8)', 
+                    fontsize=7, color='#666666', alpha=0.5,
+                    ha='left', va='bottom', style='italic',
+                    path_effects=[withStroke(linewidth=0.3, foreground='#000000', alpha=0.2)])
+            
             # 将图表转换为字节流
             img_buf = io.BytesIO()
             plt.savefig(img_buf, format='png', dpi=120, bbox_inches='tight', facecolor='#1E1E1E')
