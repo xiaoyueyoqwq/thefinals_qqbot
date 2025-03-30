@@ -375,25 +375,36 @@ class DatabaseManager:
     @classmethod
     async def close_all(cls):
         """关闭所有连接池"""
-        for db_path, pool in cls._pools.items():
+        # 创建副本以避免在遍历时修改字典
+        pools_to_close = list(cls._pools.items())
+        
+        for db_path, pool in pools_to_close:
             if pool:
                 try:
                     await pool.close()
+                    bot_logger.debug(f"成功关闭连接池: {db_path}")
                 except Exception as e:
                     bot_logger.error(f"关闭连接池失败 {db_path}: {str(e)}")
                 finally:
                     cls._pools[db_path] = None
-                    
+        
+        # 清理所有字典
         cls._pools.clear()
         cls._locks.clear()
         cls._transactions.clear()
         cls._instances.clear()
         cls._last_used.clear()  # 清理使用时间记录
+        
         # 清理所有缓存
-        for cache in cls._query_caches.values():
-            await cache.clear()
+        cache_items = list(cls._query_caches.items())
+        for _, cache in cache_items:
+            try:
+                await cache.clear()
+            except Exception as e:
+                bot_logger.error(f"清理缓存失败: {str(e)}")
         cls._query_caches.clear()
-        bot_logger.info("所有数据库连接池已关闭")
+        
+        bot_logger.info("所有数据库连接池和缓存已清理完成")
         
     async def execute_transaction(self, operations: list[tuple[str, tuple]]) -> None:
         """执行事务"""

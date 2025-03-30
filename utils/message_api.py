@@ -331,57 +331,77 @@ class MessageAPI:
         
     async def upload_group_file(self, group_id: str, file_type: FileType, url: str = None, file_data: str = None) -> Optional[Dict]:
         """上传群文件
+        
         Args:
             group_id: 群ID
             file_type: 文件类型
             url: 文件URL
-            file_data: 文件base64数据
+            file_data: base64编码的文件数据
+            
+        Returns:
+            Optional[Dict]: 上传结果，包含file_info
         """
-        try:
-            bot_logger.debug(f"群文件上传开始 - group_id: {group_id}, type: {file_type}")
-            
-            # 验证参数
-            if url is None and file_data is None:
-                raise ValueError("必须提供url或file_data其中之一")
-            if url is not None and file_data is not None:
-                raise ValueError("url和file_data不能同时提供")
+        max_retries = 3
+        retry_delay = 1.0
+        
+        for retry in range(max_retries):
+            try:
+                if not url and not file_data:
+                    raise ValueError("必须提供url或file_data其中之一")
+                    
+                upload_params = {
+                    "group_openid": group_id,
+                    "file_type": file_type.value
+                }
                 
-            # 构建上传参数
-            upload_params = {
-                "group_openid": group_id,
-                "file_type": file_type.value,
-                "srv_send_msg": False  # 设置为false避免占用主动消息频次
-            }
-            
-            if url:
-                upload_params["url"] = url
-            if file_data:
-                upload_params["file_data"] = file_data
+                # 优先使用URL
+                if url:
+                    upload_params["url"] = url
+                elif file_data:
+                    upload_params["file_data"] = file_data
                 
-            # 记录上传参数（去除敏感数据）
-            log_params = upload_params.copy()
-            if "file_data" in log_params:
-                log_params["file_data"] = "base64_data..."
-            bot_logger.debug(f"上传参数: {log_params}")
-            
-            result = await self._api.post_group_file(**upload_params)
-            
-            if not result or "file_info" not in result:
-                bot_logger.error(f"上传响应格式错误: {result}")
+                # 记录上传参数（去除敏感数据）
+                log_params = upload_params.copy()
+                if "file_data" in log_params:
+                    log_params["file_data"] = "base64_data..."
+                bot_logger.debug(f"上传参数: {log_params}")
+                
+                result = await self._api.post_group_file(**upload_params)
+                
+                if not result or "file_info" not in result:
+                    bot_logger.error(f"上传响应格式错误: {result}")
+                    if retry < max_retries - 1:
+                        bot_logger.info(f"尝试第{retry + 2}次上传...")
+                        await asyncio.sleep(retry_delay * (retry + 1))
+                        continue
+                    return None
+                    
+                bot_logger.debug(f"群文件上传成功: {result}")
+                return result
+                
+            except Exception as e:
+                error_msg = str(e)
+                if "富媒体文件格式不支持" in error_msg:
+                    bot_logger.error("图片格式不支持，请确保图片为jpg/png格式")
+                    return None  # 格式不支持无需重试
+                elif "文件大小超过限制" in error_msg:
+                    bot_logger.error("文件大小超过限制")
+                    return None  # 大小超限无需重试
+                elif "富媒体文件下载失败" in error_msg:
+                    bot_logger.error(f"文件下载失败 (重试 {retry + 1}/{max_retries})")
+                    if retry < max_retries - 1:
+                        await asyncio.sleep(retry_delay * (retry + 1))
+                        continue
+                else:
+                    bot_logger.error(f"群文件上传失败: {error_msg}")
+                    if retry < max_retries - 1:
+                        bot_logger.info(f"尝试第{retry + 2}次上传...")
+                        await asyncio.sleep(retry_delay * (retry + 1))
+                        continue
                 return None
                 
-            bot_logger.debug(f"群文件上传成功: {result}")
-            return result
-            
-        except Exception as e:
-            error_msg = str(e)
-            if "富媒体文件格式不支持" in error_msg:
-                bot_logger.error("图片格式不支持，请确保图片为jpg/png格式")
-            elif "文件大小超过限制" in error_msg:
-                bot_logger.error("文件大小超过限制")
-            else:
-                bot_logger.error(f"群文件上传失败: {error_msg}")
-            return None
+        bot_logger.error(f"群文件上传失败，已达到最大重试次数 ({max_retries})")
+        return None
             
     async def send_to_group(
         self,
