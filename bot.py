@@ -494,6 +494,8 @@ class MyBot(botpy.Client):
         try:
             # 启动图片管理器
             await self.image_manager.start()
+            # 设置图片管理器到API
+            set_image_manager(self.image_manager)
             
             # 初始化浏览器
             await self._init_browser()
