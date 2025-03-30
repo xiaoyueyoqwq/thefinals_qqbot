@@ -111,3 +111,4 @@ deploy.py
 changes.txt
 
 /static/temp_images/*
+botpy.log.*
