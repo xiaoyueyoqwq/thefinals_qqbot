@@ -3,7 +3,7 @@ import sys
 import logging
 logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 import platform
-from typing import TextIO
+from typing import TextIO, List, Tuple
 from colorama import init, Fore, Style
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
@@ -12,9 +12,18 @@ import shutil
 import time
 from pathlib import Path
 import yaml
+import queue
+import threading
+from collections import deque
+import atexit
+import re
 
 # 初始化colorama以支持Windows
 init()
+
+# 日志缓冲区大小
+BUFFER_SIZE = 1024
+FLUSH_INTERVAL = 1.0  # 1秒
 
 # 读取配置文件
 def load_config():
@@ -27,51 +36,47 @@ def load_config():
         print(f"无法加载配置文件: {e}")
         return {"debug": {"enabled": False}}
 
-class KeyboardInterruptFilter(logging.Filter):
-    """过滤掉 KeyboardInterrupt 相关的日志"""
+class OptimizedFilter(logging.Filter):
+    """优化的日志过滤器"""
+    def __init__(self):
+        super().__init__()
+        # 编译正则表达式
+        self.patterns = [
+            re.compile(pattern) for pattern in [
+                r'KeyboardInterrupt',
+                r'收到\s*CTRL\+C',
+                r'收到取消信号',
+                r'清理任务超时',
+                r'强制关闭',
+                r'Traceback \(most recent call last\)',
+                r'_overlapped\.GetQueuedCompletionStatus',
+                r'asyncio\.windows_events',
+                r"'CacheManager' object has no attribute 'get_all_keys'",
+                r'获取玩家数据失败:.*CacheManager.*get_all_keys'
+            ]
+        ]
+        
     def filter(self, record):
-        # 检查消息内容
-        if "KeyboardInterrupt" in record.getMessage():
+        # 获取消息内容
+        try:
+            message = record.getMessage()
+        except Exception:
+            return True
+            
+        # 检查是否匹配任何模式
+        if any(pattern.search(message) for pattern in self.patterns):
             return False
             
         # 检查异常信息
         if record.exc_info:
             exc_type = record.exc_info[0]
-            if exc_type and issubclass(exc_type, KeyboardInterrupt):
+            if exc_type and (
+                issubclass(exc_type, KeyboardInterrupt) or
+                (issubclass(exc_type, AttributeError) and 
+                 "'CacheManager' object has no attribute 'get_all_keys'" in str(record.exc_info[1]))
+            ):
                 return False
                 
-        # 检查格式化后的异常信息
-        if hasattr(record, 'exc_text') and record.exc_text:
-            if "KeyboardInterrupt" in record.exc_text:
-                return False
-                
-        # 检查特定的关闭消息模式
-        if any(msg in record.getMessage() for msg in [
-            "收到 CTRL+C",
-            "收到取消信号",
-            "清理任务超时",
-            "强制关闭"
-        ]):
-            return False
-            
-        return True
-
-class CacheManagerFilter(logging.Filter):
-    """过滤掉 CacheManager 相关的错误日志"""
-    def filter(self, record):
-        # 检查消息内容
-        message = record.getMessage()
-        if "'CacheManager' object has no attribute 'get_all_keys'" in message:
-            return False
-            
-        # 检查异常信息
-        if record.exc_info:
-            exc_type = record.exc_info[0]
-            if exc_type and issubclass(exc_type, AttributeError):
-                exc_str = str(record.exc_info[1])
-                if "'CacheManager' object has no attribute 'get_all_keys'" in exc_str:
-                    return False
-                    
         return True
 
 class TeeOutput:
@@ -130,47 +135,195 @@ def wait_for_file_unlock(filepath: str, timeout: int = 5) -> bool:
         time.sleep(0.1)
     return False
 
-class SafeGZipRotator:
-    """安全的日志压缩处理器"""
+class BufferedHandler(logging.Handler):
+    """带缓冲的日志处理器"""
+    def __init__(self, target_handler: logging.Handler):
+        super().__init__()
+        self.target_handler = target_handler
+        self.buffer: deque = deque(maxlen=BUFFER_SIZE)
+        self.buffer_lock = threading.Lock()
+        self.flush_timer = None
+        self.should_stop = threading.Event()
+        self.start_flush_thread()
+        atexit.register(self.stop)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if self.should_stop.is_set():
+            # 如果正在停止，直接写入目标
+            self.target_handler.emit(record)
+            return
+            
+        with self.buffer_lock:
+            self.buffer.append(record)
+            
+        # 如果是错误级别的日志，立即刷新
+        if record.levelno >= logging.ERROR:
+            self.flush()
+
+    def flush(self) -> None:
+        if not self.buffer:
+            return
+            
+        records_to_emit = []
+        with self.buffer_lock:
+            while self.buffer:
+                records_to_emit.append(self.buffer.popleft())
+
+        for record in records_to_emit:
+            try:
+                self.target_handler.emit(record)
+            except Exception as e:
+                print(f"Error emitting log record: {e}")
+        
+        try:
+            self.target_handler.flush()
+        except Exception as e:
+            print(f"Error flushing target handler: {e}")
+
+    def start_flush_thread(self) -> None:
+        def flush_worker():
+            while not self.should_stop.wait(FLUSH_INTERVAL):
+                try:
+                    self.flush()
+                except Exception as e:
+                    print(f"Error in flush worker: {e}")
+
+        self.flush_timer = threading.Thread(
+            target=flush_worker,
+            daemon=True,
+            name="LogFlushThread"
+        )
+        self.flush_timer.start()
+
+    def stop(self) -> None:
+        """安全停止日志处理器"""
+        try:
+            # 设置停止标志
+            self.should_stop.set()
+            
+            # 等待刷新线程结束
+            if self.flush_timer and self.flush_timer.is_alive():
+                self.flush_timer.join(timeout=2.0)
+                
+            # 最后一次刷新
+            self.flush()
+            
+        except Exception as e:
+            print(f"Error stopping BufferedHandler: {e}")
+        finally:
+            # 确保移除退出处理器
+            try:
+                atexit.unregister(self.stop)
+            except Exception:
+                pass
+
+class OptimizedGZipRotator:
+    """优化的日志压缩处理器"""
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._compress_queue = queue.Queue()
+        self._compress_thread = None
+        self._should_stop = threading.Event()
+        self._active_tasks = 0
+        self.start_compress_thread()
+        atexit.register(self.stop)
+        
     def __call__(self, source: str, dest: str) -> None:
         try:
             # 确保目标路径存在
             dest_dir = os.path.dirname(dest)
             os.makedirs(dest_dir, exist_ok=True)
             
-            # 如果文件被锁定，等待解锁
-            if is_file_locked(source):
-                if not wait_for_file_unlock(source):
-                    logging.warning(f"文件 {source} 仍然被锁定，跳过轮转")
-                    return
-            
             # 使用临时文件
-            temp_dest = f"{dest}.tmp"
+            temp_source = f"{source}.rotating"
             
-            # 复制并压缩
-            with open(source, 'rb') as f_in:
-                with gzip.open(f"{dest}.gz", 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+            # 快速重命名源文件
+            try:
+                os.rename(source, temp_source)
+            except (OSError, PermissionError) as e:
+                logging.warning(f"无法重命名日志文件: {e}")
+                return
+                
+            # 将压缩任务加入队列
+            with self._lock:
+                self._active_tasks += 1
+                self._compress_queue.put((temp_source, dest))
             
-            # 在Windows上，使用重命名替代删除
-            if platform.system() == 'Windows':
-                try:
-                    # 先尝试重命名源文件
-                    os.rename(source, temp_dest)
-                    # 然后删除临时文件
-                    if os.path.exists(temp_dest):
-                        os.remove(temp_dest)
-                except (OSError, PermissionError) as e:
-                    logging.warning(f"无法重命名或删除源文件: {e}")
-            else:
-                # 在其他系统上直接删除
-                try:
-                    os.remove(source)
-                except (OSError, PermissionError) as e:
-                    logging.warning(f"无法删除源文件: {e}")
-                    
         except Exception as e:
             logging.error(f"日志轮转失败: {e}")
+            
+    def compress_worker(self):
+        """压缩工作线程"""
+        while not self._should_stop.is_set():
+            try:
+                # 等待压缩任务，最多等待1秒
+                try:
+                    source, dest = self._compress_queue.get(timeout=1)
+                except queue.Empty:
+                    continue
+                    
+                try:
+                    # 执行压缩
+                    with open(source, 'rb') as f_in:
+                        with gzip.open(f"{dest}.gz", 'wb', compresslevel=6) as f_out:
+                            shutil.copyfileobj(f_in, f_out, length=1024*1024)
+                    
+                    # 删除源文件
+                    try:
+                        os.remove(source)
+                    except (OSError, PermissionError) as e:
+                        logging.warning(f"无法删除临时文件 {source}: {e}")
+                        
+                except Exception as e:
+                    logging.error(f"压缩日志文件失败: {e}")
+                finally:
+                    with self._lock:
+                        self._active_tasks -= 1
+                    
+            except Exception as e:
+                logging.error(f"压缩工作线程出错: {e}")
+                
+    def start_compress_thread(self):
+        """启动压缩线程"""
+        if self._compress_thread is None:
+            self._compress_thread = threading.Thread(
+                target=self.compress_worker,
+                daemon=True,
+                name="LogCompressThread"
+            )
+            self._compress_thread.start()
+            
+    def stop(self):
+        """停止压缩线程"""
+        try:
+            self._should_stop.set()
+            
+            if self._compress_thread and self._compress_thread.is_alive():
+                self._compress_thread.join(timeout=5.0)
+                
+            # 处理剩余的压缩任务
+            while self._active_tasks > 0:
+                try:
+                    source, dest = self._compress_queue.get_nowait()
+                    with open(source, 'rb') as f_in:
+                        with gzip.open(f"{dest}.gz", 'wb', compresslevel=6) as f_out:
+                            shutil.copyfileobj(f_in, f_out, length=1024*1024)
+                    os.remove(source)
+                except queue.Empty:
+                    break
+                except Exception as e:
+                    logging.error(f"处理剩余压缩任务失败: {e}")
+                finally:
+                    with self._lock:
+                        self._active_tasks -= 1
+                    
+        except Exception as e:
+            logging.error(f"停止压缩处理器失败: {e}")
+        finally:
+            try:
+                atexit.unregister(self.stop)
+            except Exception:
+                pass
 
 def get_log_directory() -> str:
     """获取日志目录"""
@@ -251,8 +404,8 @@ def create_handler(is_console: bool = False) -> logging.Handler:
             delay=True  # 延迟创建文件直到第一次写入
         )
         
-        # 设置自定义的日志轮转处理
-        handler.rotator = SafeGZipRotator()
+        # 设置优化的日志轮转处理器
+        handler.rotator = OptimizedGZipRotator()
         # 设置日志文件命名格式
         handler.namer = lambda name: os.path.join(
             get_log_directory(),
@@ -265,7 +418,8 @@ def create_handler(is_console: bool = False) -> logging.Handler:
         )
     
     handler.setFormatter(formatter)
-    return handler
+    # 使用缓冲处理器包装原始处理器
+    return BufferedHandler(handler)
 
 def setup_logger() -> logging.Logger:
     """设置日志系统"""
@@ -279,11 +433,9 @@ def setup_logger() -> logging.Logger:
     logger.setLevel(logging.DEBUG if debug_enabled else logging.INFO)
     logger.handlers.clear()
     
-    # 添加过滤器
-    interrupt_filter = KeyboardInterruptFilter()
-    cache_filter = CacheManagerFilter()  # 添加新的过滤器
-    logger.addFilter(interrupt_filter)
-    logger.addFilter(cache_filter)      # 添加新的过滤器
+    # 使用优化的过滤器
+    optimized_filter = OptimizedFilter()
+    logger.addFilter(optimized_filter)
     
     # 清理旧日志
     cleanup_old_logs()

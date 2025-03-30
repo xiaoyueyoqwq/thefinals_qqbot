@@ -27,7 +27,7 @@ class ScoreData(BaseModel):
             datetime: lambda v: v.isoformat(),
             date: lambda v: v.isoformat()
         }
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
 
 class CurrentScoreResponse(BaseModel):
@@ -39,7 +39,7 @@ class CurrentScoreResponse(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
 
 class HistoricalScoreData(BaseModel):
@@ -60,12 +60,11 @@ class HistoricalScoreData(BaseModel):
                 "save_time": "2024-03-20T23:55:00"
             }
         }
-        # 启用任意字符串支持
         json_encoders = {
             datetime: lambda v: v.isoformat(),
             date: lambda v: v.isoformat()
         }
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
 
 class HistoricalScoreResponse(BaseModel):
@@ -78,7 +77,7 @@ class HistoricalScoreResponse(BaseModel):
         json_encoders = {
             date: lambda v: v.isoformat()
         }
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
 
 class StatsData(BaseModel):
@@ -93,7 +92,7 @@ class StatsData(BaseModel):
         json_encoders = {
             date: lambda v: v.isoformat()
         }
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
 
 class StatsResponse(BaseModel):
@@ -105,7 +104,7 @@ class StatsResponse(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
-        allow_population_by_field_name = True
+        validate_by_name = True
         arbitrary_types_allowed = True
 
 class DFAPIPlugin(Plugin):
