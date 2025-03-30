@@ -6,6 +6,8 @@ from utils.logger import bot_logger
 from utils.config import settings
 from functools import wraps
 from contextlib import asynccontextmanager
+from datetime import datetime
+import os
 
 def async_retry(max_retries: int = 3, delay: float = 1.0):
     """异步重试装饰器"""
@@ -51,25 +53,12 @@ class BaseAPI:
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
     
-    @classmethod
-    def _get_proxy_url(cls) -> Optional[str]:
-        """获取代理URL"""
-        try:
-            proxy_config = getattr(settings, 'proxy', {})
-            if not proxy_config or not proxy_config.get('enabled', False):
-                bot_logger.debug("代理未启用")
-                return None
-                
-            proxy_type = proxy_config.get('type', 'http')
-            host = proxy_config.get('host', '127.0.0.1')
-            port = proxy_config.get('port', 7890)
-            
-            proxy_url = f"{proxy_type}://{host}:{port}"
-            bot_logger.info(f"[BaseAPI] 使用代理: {proxy_url}")
-            return proxy_url
-        except Exception as e:
-            bot_logger.error(f"[BaseAPI] 获取代理配置失败: {e}")
+    @staticmethod
+    def _get_proxy_url():
+        proxy_url = os.getenv('HTTP_PROXY') or os.getenv('HTTPS_PROXY')
+        if not proxy_url:
             return None
+        return proxy_url
     
     @classmethod
     @asynccontextmanager
@@ -80,8 +69,6 @@ class BaseAPI:
                 if not cls._client_pool:
                     # 获取代理配置
                     proxy_url = cls._get_proxy_url()
-                    
-                    bot_logger.debug(f"[BaseAPI] 创建新的HTTP客户端, 代理: {proxy_url}")
                     
                     # 创建基本客户端配置
                     client_config = {
@@ -106,7 +93,7 @@ class BaseAPI:
                                 client_config["proxies"] = proxy_url
                                 client = httpx.AsyncClient(**client_config)
                             except Exception as e:
-                                bot_logger.error(f"[BaseAPI] 代理配置失败: {e}")
+                                bot_logger.error(f"代理配置失败: {e}")
                                 # 如果代理配置都失败，尝试不使用代理
                                 client_config.pop("proxy", None)
                                 client_config.pop("proxies", None)
@@ -115,10 +102,8 @@ class BaseAPI:
                         client = httpx.AsyncClient(**client_config)
                     
                     cls._client_pool.append(client)
-                    bot_logger.debug("[BaseAPI] HTTP客户端创建成功")
                 else:
                     client = cls._client_pool.pop()
-                    bot_logger.debug("[BaseAPI] 从连接池获取HTTP客户端")
             
             try:
                 yield client
@@ -126,7 +111,6 @@ class BaseAPI:
                 if not client.is_closed:
                     async with cls._client_lock:
                         cls._client_pool.append(client)
-                        bot_logger.debug("[BaseAPI] HTTP客户端归还连接池")
     
     @classmethod
     async def close_all_clients(cls):
@@ -319,4 +303,4 @@ class BaseAPI:
     def _build_url(self, endpoint: str) -> str:
         """构建完整的API URL"""
         endpoint = endpoint.lstrip('/')
-        return f"{self.base_url}/{endpoint}" if self.base_url else endpoint 
+        return f"{self.base_url}/{endpoint}" if self.base_url else endpoint

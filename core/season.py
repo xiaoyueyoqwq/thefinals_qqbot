@@ -4,12 +4,14 @@ import asyncio
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 from pathlib import Path
+
 from utils.logger import bot_logger
 from utils.persistence import PersistenceManager
 from utils.cache_manager import CacheManager
 from utils.rotation_manager import RotationManager, TimeBasedStrategy
 from utils.base_api import BaseAPI
 from utils.config import settings
+
 
 class SeasonConfig:
     """赛季配置"""
@@ -56,11 +58,12 @@ class SeasonConfig:
             url += "/crossplay"
         return url
 
+
 class Season:
     """赛季数据管理"""
     
     def __init__(self, season_id: str, display_name: str, api: BaseAPI, cache: CacheManager, rotation: int = 60):
-        bot_logger.info(f"[Season] 初始化赛季实例 - season_id: {season_id}, display_name: {display_name}")
+        """初始化赛季实例"""
         self.season_id = season_id
         self.display_name = display_name
         self.api = api
@@ -79,13 +82,14 @@ class Season:
         self.cache_name = f"season_{season_id}"
         self.update_interval = rotation
         
-        bot_logger.info(f"[Season] 赛季实例初始化完成 - {season_id}, 存储方式: {'缓存' if self._is_current else '持久化'}")
+        # 保留对赛季初始化的一条日志
+        bot_logger.debug(
+            f"赛季 {season_id} 初始化完成，存储方式: {'缓存' if self._is_current else '持久化'}"
+        )
         
     async def initialize(self) -> None:
         """初始化赛季数据"""
         try:
-            bot_logger.info(f"[Season] 开始初始化赛季数据 - {self.season_id}")
-            
             # 注册存储
             if self._is_current:
                 await self._storage.register_database(self.cache_name)
@@ -102,18 +106,15 @@ class Season:
                 )
             
             # 立即更新一次数据
-            bot_logger.info(f"[Season] 初始化时立即更新一次数据")
             await self._update_data()
             
             # 创建更新任务
             if not self._update_task:
-                bot_logger.info(f"[Season] 创建数据更新任务 - rotation: {self.rotation}秒")
+                bot_logger.debug(f"创建数据更新任务 - {self.season_id}, rotation: {self.rotation}秒")
                 self._update_task = asyncio.create_task(self._update_loop())
                 
-            bot_logger.info(f"[Season] 赛季数据初始化完成 - {self.season_id}")
         except Exception as e:
-            bot_logger.error(f"[Season] 赛季数据初始化失败: {str(e)}")
-            bot_logger.exception(e)
+            bot_logger.error(f"赛季 {self.season_id} 初始化失败: {str(e)}")
             raise
             
     async def _update_loop(self) -> None:
@@ -124,7 +125,6 @@ class Season:
                     # 检查强制停止标志
                     if self._force_stop:
                         return
-
                     # 更新数据
                     await self._update_data()
                     
@@ -256,14 +256,7 @@ class Season:
             return None
             
     async def get_top_players(self, limit: int = 5) -> List[str]:
-        """获取排名前N的玩家
-        
-        Args:
-            limit: 返回数量限制
-            
-        Returns:
-            List[str]: 玩家名称列表
-        """
+        """获取排名前N的玩家"""
         try:
             # 只从缓存获取数据
             cached_data = await self._storage.get_cache(self.cache_name, "top_players")
@@ -272,8 +265,6 @@ class Season:
                     return json.loads(cached_data)[:limit]
                 except json.JSONDecodeError:
                     pass
-            
-            # 缓存未命中返回空列表
             return []
             
         except Exception as e:
@@ -293,11 +284,7 @@ class Season:
                 pass
             
     async def get_all_players(self) -> List[Dict[str, Any]]:
-        """获取所有玩家数据
-        
-        Returns:
-            List[Dict[str, Any]]: 所有玩家数据列表
-        """
+        """获取所有玩家数据"""
         try:
             bot_logger.info(f"[Season] 开始获取所有玩家数据 - {self.season_id}")
             
@@ -326,11 +313,11 @@ class Season:
             bot_logger.error(f"[Season] 获取所有玩家数据失败: {str(e)}")
             return []
 
+
 class HistorySeason:
     """历史赛季数据管理"""
     
     def __init__(self, season_id: str, display_name: str, api: BaseAPI, persistence: PersistenceManager):
-        bot_logger.info(f"[HistorySeason] 初始化历史赛季实例 - season_id: {season_id}, display_name: {display_name}")
         self.season_id = season_id
         self.display_name = display_name
         self.api = api
@@ -340,30 +327,26 @@ class HistorySeason:
         # 添加数据库相关属性
         self.db_name = f"season_{season_id}"
         self.table_name = "player_data"
-        self._persistence = persistence  # 保存persistence实例的引用
+        self._persistence = persistence
         
-        bot_logger.info(f"[HistorySeason] 历史赛季实例初始化完成 - {season_id}, db_name: {self.db_name}")
+        # 【修改】删除重复日志：原本这里有“历史赛季 {season_id} 初始化完成”
+        # bot_logger.debug(f"历史赛季 {season_id} 初始化完成")  # <-- 移除这一行
         
     async def initialize(self) -> None:
         """初始化历史赛季数据"""
         try:
             if not self._initialized:
-                bot_logger.info(f"[HistorySeason] 开始初始化历史赛季数据 - {self.season_id}")
                 await self._initialize_data()
                 self._initialized = True
-                bot_logger.info(f"[HistorySeason] 历史赛季数据初始化完成 - {self.season_id}")
             else:
-                bot_logger.info(f"[HistorySeason] 历史赛季已初始化，跳过 - {self.season_id}")
+                bot_logger.debug(f"历史赛季 {self.season_id} 已初始化，跳过")
         except Exception as e:
-            bot_logger.error(f"[HistorySeason] 历史赛季数据初始化失败: {str(e)}")
-            bot_logger.exception(e)
+            bot_logger.error(f"历史赛季 {self.season_id} 初始化失败: {str(e)}")
             raise
             
     async def _initialize_data(self) -> None:
         """初始化数据库"""
         try:
-            bot_logger.info(f"[HistorySeason] 开始初始化数据库 - {self.season_id}")
-            
             # 1. 定义表结构并注册数据库
             tables = {
                 self.table_name: {
@@ -375,45 +358,39 @@ class HistorySeason:
                 }
             }
             
-            bot_logger.info(f"[HistorySeason] 注册数据库并创建表 - db_name: {self.db_name}, tables: {tables}")
             await self._persistence.register_database(self.db_name, tables)
-            bot_logger.info(f"[HistorySeason] 数据库注册完成 - {self.db_name}")
             
             # 2. 检查是否需要初始化数据
             sql = f"SELECT COUNT(*) as count FROM {self.table_name}"
-            bot_logger.info(f"[HistorySeason] 检查数据表是否存在数据 - SQL: {sql}")
-            
             result = await self._persistence.fetch_one(self.db_name, sql)
-            bot_logger.info(f"[HistorySeason] 数据检查结果: {result}")
             
             if result and result["count"] > 0:
-                bot_logger.info(f"[HistorySeason] 数据库已有数据({result['count']}条记录)，跳过初始化")
+                # 【修改】将原来两条日志合并成一条
+                bot_logger.debug(
+                    f"历史赛季 {self.season_id} 数据库已有 {result['count']} 条记录 => 初始化完成"
+                )
                 return
                 
             # 3. 从API获取数据
-            bot_logger.info(f"[HistorySeason] 从API获取数据 - {self.season_id}")
             url = SeasonConfig.get_api_url(self.season_id)
-            bot_logger.info(f"[HistorySeason] 请求API - URL: {url}")
             response = await self.api.get(url)
             
             if not response or response.status_code != 200:
-                bot_logger.error(f"[HistorySeason] API请求失败: {self.season_id}, status_code: {response.status_code if response else 'None'}")
+                bot_logger.error(f"赛季 {self.season_id} API请求失败")
                 return
                 
             data = self.api.handle_response(response)
             if not isinstance(data, dict):
-                bot_logger.error(f"[HistorySeason] API返回数据格式错误: {self.season_id}, type: {type(data)}")
+                bot_logger.error(f"赛季 {self.season_id} API返回数据格式错误")
                 return
                 
             players = data.get("data", [])
             if not players:
-                bot_logger.warning(f"[HistorySeason] 未获取到玩家数据: {self.season_id}")
+                bot_logger.warning(f"赛季 {self.season_id} 未获取到玩家数据")
                 return
                 
             # 4. 保存数据到数据库
-            bot_logger.info(f"[HistorySeason] 开始保存数据到数据库 - 玩家数: {len(players)}")
             operations = []
-            
             for player in players:
                 player_name = player.get("name", "").lower()
                 if not player_name:
@@ -434,24 +411,15 @@ class HistorySeason:
                 ))
             
             if operations:
-                bot_logger.info(f"[HistorySeason] 执行数据库事务 - 操作数: {len(operations)}")
                 await self._persistence.execute_transaction(self.db_name, operations)
-                bot_logger.info(f"[HistorySeason] 数据保存完成 - {len(operations)} 条记录")
+                bot_logger.info(f"赛季 {self.season_id} 已导入 {len(operations)} 条玩家数据")
             
         except Exception as e:
-            bot_logger.error(f"[HistorySeason] 数据库初始化失败: {str(e)}")
-            bot_logger.exception(e)
+            bot_logger.error(f"赛季 {self.season_id} 数据库初始化失败: {str(e)}")
             raise
             
     async def get_player_data(self, player_name: str) -> Optional[dict]:
-        """获取玩家数据
-        
-        Args:
-            player_name: 玩家ID
-            
-        Returns:
-            Optional[dict]: 玩家数据,如果未找到则返回None
-        """
+        """获取玩家数据"""
         try:
             # 先尝试精确匹配
             bot_logger.info(f"[HistorySeason] 尝试精确匹配玩家数据 - {player_name}")
@@ -489,16 +457,8 @@ class HistorySeason:
             return None
             
     async def get_top_players(self, limit: int = 5) -> List[str]:
-        """获取排名前N的玩家
-        
-        Args:
-            limit: 返回数量限制
-            
-        Returns:
-            List[str]: 玩家名称列表
-        """
+        """获取排名前N的玩家"""
         try:
-            # 从持久化存储获取
             sql = f"""
             SELECT player_name 
             FROM {self.table_name} 
@@ -512,11 +472,9 @@ class HistorySeason:
             bot_logger.error(f"[HistorySeason] 获取top玩家失败 {self.season_id}: {str(e)}")
             return []
 
+
 class SeasonManager:
-    """赛季管理器
-    
-    管理多个赛季实例
-    """
+    """赛季管理器"""
     
     _instance = None
     _initialized = False
@@ -553,13 +511,13 @@ class SeasonManager:
         self._lock = asyncio.Lock()
         
         self._initialized = True
-        bot_logger.info("SeasonManager初始化完成")
+        bot_logger.debug("赛季管理器初始化完成")
         
     async def initialize(self) -> None:
         """初始化所有赛季"""
         try:
-            bot_logger.info("[SeasonManager] 开始初始化所有赛季")
-            bot_logger.info(f"[SeasonManager] 当前赛季配置: {self.seasons_config}")
+            bot_logger.info("开始初始化赛季数据")
+            bot_logger.debug(f"当前赛季配置: {self.seasons_config}")
             
             async with self._lock:
                 total_seasons = len(self.seasons_config)
@@ -567,22 +525,17 @@ class SeasonManager:
                 
                 for season_id, display_name in self.seasons_config.items():
                     try:
-                        bot_logger.info(f"[SeasonManager] 正在初始化赛季: {season_id} ({initialized_count + 1}/{total_seasons})")
-                        bot_logger.info(f"[SeasonManager] 赛季显示名称: {display_name}")
-                        
                         if season_id not in self._seasons:
                             # 根据配置判断是否为当前赛季
                             if SeasonConfig.is_current_season(season_id):
-                                bot_logger.info(f"[SeasonManager] {season_id} 是当前赛季，使用缓存模式")
                                 season = Season(
                                     season_id,
                                     display_name,
                                     self.api,
                                     self.cache,
-                                    SeasonConfig.UPDATE_INTERVAL  # 使用配置中的更新间隔
+                                    SeasonConfig.UPDATE_INTERVAL
                                 )
                             else:
-                                bot_logger.info(f"[SeasonManager] {season_id} 是历史赛季，使用数据库模式")
                                 season = HistorySeason(
                                     season_id,
                                     display_name,
@@ -590,42 +543,29 @@ class SeasonManager:
                                     self.persistence
                                 )
                                 
-                            try:
-                                bot_logger.info(f"[SeasonManager] 开始初始化赛季实例 {season_id}")
-                                await season.initialize()
-                                self._seasons[season_id] = season
-                                initialized_count += 1
-                                bot_logger.info(f"[SeasonManager] 赛季 {season_id} 初始化成功 ({initialized_count}/{total_seasons})")
-                            except Exception as e:
-                                bot_logger.error(f"[SeasonManager] 赛季 {season_id} 初始化失败: {str(e)}")
-                                bot_logger.exception(e)
-                                raise
+                            await season.initialize()
+                            self._seasons[season_id] = season
+                            initialized_count += 1
+                            
+                            # 这里保留赛季初始化完成的计数日志
+                            bot_logger.debug(
+                                f"赛季 {season_id} 初始化完成 ({initialized_count}/{total_seasons})"
+                            )
                         else:
-                            bot_logger.info(f"[SeasonManager] 赛季 {season_id} 已存在，跳过初始化")
                             initialized_count += 1
                             
                     except Exception as e:
-                        bot_logger.error(f"[SeasonManager] 处理赛季 {season_id} 时出错: {str(e)}")
-                        bot_logger.exception(e)
+                        bot_logger.error(f"赛季 {season_id} 初始化失败: {str(e)}")
                         raise
                         
-            bot_logger.info(f"[SeasonManager] 所有赛季初始化完成，成功初始化 {initialized_count}/{total_seasons} 个赛季")
-            bot_logger.info(f"[SeasonManager] 已初始化的赛季列表: {list(self._seasons.keys())}")
+            bot_logger.info(f"赛季初始化完成，共 {initialized_count}/{total_seasons} 个赛季")
             
         except Exception as e:
-            bot_logger.error(f"[SeasonManager] 初始化赛季失败: {str(e)}")
-            bot_logger.exception(e)
+            bot_logger.error(f"赛季初始化失败: {str(e)}")
             raise
             
     async def get_season(self, season_id: str) -> Optional[Union[Season, HistorySeason]]:
-        """获取赛季实例
-        
-        Args:
-            season_id: 赛季ID
-            
-        Returns:
-            Union[Season, HistorySeason]: 赛季实例,未找到返回None
-        """
+        """获取赛季实例"""
         return self._seasons.get(season_id.lower())
         
     def get_all_seasons(self) -> List[str]:
@@ -668,15 +608,7 @@ class SeasonManager:
             bot_logger.error(f"[SeasonManager] 停止赛季任务失败: {str(e)}")
             
     async def get_player_data(self, player_name: str, season_id: str) -> Optional[dict]:
-        """获取指定赛季的玩家数据
-        
-        Args:
-            player_name: 玩家名称
-            season_id: 赛季ID
-            
-        Returns:
-            dict: 玩家数据,未找到返回None
-        """
+        """获取指定赛季的玩家数据"""
         bot_logger.info(f"[SeasonManager] 开始获取玩家数据 - 玩家: {player_name}, 赛季: {season_id}")
         
         season = await self.get_season(season_id)
@@ -687,15 +619,7 @@ class SeasonManager:
         return await season.get_player_data(player_name)
         
     async def get_top_players(self, season_id: str, limit: int = 5) -> List[str]:
-        """获取指定赛季排名前N的玩家
-        
-        Args:
-            season_id: 赛季ID
-            limit: 返回数量限制
-            
-        Returns:
-            List[str]: 玩家名称列表
-        """
+        """获取指定赛季排名前N的玩家"""
         season = await self.get_season(season_id)
         if not season:
             return []
@@ -721,4 +645,4 @@ class SeasonManager:
             LIMIT ?
             """
             results = await self.persistence.fetch_all(db_name, sql, (limit,))
-            return [r["player_name"] for r in results] if results else [] 
+            return [r["player_name"] for r in results] if results else []
