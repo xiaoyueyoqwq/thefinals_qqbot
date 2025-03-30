@@ -70,6 +70,11 @@ class BaseAPI:
                     # 获取代理配置
                     proxy_url = cls._get_proxy_url()
                     
+<<<<<<< HEAD
+                    bot_logger.debug(f"[BaseAPI] 创建新的HTTP客户端, 代理: {proxy_url}")
+                    
+=======
+>>>>>>> fix/improve-exit-mechanism
                     # 创建基本客户端配置
                     client_config = {
                         "timeout": 30,
@@ -93,7 +98,11 @@ class BaseAPI:
                                 client_config["proxies"] = proxy_url
                                 client = httpx.AsyncClient(**client_config)
                             except Exception as e:
+<<<<<<< HEAD
+                                bot_logger.error(f"[BaseAPI] 代理配置失败: {e}")
+=======
                                 bot_logger.error(f"代理配置失败: {e}")
+>>>>>>> fix/improve-exit-mechanism
                                 # 如果代理配置都失败，尝试不使用代理
                                 client_config.pop("proxy", None)
                                 client_config.pop("proxies", None)

@@ -32,9 +32,10 @@ import os
 import ctypes
 import subprocess
 from utils.image_manager import ImageManager
+<<<<<<< HEAD
+=======
 from datetime import datetime
-import argparse
-from pathlib import Path
+>>>>>>> fix/improve-exit-mechanism
 
 # 全局变量，用于在信号处理函数中访问
 client = None
@@ -312,6 +313,32 @@ class SafeThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
             self._tasks.clear()
             
 class MyBot(botpy.Client):
+<<<<<<< HEAD
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tasks = []
+        self.executor = SafeThreadPoolExecutor(max_workers=settings.MAX_WORKERS)
+        self.plugin_manager = PluginManager()
+        self.browser = None
+        self.health_check_task = None
+        self.recovery_task = None
+        self.is_stopping = False
+        
+        # 初始化图片管理器
+        self.image_manager = ImageManager()
+        set_image_manager(self.image_manager)
+        
+        # 创建事件循环
+        self.loop = asyncio.get_event_loop()
+        self.loop.set_exception_handler(custom_exception_handler)
+        
+        # 使用增强的线程池
+        self.thread_pool = SafeThreadPoolExecutor(
+            max_workers=settings.MAX_WORKERS if hasattr(settings, 'MAX_WORKERS') else 10,
+            thread_name_prefix="bot_worker"
+        )
+        # 信号量控制并发
+=======
     def __init__(self, intents=None, **options):
         super().__init__(intents=intents, **options)
         
@@ -335,13 +362,19 @@ class MyBot(botpy.Client):
         self.browser_manager = browser_manager
         
         # 初始化消息处理信号量
+>>>>>>> fix/improve-exit-mechanism
         self.semaphore = asyncio.Semaphore(
             settings.MAX_CONCURRENT if hasattr(settings, 'MAX_CONCURRENT') else 5
         )
         
+<<<<<<< HEAD
+        # 初始化组件
+        self.browser_manager = browser_manager
+=======
         # 注册资源
         register_resource(self)
         register_resource(self.thread_pool)
+>>>>>>> fix/improve-exit-mechanism
         
         # 优化内存管理
         self._setup_memory_management()
@@ -494,8 +527,6 @@ class MyBot(botpy.Client):
         try:
             # 启动图片管理器
             await self.image_manager.start()
-            # 设置图片管理器到API
-            set_image_manager(self.image_manager)
             
             # 初始化浏览器
             await self._init_browser()
@@ -523,15 +554,10 @@ class MyBot(botpy.Client):
     async def _init_browser(self):
         """初始化浏览器的异步方法"""
         try:
-            # 检查浏览器状态
-            if not self.browser_manager.initialized:
-                bot_logger.warning("浏览器未初始化，尝试重新初始化...")
-                await asyncio.wait_for(
-                    self.browser_manager.initialize(),
-                    timeout=INIT_TIMEOUT
-                )
-            else:
-                bot_logger.debug("浏览器环境已就绪")
+            await asyncio.wait_for(
+                self.browser_manager.initialize(),
+                timeout=INIT_TIMEOUT
+            )
         except asyncio.TimeoutError:
             bot_logger.error("浏览器初始化超时")
             raise
@@ -809,6 +835,39 @@ class MyBot(botpy.Client):
                 if hasattr(self, 'commands'):
                     self.commands.clear()
 
+<<<<<<< HEAD
+    async def stop(self):
+        """停止机器人"""
+        if self.is_stopping:
+            return
+            
+        self.is_stopping = True
+        bot_logger.info("正在停止机器人...")
+        
+        try:
+            # 停止图片管理器
+            await self.image_manager.stop()
+            
+            # 停止健康检查
+            if self.health_check_task:
+                self.health_check_task.cancel()
+                
+            # 停止恢复任务
+            if self.recovery_task:
+                self.recovery_task.cancel()
+                
+            # 清理资源
+            await self._cleanup()
+            
+        except Exception as e:
+            bot_logger.error(f"停止机器人时出错: {str(e)}")
+            
+        finally:
+            # 调用父类的停止方法
+            await super().stop()
+
+=======
+>>>>>>> fix/improve-exit-mechanism
 async def check_ip():
     """检查当前出口IP"""
     from utils.base_api import BaseAPI
@@ -936,14 +995,6 @@ async def async_main():
         
         # 检查出口IP
         await check_ip()
-        
-        # 初始化浏览器
-        bot_logger.info("正在初始化浏览器环境...")
-        try:
-            await browser_manager.initialize()
-        except Exception as e:
-            bot_logger.error(f"浏览器初始化失败: {e}")
-            raise
         
         intents = botpy.Intents(public_guild_messages=True, public_messages=True)
         client = MyBot(intents=intents)
@@ -1172,49 +1223,9 @@ async def cleanup_resources(timeout=5):
         bot_logger.error(f"清理过程出错: {str(e)}")
         return False
 
-def start_command_tester():
-    """启动命令测试工具"""
-    try:
-        # 检查必要的依赖
-        try:
-            import aiohttp
-            import aiohttp_cors
-        except ImportError:
-            bot_logger.info("正在安装必要的依赖...")
-            pip_cmd = [sys.executable, "-m", "pip", "install", "aiohttp", "aiohttp_cors"]
-            subprocess.check_call(pip_cmd)
-            bot_logger.info("依赖安装完成")
-
-        # 获取命令测试工具的路径
-        tester_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools", "command_tester.py")
-        
-        # 使用 python 解释器运行命令测试工具
-        cmd = [sys.executable, tester_path]
-        bot_logger.info("正在启动命令测试工具...")
-        
-        # 在 Windows 上使用 shell=True 以支持命令行颜色
-        if platform.system() == "Windows":
-            subprocess.run(" ".join(cmd), shell=True)
-        else:
-            subprocess.run(cmd)
-            
-    except Exception as e:
-        bot_logger.error(f"启动命令测试工具时出错: {str(e)}")
-        raise
-
 def main():
     """主函数"""
     try:
-        # 解析命令行参数
-        parser = argparse.ArgumentParser(description="THE FINALS QQ机器人")
-        parser.add_argument("-local", "--local", action="store_true", help="启动本地命令测试工具")
-        args = parser.parse_args()
-
-        # 如果指定了 -local 参数，启动命令测试工具
-        if args.local:
-            start_command_tester()
-            return
-
         FINAL_CLEANUP_TIMEOUT = 10  # 最终清理超时时间（秒）
         
         # 使用全局变量

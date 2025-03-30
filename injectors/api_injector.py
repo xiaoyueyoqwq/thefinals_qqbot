@@ -5,7 +5,10 @@ import botpy.api
 import botpy.http
 from utils.logger import bot_logger
 import asyncio
+<<<<<<< HEAD
+=======
 from datetime import datetime
+>>>>>>> fix/improve-exit-mechanism
 
 class APIInjector:
     """API功能增强注入器"""
@@ -56,11 +59,26 @@ class APIInjector:
             
             for retry in range(max_retries):
                 try:
+<<<<<<< HEAD
+                    bot_logger.debug(f"[APIInjector] 发送文件上传请求 - group_id: {group_openid}, type: {file_type}, 第{retry + 1}次尝试")
+=======
                     bot_logger.debug(f"发送文件上传请求 - group_id: {group_openid}, type: {file_type}, 第{retry + 1}次尝试")
+>>>>>>> fix/improve-exit-mechanism
                     response = await asyncio.wait_for(
                         self._http.request(route, json=payload),
                         timeout=timeout
                     )
+<<<<<<< HEAD
+                    bot_logger.debug(f"[APIInjector] 文件上传响应: {response}")
+                    return response
+                except asyncio.TimeoutError:
+                    if retry < max_retries - 1:
+                        bot_logger.warning(f"[APIInjector] 请求超时，等待{retry_delay}秒后重试...")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # 指数退避
+                        continue
+                    bot_logger.error("[APIInjector] 文件上传请求多次超时")
+=======
                     bot_logger.debug(f"文件上传响应: {response}")
                     return response
                 except asyncio.TimeoutError:
@@ -70,6 +88,7 @@ class APIInjector:
                         retry_delay *= 2  # 指数退避
                         continue
                     bot_logger.error("文件上传请求多次超时")
+>>>>>>> fix/improve-exit-mechanism
                     raise ValueError("文件上传请求超时") from None
                 except Exception as e:
                     error_msg = str(e)
@@ -101,7 +120,11 @@ class APIInjector:
                 if "file_info" in media:
                     payload["media"] = media
                 else:
+<<<<<<< HEAD
+                    bot_logger.warning("[APIInjector] media对象格式不正确，应包含file_info字段")
+=======
                     bot_logger.warning("media对象格式不正确，应包含file_info字段")
+>>>>>>> fix/improve-exit-mechanism
                     return None
                     
             # 移除None值
@@ -116,7 +139,11 @@ class APIInjector:
                 group_openid=group_openid
             )
             
+<<<<<<< HEAD
+            bot_logger.debug(f"[APIInjector] 发送群消息payload: {payload}")
+=======
             bot_logger.debug(f"发送群消息payload: {payload}")
+>>>>>>> fix/improve-exit-mechanism
             return await self._http.request(route, json=payload)
             
         botpy.api.BotAPI.post_group_message = new_post_group_message
@@ -158,4 +185,8 @@ class APIInjector:
             botpy.api.BotAPI.post_group_message = cls._original_post_group_message
             cls._original_post_group_message = None
             
+<<<<<<< HEAD
+        bot_logger.debug("[APIInjector] API功能已恢复原状") 
+=======
         bot_logger.debug("API功能已恢复原状") 
+>>>>>>> fix/improve-exit-mechanism
