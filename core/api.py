@@ -132,7 +132,7 @@ async def get_image(image_id: str, request: Request):
     # 确保图片存在且在允许的目录中
     try:
         image_path = os.path.abspath(image_path)
-        base_dir = os.path.abspath(_image_manager.base_dir)
+        base_dir = os.path.abspath(_image_manager.image_dir)
         if not image_path.startswith(base_dir):
             raise HTTPException(status_code=403, detail="Access denied")
             
