@@ -27,9 +27,10 @@ class LeaderboardPlugin(Plugin):
         await super().on_load()  # 调用父类的 on_load
         self.logger.info(f"[{self.name}] 排位分数走势图插件已加载")
         
-    def on_unload(self):
+    async def on_unload(self):
         """插件卸载时的回调函数"""
         self.logger.info(f"[{self.name}] 排位分数走势图插件已卸载")
+        await super().on_unload()
         
     def _get_usage_message(self) -> str:
         """获取使用说明消息"""

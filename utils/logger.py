@@ -11,9 +11,24 @@ import gzip
 import shutil
 import time
 from pathlib import Path
+<<<<<<< HEAD
+=======
+import yaml
+>>>>>>> fix/improve-exit-mechanism
 
 # 初始化colorama以支持Windows
 init()
+
+# 读取配置文件
+def load_config():
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'config.yaml')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        return config
+    except Exception as e:
+        print(f"无法加载配置文件: {e}")
+        return {"debug": {"enabled": False}}
 
 class KeyboardInterruptFilter(logging.Filter):
     """过滤掉 KeyboardInterrupt 相关的日志"""
@@ -257,9 +272,14 @@ def create_handler(is_console: bool = False) -> logging.Handler:
 
 def setup_logger() -> logging.Logger:
     """设置日志系统"""
+    # 加载配置
+    config = load_config()
+    debug_enabled = config.get('debug', {}).get('enabled', False)
+    
     # 配置logger
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    # 根据debug设置决定日志级别
+    logger.setLevel(logging.DEBUG if debug_enabled else logging.INFO)
     logger.handlers.clear()
     
     # 添加过滤器

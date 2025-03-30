@@ -12,7 +12,7 @@ class MessageInjector:
     @classmethod
     def inject(cls):
         """注入消息类功能增强"""
-        bot_logger.info("[MessageInjector] 开始注入消息类功能增强...")
+        bot_logger.info("注入功能: 消息处理")
         
         # 保存原始方法
         cls._original_reply = getattr(botpy.message.Message, 'reply', None)
@@ -36,12 +36,11 @@ class MessageInjector:
             )
         botpy.message.Message.recall = recall
         
-        bot_logger.debug("[MessageInjector] 已增强Message类功能")
         
     @classmethod
     def rollback(cls):
         """回滚消息类功能增强"""
-        bot_logger.info("[MessageInjector] 正在回滚消息类功能增强...")
+        bot_logger.info("正在回滚消息处理功能...")
         
         # 恢复原始方法
         if cls._original_reply is not None:
@@ -52,4 +51,4 @@ class MessageInjector:
             botpy.message.Message.recall = cls._original_recall
             cls._original_recall = None
             
-        bot_logger.debug("[MessageInjector] 消息类功能已恢复原状") 
+        bot_logger.debug("消息处理功能已恢复原状") 

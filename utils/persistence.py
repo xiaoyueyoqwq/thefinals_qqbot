@@ -91,7 +91,6 @@ class AsyncDatabase:
         is_many: bool = False
     ):
         """将写操作添加进内存队列，等待后台flush"""
-        # 如果数据库已close则直接拒绝
         if self._closed:
             raise RuntimeError("AsyncDatabase已关闭，无法再进行写入操作。")
         
@@ -152,8 +151,6 @@ class AsyncDatabase:
         """创建表(如果不存在则创建)"""
         columns_def = ", ".join(f"{name} {type_}" for name, type_ in columns.items())
         sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_def})"
-        # 这里我们也使用延迟写，但建表通常只需建一次
-        # 如果希望建表立即生效可以改为: await self.flush()
         await self.execute(sql)
 
     async def close(self) -> None:
@@ -201,8 +198,8 @@ class PersistenceManager:
         self._lock = asyncio.Lock()
         
         self._initialized = True
-        bot_logger.info("PersistenceManager初始化完成")
-        
+        # 原先这里有 info 日志，已移除
+
     def _get_db_path(self, name: str) -> Path:
         """获取数据库文件路径"""
         return self.data_dir / f"{name}.db"
@@ -214,22 +211,20 @@ class PersistenceManager:
     ) -> None:
         """注册数据库并按需创建表"""
         try:
-            bot_logger.info(f"开始注册数据库: {name}")
+            # 原先这里有 info 日志，已移除
             
             async with self._lock:
                 if name in self._databases:
                     return
-                # 创建数据库实例
                 db_path = self._get_db_path(name)
                 db = AsyncDatabase(db_path)
                 self._databases[name] = db
                 
-                # 创建表
                 if tables:
                     for table_name, columns in tables.items():
                         await db.create_table(table_name, columns)
                         
-            bot_logger.info(f"数据库 {name} 注册完成")
+            # 原先这里有 info 日志，已移除
             
         except Exception as e:
             bot_logger.error(f"注册数据库失败 {name}: {str(e)}")
