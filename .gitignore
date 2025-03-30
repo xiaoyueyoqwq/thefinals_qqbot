@@ -111,4 +111,8 @@ deploy.py
 changes.txt
 
 /static/temp_images/*
+<<<<<<< HEAD
+=======
+
+>>>>>>> fix/improve-exit-mechanism
 botpy.log.*

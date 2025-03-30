@@ -3,6 +3,9 @@
 import functools
 import botpy.logging
 from utils.logger import bot_logger
+from datetime import datetime
+
+log = bot_logger
 
 class LoggingInjector:
     """日志功能增强注入器"""
@@ -12,7 +15,7 @@ class LoggingInjector:
     @classmethod
     def inject(cls):
         """注入日志功能增强"""
-        bot_logger.info("[LoggingInjector] 开始注入日志功能增强...")
+        log.info("注入功能: 日志增强")
         
         # 保存原始方法
         cls._original_configure_logging = botpy.logging.configure_logging
@@ -24,13 +27,12 @@ class LoggingInjector:
             return cls._original_configure_logging(*args, **kwargs)
             
         botpy.logging.configure_logging = new_configure_logging
-        bot_logger.debug("[LoggingInjector] 已修复logging force参数")
         
     @classmethod
     def rollback(cls):
         """回滚日志功能增强"""
         if cls._original_configure_logging:
-            bot_logger.info("[LoggingInjector] 正在回滚日志功能增强...")
+            bot_logger.info("正在回滚日志功能增强...")
             botpy.logging.configure_logging = cls._original_configure_logging
             cls._original_configure_logging = None
-            bot_logger.debug("[LoggingInjector] 日志功能已恢复原状") 
+            bot_logger.debug("日志功能已恢复原状") 

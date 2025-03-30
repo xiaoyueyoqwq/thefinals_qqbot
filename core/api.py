@@ -287,7 +287,6 @@ def register_plugin_instance(instance: Any):
     """注册插件实例"""
     plugin_name = instance.__class__.__name__
     _plugin_instances[plugin_name] = instance
-    bot_logger.debug(f"[API] 注册插件实例: {plugin_name}")
 
 def get_app() -> FastAPI:
     """获取FastAPI实例"""

@@ -10,6 +10,7 @@ import botpy.http
 from typing import Any
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
+from datetime import datetime
 
 class ProxyInjector:
     """代理支持注入器"""
@@ -21,7 +22,7 @@ class ProxyInjector:
     @classmethod
     def inject(cls):
         """注入代理支持"""
-        bot_logger.info("[ProxyInjector] 开始注入代理支持...")
+        bot_logger.info("注入功能: 代理支持")
         
         # 保存原始方法
         cls._original_update_access_token = botpy.robot.Token.update_access_token
@@ -34,7 +35,6 @@ class ProxyInjector:
             """注入代理的token获取"""
             # 获取代理配置
             proxy_url = BaseAPI._get_proxy_url()
-            bot_logger.info(f"[Botpy] Token获取使用代理: {proxy_url}")
             
             # 创建SSL上下文
             ssl_ctx = ssl.create_default_context()
@@ -64,16 +64,15 @@ class ProxyInjector:
                 ) as response:
                     data = await response.json()
             except asyncio.TimeoutError as e:
-                bot_logger.error(f"[Botpy] 获取token超时: {e}")
+                bot_logger.error(f"获取token超时: {e}")
                 raise
             finally:
                 await session.close()
                 
             if "access_token" not in data or "expires_in" not in data:
-                bot_logger.error("[Botpy] 获取token失败，请检查appid和secret填写是否正确！")
+                bot_logger.error("获取token失败，请检查appid和secret填写是否正确！")
                 raise RuntimeError(str(data))
                 
-            bot_logger.info(f"[Botpy] Token将在 {data['expires_in']} 秒后过期")
             self.access_token = data["access_token"]
             self.expires_in = int(data["expires_in"]) + int(time.time())
         
@@ -90,7 +89,6 @@ class ProxyInjector:
             if not self._session or self._session.closed:
                 # 获取代理配置
                 proxy_url = BaseAPI._get_proxy_url()
-                bot_logger.info(f"[Botpy] HTTP使用代理: {proxy_url}")
                 
                 # 创建SSL上下文
                 ssl_ctx = ssl.create_default_context()
@@ -109,7 +107,6 @@ class ProxyInjector:
                     connector=connector,
                     timeout=aiohttp.ClientTimeout(total=30)
                 )
-                bot_logger.debug("[Botpy] HTTP客户端创建成功")
         
         # 注入request方法
         @functools.wraps(cls._original_request)
@@ -131,17 +128,12 @@ class ProxyInjector:
                         if v:
                             if isinstance(v, dict):
                                 if k == "message_reference":
-                                    bot_logger.error(
-                                        f"[botpy] 接口参数传入异常, 请求连接: {route.url}, "
-                                        f"错误原因: file_image与message_reference不能同时传入，"
-                                        f"备注: sdk已按照优先级，去除message_reference参数"
-                                    )
+                                    bot_logger.error("接口参数传入异常, file_image与message_reference不能同时传入")
                             else:
                                 kwargs["data"].add_field(k, v)
             
             await self.check_session()
             route.is_sandbox = self.is_sandbox
-            bot_logger.debug(f"[botpy] 请求头部: {self._headers}, 请求方式: {route.method}, 请求url: {route.url}")
             
             try:
                 # 添加代理配置
@@ -155,12 +147,10 @@ class ProxyInjector:
                     timeout=aiohttp.ClientTimeout(total=self.timeout),
                     **kwargs,
                 ) as response:
-                    bot_logger.debug(response)
                     return await botpy.http._handle_response(response)
             except asyncio.TimeoutError:
-                bot_logger.warning(f"请求超时，请求连接: {route.url}")
+                bot_logger.warning(f"请求超时: {route.url}")
             except ConnectionResetError:
-                bot_logger.debug("session connection broken retry")
                 await self.request(route, retry_time + 1, **kwargs)
         
         # 替换方法
@@ -168,12 +158,10 @@ class ProxyInjector:
         botpy.http.BotHttp.check_session = new_check_session
         botpy.http.BotHttp.request = new_request
         
-        bot_logger.debug("[ProxyInjector] 已注入代理支持")
-        
     @classmethod
     def rollback(cls):
         """回滚代理支持"""
-        bot_logger.info("[ProxyInjector] 正在回滚代理支持...")
+        bot_logger.info("正在回滚代理支持...")
         
         # 恢复原始方法
         if cls._original_update_access_token is not None:
@@ -187,5 +175,8 @@ class ProxyInjector:
         if cls._original_request is not None:
             botpy.http.BotHttp.request = cls._original_request
             cls._original_request = None
-            
-        bot_logger.debug("[ProxyInjector] 代理支持已恢复原状") 
+        
+    def log_request(self, method, url, headers):
+        if 'gateway/bot' in url or 'users/@me' in url:
+            return
+        bot_logger.debug(f"[{datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z] HTTP请求: {method} {url}") 
