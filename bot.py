@@ -32,7 +32,10 @@ import os
 import ctypes
 import subprocess
 from utils.image_manager import ImageManager
+<<<<<<< HEAD
+=======
 from datetime import datetime
+>>>>>>> fix/improve-exit-mechanism
 
 # 全局变量，用于在信号处理函数中访问
 client = None
@@ -310,6 +313,32 @@ class SafeThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
             self._tasks.clear()
             
 class MyBot(botpy.Client):
+<<<<<<< HEAD
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tasks = []
+        self.executor = SafeThreadPoolExecutor(max_workers=settings.MAX_WORKERS)
+        self.plugin_manager = PluginManager()
+        self.browser = None
+        self.health_check_task = None
+        self.recovery_task = None
+        self.is_stopping = False
+        
+        # 初始化图片管理器
+        self.image_manager = ImageManager()
+        set_image_manager(self.image_manager)
+        
+        # 创建事件循环
+        self.loop = asyncio.get_event_loop()
+        self.loop.set_exception_handler(custom_exception_handler)
+        
+        # 使用增强的线程池
+        self.thread_pool = SafeThreadPoolExecutor(
+            max_workers=settings.MAX_WORKERS if hasattr(settings, 'MAX_WORKERS') else 10,
+            thread_name_prefix="bot_worker"
+        )
+        # 信号量控制并发
+=======
     def __init__(self, intents=None, **options):
         super().__init__(intents=intents, **options)
         
@@ -333,13 +362,19 @@ class MyBot(botpy.Client):
         self.browser_manager = browser_manager
         
         # 初始化消息处理信号量
+>>>>>>> fix/improve-exit-mechanism
         self.semaphore = asyncio.Semaphore(
             settings.MAX_CONCURRENT if hasattr(settings, 'MAX_CONCURRENT') else 5
         )
         
+<<<<<<< HEAD
+        # 初始化组件
+        self.browser_manager = browser_manager
+=======
         # 注册资源
         register_resource(self)
         register_resource(self.thread_pool)
+>>>>>>> fix/improve-exit-mechanism
         
         # 优化内存管理
         self._setup_memory_management()
@@ -800,6 +835,39 @@ class MyBot(botpy.Client):
                 if hasattr(self, 'commands'):
                     self.commands.clear()
 
+<<<<<<< HEAD
+    async def stop(self):
+        """停止机器人"""
+        if self.is_stopping:
+            return
+            
+        self.is_stopping = True
+        bot_logger.info("正在停止机器人...")
+        
+        try:
+            # 停止图片管理器
+            await self.image_manager.stop()
+            
+            # 停止健康检查
+            if self.health_check_task:
+                self.health_check_task.cancel()
+                
+            # 停止恢复任务
+            if self.recovery_task:
+                self.recovery_task.cancel()
+                
+            # 清理资源
+            await self._cleanup()
+            
+        except Exception as e:
+            bot_logger.error(f"停止机器人时出错: {str(e)}")
+            
+        finally:
+            # 调用父类的停止方法
+            await super().stop()
+
+=======
+>>>>>>> fix/improve-exit-mechanism
 async def check_ip():
     """检查当前出口IP"""
     from utils.base_api import BaseAPI
