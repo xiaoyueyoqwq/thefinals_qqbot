@@ -54,19 +54,26 @@ class BindPlugin(Plugin):
             return
             
         try:
-            async with self.bind_manager._lock:
-                self.bind_manager.bindings[handler.message.author.member_openid] = args
-                with open(self.bind_manager.bind_file, 'w', encoding='utf-8') as f:
-                    json.dump(self.bind_manager.bindings, f, ensure_ascii=False, indent=2)
-                
-            await self.reply(handler,
-                "\n✅ 绑定成功！\n"
-                "━━━━━━━━━━━━━━━\n"
-                f"游戏ID: {args}\n\n"
-                "现在可以直接使用:\n"
-                "/r - 查询排位\n"
-                "/wt - 查询世界巡回赛"
+            success = await self.bind_manager.bind_user_async(
+                handler.message.author.member_openid,
+                args
             )
+            
+            if success:
+                await self.reply(handler,
+                    "\n✅ 绑定成功！\n"
+                    "━━━━━━━━━━━━━━━\n"
+                    f"游戏ID: {args}\n\n"
+                    "现在可以直接使用:\n"
+                    "/r - 查询排位\n"
+                    "/wt - 查询世界巡回赛\n"
+                    "/lb - 查询排位分数走势"
+                )
+            else:
+                await self.reply(handler, "❌ 绑定失败，请稍后重试")
+        except TimeoutError:
+            bot_logger.error(f"[{self.name}] 绑定操作超时")
+            await self.reply(handler, "⚠️ 操作超时，请稍后重试")
         except Exception as e:
             bot_logger.error(f"[{self.name}] 绑定失败: {str(e)}")
             await self.reply(handler, "❌ 绑定失败，请稍后重试")
@@ -75,15 +82,17 @@ class BindPlugin(Plugin):
     async def unbind_game_id(self, handler: MessageHandler, content: str) -> None:
         """解除游戏ID绑定"""
         try:
-            user_id = handler.message.author.member_openid
-            async with self.bind_manager._lock:
-                if user_id in self.bind_manager.bindings:
-                    del self.bind_manager.bindings[user_id]
-                    with open(self.bind_manager.bind_file, 'w', encoding='utf-8') as f:
-                        json.dump(self.bind_manager.bindings, f, ensure_ascii=False, indent=2)
-                    await self.reply(handler, "✅ 已解除游戏ID绑定")
-                else:
-                    await self.reply(handler, "❌ 您当前没有绑定游戏ID")
+            success = await self.bind_manager.unbind_user_async(
+                handler.message.author.member_openid
+            )
+            
+            if success:
+                await self.reply(handler, "✅ 已解除游戏ID绑定")
+            else:
+                await self.reply(handler, "❌ 您当前没有绑定游戏ID")
+        except TimeoutError:
+            bot_logger.error(f"[{self.name}] 解绑操作超时")
+            await self.reply(handler, "⚠️ 操作超时，请稍后重试")
         except Exception as e:
             bot_logger.error(f"[{self.name}] 解绑失败: {str(e)}")
             await self.reply(handler, "❌ 解绑失败，请稍后重试")
@@ -91,31 +100,37 @@ class BindPlugin(Plugin):
     @on_command("status", "查看当前绑定的游戏ID")
     async def check_bind_status(self, handler: MessageHandler, content: str) -> None:
         """查看绑定状态"""
-        game_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
-        if game_id:
-            await self.reply(handler,
-                "\n📋 当前绑定信息\n"
-                "━━━━━━━━━━━━━━━\n"
-                f"游戏ID: {game_id}"
-            )
-        else:
-            await self.reply(handler, "❌ 您当前没有绑定游戏ID")
+        try:
+            bind_info = self.bind_manager.get_bind_info(handler.message.author.member_openid)
+            if bind_info:
+                bind_time = bind_info.get("bind_time", "未知")
+                last_updated = bind_info.get("last_updated", "未知")
+                await self.reply(handler,
+                    "\n📋 当前绑定信息\n"
+                    "━━━━━━━━━━━━━━━\n"
+                    f"游戏ID: {bind_info['game_id']}\n"
+                    f"绑定时间: {bind_time}\n"
+                    f"最后更新: {last_updated}"
+                )
+            else:
+                await self.reply(handler, "❌ 您当前没有绑定游戏ID")
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 查询绑定状态失败: {str(e)}")
+            await self.reply(handler, "❌ 查询失败，请稍后重试")
             
     def _get_help_message(self) -> str:
         """获取帮助信息"""
         return (
             "\n📝 绑定功能说明\n"
             "━━━━━━━━━━━━━━━\n"
-            "绑定游戏ID:\n"
-            "/bind <游戏ID>\n"
-            "示例: /bind PlayerName#1234\n\n"
-            "解除绑定:\n"
-            "/unbind\n\n"
-            "查看当前绑定:\n"
-            "/status\n\n"
+            "▎绑定ID：/bind 你的游戏ID\n"
+            "▎解除绑定：/unbind\n"
+            "▎查看状态：/status\n"
+            "━━━━━━━━━━━━━━━\n"
             "绑定后可直接使用:\n"
             "/r - 查询排位\n"
-            "/wt - 查询世界巡回赛"
+            "/wt - 查询世界巡回赛\n"
+            "/lb - 查询排位分数走势"
         )
         
     async def on_load(self) -> None:

@@ -50,45 +50,64 @@ class LeaderboardPlugin(Plugin):
     async def show_leaderboard(self, handler, content):
         """处理查看排位分数走势的命令"""
         try:
-            self.logger.debug(f"[{self.name}] 收到命令: /lb {content}")
+            self.logger.debug(f"[{self.name}] 收到原始命令内容: {content}")
             
-            # 移除命令前缀
+            # 移除命令前缀和多余空格
             content = content.strip()
+            # 移除可能重复的命令前缀
+            if content.startswith("/lb"):
+                content = content[3:].strip()
             
-            if not content:
-                # 如果没有参数，返回使用说明
-                self.logger.debug(f"[{self.name}] 无参数，显示使用说明")
-                await self.reply(handler, self._get_usage_message())
-                return
-                
-            # 检查玩家绑定状态
+            self.logger.debug(f"[{self.name}] 处理后的命令内容: {content}")
+            
+            # 获取玩家绑定状态
             try:
                 member_openid = handler.message.author.member_openid
                 self.logger.debug(f"[{self.name}] 用户 member_openid: {member_openid}")
-                player_id = self.bind_manager.get_game_id(member_openid)
-                self.logger.debug(f"[{self.name}] 绑定的 player_id: {player_id}")
+                bound_player_id = self.bind_manager.get_game_id(member_openid)
+                self.logger.debug(f"[{self.name}] 绑定的 player_id: {bound_player_id}")
             except Exception as e:
                 self.logger.error(f"[{self.name}] 获取绑定信息失败: {str(e)}\n{traceback.format_exc()}")
-                player_id = None
+                bound_player_id = None
             
-            # 解析参数，考虑到ID中可能包含#号
-            parts = content.split()
-            if "#" in content:
-                # 如果包含#号，找到第一个包含#的部分作为完整ID
-                for i, part in enumerate(parts):
-                    if "#" in part:
-                        player_id = part
-                        remaining_parts = parts[i+1:]  # 剩余的部分可能是天数
-                        break
+            # 如果没有参数且没有绑定，返回使用说明
+            if not content and not bound_player_id:
+                self.logger.debug(f"[{self.name}] 无参数且未绑定，显示使用说明")
+                await self.reply(handler, self._get_usage_message())
+                return
+            
+            # 如果没有参数但有绑定ID，直接使用绑定ID
+            if not content:
+                player_id = bound_player_id
+                remaining_parts = []
             else:
-                # 如果不包含#号，使用第一个参数作为ID
-                player_id = parts[0]
-                remaining_parts = parts[1:]  # 剩余的部分可能是天数
-                
-            self.logger.debug(f"[{self.name}] 解析到的 player_id: {player_id}")
+                # 解析参数
+                parts = content.split()
+                # 如果第一部分是数字，且有绑定ID，使用绑定ID和天数
+                if parts and parts[0].isdigit() and bound_player_id:
+                    player_id = bound_player_id
+                    remaining_parts = parts
+                else:
+                    # 否则解析ID和天数
+                    if "#" in content:
+                        # 如果包含#号，找到第一个包含#的部分作为完整ID
+                        for i, part in enumerate(parts):
+                            if "#" in part:
+                                player_id = part
+                                remaining_parts = parts[i+1:]
+                                break
+                        else:  # 如果没有找到包含#的部分
+                            player_id = bound_player_id if bound_player_id else None
+                            remaining_parts = parts
+                    else:
+                        # 如果不包含#号，使用第一个参数作为ID
+                        player_id = parts[0]
+                        remaining_parts = parts[1:]
+            
+            self.logger.debug(f"[{self.name}] 最终使用的 player_id: {player_id}")
             
             if not player_id:
-                self.logger.debug(f"[{self.name}] 未提供玩家ID")
+                self.logger.debug(f"[{self.name}] 未提供玩家ID且未绑定")
                 await self.reply(handler, (
                     "\n⚠️ 未提供玩家ID\n"
                     "━━━━━━━━━━━━━\n"

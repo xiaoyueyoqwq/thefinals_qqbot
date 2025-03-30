@@ -9,6 +9,8 @@ from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 import gzip
 import shutil
+import time
+from pathlib import Path
 
 # 初始化colorama以支持Windows
 init()
@@ -96,13 +98,67 @@ class TeeOutput:
         for stream in (self.file, self.original_stream):
             stream.flush()
 
-class GZipRotator:
-    """日志压缩处理器"""
+def is_file_locked(filepath: str) -> bool:
+    """检查文件是否被锁定"""
+    try:
+        # 尝试以独占模式打开文件
+        with open(filepath, 'a+b') as f:
+            # 如果能打开，说明文件没有被锁定
+            return False
+    except (IOError, PermissionError):
+        # 如果无法打开，说明文件被锁定
+        return True
+
+def wait_for_file_unlock(filepath: str, timeout: int = 5) -> bool:
+    """等待文件解锁"""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if not is_file_locked(filepath):
+            return True
+        time.sleep(0.1)
+    return False
+
+class SafeGZipRotator:
+    """安全的日志压缩处理器"""
     def __call__(self, source: str, dest: str) -> None:
-        with open(source, 'rb') as f_in:
-            with gzip.open(f"{dest}.gz", 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        os.remove(source)  # 删除原始文件
+        try:
+            # 确保目标路径存在
+            dest_dir = os.path.dirname(dest)
+            os.makedirs(dest_dir, exist_ok=True)
+            
+            # 如果文件被锁定，等待解锁
+            if is_file_locked(source):
+                if not wait_for_file_unlock(source):
+                    logging.warning(f"文件 {source} 仍然被锁定，跳过轮转")
+                    return
+            
+            # 使用临时文件
+            temp_dest = f"{dest}.tmp"
+            
+            # 复制并压缩
+            with open(source, 'rb') as f_in:
+                with gzip.open(f"{dest}.gz", 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            
+            # 在Windows上，使用重命名替代删除
+            if platform.system() == 'Windows':
+                try:
+                    # 先尝试重命名源文件
+                    os.rename(source, temp_dest)
+                    # 然后删除临时文件
+                    if os.path.exists(temp_dest):
+                        os.remove(temp_dest)
+                except (OSError, PermissionError) as e:
+                    logging.warning(f"无法重命名或删除源文件: {e}")
+            else:
+                # 在其他系统上直接删除
+                try:
+                    os.remove(source)
+                except (OSError, PermissionError) as e:
+                    logging.warning(f"无法删除源文件: {e}")
+                    
+        except Exception as e:
+            logging.error(f"日志轮转失败: {e}")
 
 def get_log_directory() -> str:
     """获取日志目录"""
@@ -178,12 +234,13 @@ def create_handler(is_console: bool = False) -> logging.Handler:
             filename=log_path,
             when='midnight',  # 每天午夜切换
             interval=1,  # 间隔为1天
-            backupCount=0,  # 不限制备份数量，通过cleanup_old_logs控制
-            encoding='utf-8'
+            backupCount=30,  # 保留30天的日志
+            encoding='utf-8',
+            delay=True  # 延迟创建文件直到第一次写入
         )
         
         # 设置自定义的日志轮转处理
-        handler.rotator = GZipRotator()
+        handler.rotator = SafeGZipRotator()
         # 设置日志文件命名格式
         handler.namer = lambda name: os.path.join(
             get_log_directory(),
