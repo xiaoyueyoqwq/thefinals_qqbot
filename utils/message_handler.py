@@ -17,9 +17,7 @@ class MessageHandler:
     def init_image_manager(cls):
         """初始化图片管理器"""
         if not cls._image_manager:
-            cls._image_manager = ImageManager(
-                base_dir=Settings().image["storage"]["path"]
-            )
+            cls._image_manager = ImageManager()
             
     @classmethod
     async def start_image_manager(cls):

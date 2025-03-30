@@ -19,7 +19,6 @@ class BrowserManager:
             async with cls._lock:
                 if not cls._instance:
                     cls._instance = cls()
-                    await cls._instance.initialize()
         return cls._instance
     
     async def initialize(self):
@@ -62,13 +61,9 @@ class BrowserManager:
                     for context in contexts:
                         for page in context.pages:
                             try:
-                                # 检查Playwright文档，如果page.close()不支持timeout参数，则移除
-                                # 这里我们使用try/except处理可能的问题，尝试两种方式关闭页面
                                 try:
-                                    # 先尝试不带参数的关闭
                                     await page.close()
                                 except Exception:
-                                    # 如果出错，等待一小段时间后再次尝试
                                     await asyncio.sleep(0.5)
                                     try:
                                         await page.close()
@@ -82,24 +77,20 @@ class BrowserManager:
             # 步骤2: 关闭浏览器
             if self.browser:
                 try:
-                    # 先检查浏览器连接状态
                     browser_connected = False
                     try:
-                        # 简单操作检查连接是否有效
                         contexts = self.browser.contexts
                         browser_connected = True
                     except Exception:
                         bot_logger.debug("浏览器连接似乎已经断开")
                     
                     if browser_connected:
-                        # 如果连接正常，尝试优雅关闭
                         try:
                             await asyncio.wait_for(self.browser.close(), timeout=3.0)
                             bot_logger.debug("浏览器实例已正常关闭")
                         except asyncio.TimeoutError:
                             bot_logger.warning("关闭浏览器超时，将强制关闭")
                         except Exception as e:
-                            # 特殊处理连接关闭错误
                             if "Connection closed" in str(e):
                                 bot_logger.debug("浏览器连接已关闭，这是正常现象")
                             else:
@@ -109,15 +100,11 @@ class BrowserManager:
                 except Exception as e:
                     bot_logger.error(f"处理浏览器关闭时出错: {str(e)}")
                 finally:
-                    # 增强的清理方式 - 特别针对Linux环境
                     import platform
                     if platform.system() != "Windows":
                         try:
-                            # 在Linux上，尝试直接终止相关进程
                             import subprocess, signal, os
-                            # 立即查找并终止所有相关进程
                             try:
-                                # 查找可能的playwright/chromium相关进程
                                 result = subprocess.run(
                                     ["ps", "-ef"], 
                                     capture_output=True, 
@@ -138,7 +125,7 @@ class BrowserManager:
                         except Exception as e:
                             bot_logger.debug(f"Linux特殊清理时出错: {str(e)}")
                     
-                    self.browser = None  # 无论如何都将browser置为None
+                    self.browser = None
             
             # 步骤3: 关闭playwright
             if self.playwright:
@@ -154,7 +141,6 @@ class BrowserManager:
             import platform, os, signal, subprocess
             if platform.system() != "Windows":
                 try:
-                    # 查找可能的playwright node进程
                     result = subprocess.run(
                         ["ps", "-ef"], 
                         capture_output=True, 
@@ -162,7 +148,6 @@ class BrowserManager:
                     )
                     for line in result.stdout.splitlines():
                         if "playwright" in line and "node" in line:
-                            # 解析进程ID
                             parts = line.split()
                             if len(parts) > 1:
                                 try:
@@ -179,7 +164,6 @@ class BrowserManager:
             
         except Exception as e:
             bot_logger.error(f"清理浏览器资源时出错: {str(e)}")
-            # 确保即使出错也重置状态
             self.browser = None
             self.playwright = None
             self.initialized = False

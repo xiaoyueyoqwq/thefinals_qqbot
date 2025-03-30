@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from utils.logger import bot_logger
 from utils.config import Settings
+import aiofiles
 
 log = bot_logger
 
@@ -22,7 +23,7 @@ class ImageManager:
     
     def __init__(self):
         """初始化图片管理器"""
-        self.image_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "temp_images")
+        self.image_dir = Path(os.path.dirname(os.path.dirname(__file__))) / "static" / "temp_images"
         os.makedirs(self.image_dir, exist_ok=True)
         bot_logger.info(f"资源就绪: 图片目录={self.image_dir}")
         self.image_info: Dict[str, Dict] = {}  # 图片信息缓存
@@ -91,58 +92,45 @@ class ImageManager:
                 pass
         bot_logger.info("图片管理器已停止")
         
-    async def save_image(self, image_data: bytes, lifetime: int = 24) -> str:
-        """保存图片
+    async def save_image(self, image_data: bytes, lifetime: int = 3600) -> str:
+        """保存图片数据
         
         Args:
-            image_data: 图片数据
-            lifetime: 生命周期(小时)
+            image_data: 图片二进制数据
+            lifetime: 图片生存时间（秒）
             
         Returns:
             str: 图片ID
-            
-        Raises:
-            ValueError: 图片验证失败
         """
-        # 验证图片
-        if not self._validate_image(image_data):
-            self._stats["total_rejected"] += 1
-            raise ValueError("Invalid image data")
-            
-        # 生成唯一ID
-        image_id = str(uuid.uuid4())
-        
-        # 构建文件路径
-        file_path = self.image_dir / f"{image_id}.png"
-        
         try:
-            # 写入文件
-            with open(file_path, "wb") as f:
-                f.write(image_data)
-                
-            # 设置文件权限为 644
-            os.chmod(file_path, 0o644)
-                
+            # 验证图片
+            if not self._validate_image(image_data):
+                raise ValueError("无效的图片数据")
+            
+            # 生成唯一ID
+            image_id = str(uuid.uuid4())
+            
+            # 构建文件路径
+            file_path = self.image_dir / f"{image_id}.png"
+            
+            # 保存图片
+            async with aiofiles.open(file_path, 'wb') as f:
+                await f.write(image_data)
+            
             # 记录图片信息
             self.image_info[image_id] = {
-                "path": str(file_path),
-                "created_at": datetime.now(),
-                "expires_at": datetime.now() + timedelta(hours=lifetime),
-                "size": len(image_data)
+                'path': str(file_path),
+                'created': time.time(),
+                'lifetime': lifetime
             }
             
-            self._stats["total_saved"] += 1
-            bot_logger.debug(f"图片已保存: {image_id}")
+            # 更新统计
+            self._stats['total_saved'] += 1
+            
             return image_id
             
         except Exception as e:
             bot_logger.error(f"保存图片失败: {str(e)}")
-            # 清理失败的文件
-            if file_path.exists():
-                try:
-                    os.remove(file_path)
-                except:
-                    pass
             raise
             
     def get_image_path(self, image_id: str) -> Optional[str]:
@@ -218,4 +206,33 @@ class ImageManager:
             self._delete_image(image_id)
             
         if expired:
-            bot_logger.info(f"已清理 {len(expired)} 个过期图片") 
+            bot_logger.info(f"已清理 {len(expired)} 个过期图片")
+            
+    async def get_image(self, image_id: str) -> Optional[bytes]:
+        """获取图片数据
+        
+        Args:
+            image_id: 图片ID
+            
+        Returns:
+            Optional[bytes]: 图片数据，如果不存在则返回None
+        """
+        try:
+            # 检查图片是否存在
+            if image_id not in self.image_info:
+                return None
+            
+            # 获取文件路径
+            file_path = self.image_dir / f"{image_id}.png"
+            
+            # 检查文件是否存在
+            if not file_path.exists():
+                return None
+            
+            # 读取图片数据
+            async with aiofiles.open(file_path, 'rb') as f:
+                return await f.read()
+                
+        except Exception as e:
+            bot_logger.error(f"获取图片失败: {str(e)}")
+            return None 

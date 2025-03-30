@@ -12,17 +12,31 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
     <style>
         :root {
-            --primary-color: #0070f3;
-            --primary-hover: #0061d5;
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+            --background-color: #f0f2f5;
+            --message-background: #ffffff;
+            --bot-message-background: #f0f2f5;
+            --border-color: #dee2e6;
+            --text-color: #212529;
+            --placeholder-color: #6c757d;
+            --hover-color: #e9ecef;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --fast-color: #28a745;
+            --normal-color: #ffc107;
+            --slow-color: #dc3545;
             --bg-color: #fafafa;
             --panel-bg: #ffffff;
-            --border-color: #eaeaea;
-            --text-color: #111111;
             --text-secondary: #666666;
             --bot-msg-bg: #f0f7ff;
             --user-msg-bg: #f2f2f7;
             --error-color: #ff453a;
-            --success-color: #34c759;
             --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
             --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
             --radius-sm: 6px;
@@ -742,6 +756,120 @@
                 max-width: 90%;
             }
         }
+
+        /* 执行时间显示样式 */
+        .execution-time {
+            position: absolute;
+            top: -20px;
+            right: -10px;
+            font-size: 12px;
+            color: var(--text-color);
+            padding: 2px 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0;
+            transform: translateX(10px);
+            animation: timeAppear 0.3s ease-out forwards;
+            animation-delay: 0.1s;
+        }
+
+        @keyframes timeAppear {
+            from {
+                opacity: 0;
+                transform: translateX(10px);
+            }
+            to {
+                opacity: 0.8;
+                transform: translateX(0);
+            }
+        }
+
+        .execution-time:hover {
+            opacity: 1;
+            transform: translateX(-5px);
+            transition: all 0.2s ease-out;
+        }
+
+        .execution-time svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .execution-time.fast {
+            color: var(--fast-color);
+        }
+
+        .execution-time.normal {
+            color: var(--normal-color);
+        }
+
+        .execution-time.slow {
+            color: var(--slow-color);
+        }
+
+        .execution-time.very-slow {
+            color: var(--danger-color);
+        }
+
+        .execution-time-text {
+            display: none;
+            transform: translateX(5px);
+            transition: transform 0.2s ease-out;
+        }
+
+        .execution-time:hover .execution-time-text {
+            display: inline;
+            transform: translateX(0);
+        }
+
+        /* 消息容器相对定位 */
+        .message {
+            position: relative;
+        }
+
+        /* 强制发送按钮样式 */
+        .force-send-button {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 10px;
+            padding: 6px 12px;
+            background: var(--danger-color);
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            opacity: 0.9;
+        }
+
+        .force-send-button:hover {
+            opacity: 1;
+            transform: translateY(-1px);
+        }
+
+        .force-send-button svg {
+            margin-right: 4px;
+        }
+
+        .error-message {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid var(--danger-color);
+            color: var(--danger-color);
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+
+        .error-message ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .error-message li {
+            margin: 4px 0;
+        }
     </style>
 </head>
 <body>
@@ -759,6 +887,18 @@
             </symbol>
             <symbol id="icon-command" viewBox="0 0 24 24">
                 <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+            </symbol>
+            <symbol id="icon-fast" viewBox="0 0 24 24">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>
+            </symbol>
+            <symbol id="icon-normal" viewBox="0 0 24 24">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" opacity="0.8"/>
+            </symbol>
+            <symbol id="icon-slow" viewBox="0 0 24 24">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" opacity="0.6"/>
+            </symbol>
+            <symbol id="icon-very-slow" viewBox="0 0 24 24">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" opacity="0.4"/>
             </symbol>
         </svg>
     </div>
@@ -862,6 +1002,9 @@
     </div>
 
     <script>
+        // 将 sendCommand 函数暴露到全局作用域
+        let globalSendCommand;
+
         document.addEventListener('DOMContentLoaded', function() {
             const chatMessages = document.getElementById('chatMessages');
             const commandInput = document.getElementById('commandInput');
@@ -896,8 +1039,37 @@
             // 加载命令列表
             fetchCommandList();
 
+            // 获取执行时间的图标和类名
+            function getExecutionTimeInfo(time) {
+                if (time < 3000) {  // 小于 3s 认为是超快
+                    return {
+                        icon: 'fast',
+                        class: 'fast',
+                        text: '响应超快'
+                    };
+                } else if (time < 4000) {  // 小于 4s 认为是不错
+                    return {
+                        icon: 'normal',
+                        class: 'normal',
+                        text: '响应不错'
+                    };
+                } else if (time < 5000) {  // 小于 5s 认为是慢
+                    return {
+                        icon: 'slow',
+                        class: 'slow',
+                        text: '响应较慢'
+                    };
+                } else {  // 大于 5s 认为是非常慢
+                    return {
+                        icon: 'very-slow',
+                        class: 'very-slow',
+                        text: '响应非常慢'
+                    };
+                }
+            }
+
             // 添加消息到聊天区域
-            function addMessage(content, type, imageData = null) {
+            function addMessage(content, type, imageData = null, executionTime = null) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${type}-message`;
                 
@@ -947,6 +1119,19 @@
                 
                 messageDiv.appendChild(header);
                 messageDiv.appendChild(messageContent);
+
+                // 添加执行时间显示（仅对机器人消息）
+                if (type === 'bot' && executionTime !== null) {
+                    const timeInfo = getExecutionTimeInfo(executionTime);
+                    const timeDiv = document.createElement('div');
+                    timeDiv.className = `execution-time ${timeInfo.class}`;
+                    timeDiv.innerHTML = `
+                        <svg><use href="#icon-${timeInfo.icon}"/></svg>
+                        <span>${executionTime}ms</span>
+                        <span class="execution-time-text">${timeInfo.text}</span>
+                    `;
+                    messageDiv.appendChild(timeDiv);
+                }
 
                 // 如果有图片数据,添加图片
                 if (imageData) {
@@ -1061,9 +1246,44 @@
             }
 
             // 发送命令
-            function sendCommand() {
+            async function sendCommand(forceSend = false) {
                 const command = commandInput.value.trim();
                 if (command === '' || isWaitingForResponse) return;
+
+                // 检查命令是否存在于命令列表中
+                if (!forceSend && command.startsWith('/')) {
+                    const commandName = command.split(' ')[0].substring(1); // 获取命令名称(不含参数)
+                    const commandExists = Object.keys(window.availableCommands || {}).includes(commandName);
+                    
+                    if (!commandExists) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'error-message';
+                        errorDiv.innerHTML = `
+                            <div style="margin-bottom: 10px;">命令 /${commandName} 不存在。请检查:</div>
+                            <ol style="margin: 0; padding-left: 20px;">
+                                <li>命令名称是否正确</li>
+                                <li>对应的命令代码是否已注册</li>
+                                <li>命令插件是否已正确加载</li>
+                            </ol>
+                            <div class="force-send-button" id="forceSendBtn">
+                                <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
+                                    <path d="M12 2L4 20l8-3 8 3L12 2z" fill="currentColor"/>
+                                </svg>
+                                强制发送
+                            </div>
+                        `;
+                        chatMessages.appendChild(errorDiv);
+
+                        // 使用 DOM 方式绑定点击事件
+                        const forceSendBtn = errorDiv.querySelector('#forceSendBtn');
+                        forceSendBtn.addEventListener('click', () => sendCommand(true));
+
+                        if (autoScroll.checked) {
+                            scrollToBottom();
+                        }
+                        return;
+                    }
+                }
                 
                 // 添加用户消息
                 addMessage(command, 'user');
@@ -1094,7 +1314,7 @@
                     if (data.error) {
                         addErrorMessage(data.error);
                     } else {
-                        addMessage(data.response, 'bot', data.image);
+                        addMessage(data.response, 'bot', data.image, data.execution_time);
                     }
                 })
                 .catch(error => {
@@ -1110,6 +1330,9 @@
                     commandInput.focus();
                 });
             }
+
+            // 将 sendCommand 函数暴露到全局作用域
+            globalSendCommand = sendCommand;
 
             // 添加错误消息
             function addErrorMessage(content) {
@@ -1148,6 +1371,9 @@
                         commandList.appendChild(errorDiv);
                         return;
                     }
+
+                    // 保存命令列表到全局变量
+                    window.availableCommands = data.commands;
                     
                     // 按插件名分组命令
                     const pluginCommands = {};

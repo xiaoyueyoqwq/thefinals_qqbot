@@ -33,6 +33,8 @@ import ctypes
 import subprocess
 from utils.image_manager import ImageManager
 from datetime import datetime
+import argparse
+from pathlib import Path
 
 # 全局变量，用于在信号处理函数中访问
 client = None
@@ -519,10 +521,15 @@ class MyBot(botpy.Client):
     async def _init_browser(self):
         """初始化浏览器的异步方法"""
         try:
-            await asyncio.wait_for(
-                self.browser_manager.initialize(),
-                timeout=INIT_TIMEOUT
-            )
+            # 检查浏览器状态
+            if not self.browser_manager.initialized:
+                bot_logger.warning("浏览器未初始化，尝试重新初始化...")
+                await asyncio.wait_for(
+                    self.browser_manager.initialize(),
+                    timeout=INIT_TIMEOUT
+                )
+            else:
+                bot_logger.debug("浏览器环境已就绪")
         except asyncio.TimeoutError:
             bot_logger.error("浏览器初始化超时")
             raise
@@ -928,6 +935,14 @@ async def async_main():
         # 检查出口IP
         await check_ip()
         
+        # 初始化浏览器
+        bot_logger.info("正在初始化浏览器环境...")
+        try:
+            await browser_manager.initialize()
+        except Exception as e:
+            bot_logger.error(f"浏览器初始化失败: {e}")
+            raise
+        
         intents = botpy.Intents(public_guild_messages=True, public_messages=True)
         client = MyBot(intents=intents)
         
@@ -1155,9 +1170,49 @@ async def cleanup_resources(timeout=5):
         bot_logger.error(f"清理过程出错: {str(e)}")
         return False
 
+def start_command_tester():
+    """启动命令测试工具"""
+    try:
+        # 检查必要的依赖
+        try:
+            import aiohttp
+            import aiohttp_cors
+        except ImportError:
+            bot_logger.info("正在安装必要的依赖...")
+            pip_cmd = [sys.executable, "-m", "pip", "install", "aiohttp", "aiohttp_cors"]
+            subprocess.check_call(pip_cmd)
+            bot_logger.info("依赖安装完成")
+
+        # 获取命令测试工具的路径
+        tester_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools", "command_tester.py")
+        
+        # 使用 python 解释器运行命令测试工具
+        cmd = [sys.executable, tester_path]
+        bot_logger.info("正在启动命令测试工具...")
+        
+        # 在 Windows 上使用 shell=True 以支持命令行颜色
+        if platform.system() == "Windows":
+            subprocess.run(" ".join(cmd), shell=True)
+        else:
+            subprocess.run(cmd)
+            
+    except Exception as e:
+        bot_logger.error(f"启动命令测试工具时出错: {str(e)}")
+        raise
+
 def main():
     """主函数"""
     try:
+        # 解析命令行参数
+        parser = argparse.ArgumentParser(description="THE FINALS QQ机器人")
+        parser.add_argument("-local", "--local", action="store_true", help="启动本地命令测试工具")
+        args = parser.parse_args()
+
+        # 如果指定了 -local 参数，启动命令测试工具
+        if args.local:
+            start_command_tester()
+            return
+
         FINAL_CLEANUP_TIMEOUT = 10  # 最终清理超时时间（秒）
         
         # 使用全局变量

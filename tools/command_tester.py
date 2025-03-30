@@ -22,6 +22,14 @@ import platform
 import ctypes
 import subprocess
 
+# 添加项目根目录到sys.path
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+from utils.browser import browser_manager
+from utils.logger import bot_logger
+
 # 全局变量，用于在信号处理函数中访问
 tester = None
 loop = None
@@ -87,10 +95,13 @@ async def cleanup_resources():
         from utils.db import DatabaseManager
         await DatabaseManager.close_all()
         
-        # 4. 清理线程
+        # 4. 清理浏览器资源
+        await browser_manager.cleanup()
+        
+        # 5. 清理线程
         cleanup_threads()
         
-        # 5. 停止事件循环
+        # 6. 停止事件循环
         if loop and not loop.is_closed():
             loop.stop()
             
@@ -132,9 +143,6 @@ def handle_exit():
         gc.collect()
     except Exception:
         pass
-
-# 添加项目根目录到sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 确保配置文件存在
 config_dir = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / "config"
@@ -454,8 +462,14 @@ class CommandTester:
                 })
                 
             try:
+                # 记录开始时间
+                start_time = time.time()
+                
                 # 尝试执行命令
                 success = await self.plugin_manager.handle_message(handler, command)
+                
+                # 计算执行时间（毫秒）
+                execution_time = round((time.time() - start_time) * 1000)
                 
                 # 获取响应
                 response = handler.get_latest_response()
@@ -484,7 +498,8 @@ class CommandTester:
                 return web.json_response({
                     "success": True,
                     "response": response,
-                    "image": image_base64
+                    "image": image_base64,
+                    "execution_time": execution_time  # 添加执行时间到响应中
                 })
                 
             except Exception as e:
@@ -566,6 +581,15 @@ async def main():
     
     try:
         bot_logger.info("命令测试工具启动中...")
+        
+        # 初始化浏览器
+        bot_logger.info("正在初始化浏览器环境...")
+        try:
+            await browser_manager.initialize()
+        except Exception as e:
+            bot_logger.error(f"浏览器初始化失败: {e}")
+            raise
+        
         await tester.start()
         
         bot_logger.info(f"命令测试工具已成功启动 http://{args.host}:{args.port}/")
