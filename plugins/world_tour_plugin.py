@@ -74,9 +74,6 @@ class WorldTourPlugin(Plugin):
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
-            # 发送初始提示消息
-            await self.reply(handler, self._format_loading_message(player_name, season))
-            
             # 如果是完整ID格式，直接查询
             if re.match(r"^[a-zA-Z0-9_]+#\d{4}$", player_name):
                 result = await self.world_tour_query.process_wt_command(player_name, season)
