@@ -4,6 +4,7 @@ from utils.logger import bot_logger
 from utils.config import settings
 from utils.base_api import BaseAPI
 from core.season import SeasonManager
+from utils.templates import SEPARATOR
 
 class WorldTourAPI(BaseAPI):
     """世界巡回赛API封装"""
@@ -115,20 +116,8 @@ class WorldTourQuery:
             valid_data = {season: data for season, data in season_data.items() if data}
             
         if not valid_data:
-            return (
-                "\n⚠️ 未找到玩家数据\n"
-                "━━━━━━━━━━━━━\n"
-                "可能的原因:\n"
-                "1. 玩家ID输入或绑定错误\n"
-                "2. 玩家巡回赛排名太低\n"
-                "3. 玩家和NamaTama不是好朋友\n"
-                "━━━━━━━━━━━━━\n"
-                "💡 提示: 你可以:\n"
-                "1. 检查ID是否正确\n"
-                "2. 尝试使用精确搜索\n"
-                "3. 成为pro哥，惊艳群u们\n"
-                "━━━━━━━━━━━━━"
-            )
+            # 直接返回简洁的错误信息
+            return "\n⚠️ 未找到玩家数据"
 
         # 获取第一个有效数据用于基本信息
         first_season, first_data = next(iter(valid_data.items()))
@@ -138,12 +127,12 @@ class WorldTourQuery:
         # 构建响应
         return (
             f"\n💰 {season_name}世界巡回赛 | THE FINALS\n"
-            f"━━━━━━━━━━━━━\n"
+            f"{SEPARATOR}\n"
             f"📋 玩家: {name}{club_tag}\n"
             f"🖥️ 平台: {platform}\n"
             f"📊 排名: {rank}\n"
             f"💵 奖金: ${cash}\n"
-            f"━━━━━━━━━━━━━"
+            f"{SEPARATOR}"
         )
 
     async def process_wt_command(self, player_name: str = None, season: str = None) -> str:
@@ -155,11 +144,11 @@ class WorldTourQuery:
             
             return (
                 "\n❌ 未提供玩家ID\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "🎮 使用方法:\n"
                 "1. /wt 玩家ID\n"
                 "2. /wt 玩家ID 赛季\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "💡 小贴士:\n"
                 f"1. 可以使用 /bind 绑定ID\n"
                 f"2. 赛季可选: {season_range}\n"

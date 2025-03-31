@@ -37,9 +37,9 @@ class ClubPlugin(Plugin):
             # 提取实际的俱乐部标签
             club_tag = args.replace("/club", "").strip()
                 
-            # 先发送加载提示消息
-            loading_msg = self.club_query._format_loading_message(club_tag)
-            await self.reply(handler, loading_msg)
+            # 移除加载提示消息
+            # loading_msg = self.club_query._format_loading_message(club_tag)
+            # await self.reply(handler, loading_msg)
             
             # 调用核心查询功能
             result = await self.club_query.process_club_command(club_tag)

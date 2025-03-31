@@ -5,6 +5,7 @@ from core.bind import BindManager
 from core.rank import RankAPI
 import base64
 import traceback
+from utils.templates import SEPARATOR
 
 class LeaderboardPlugin(Plugin):
     """排位分数走势图插件"""
@@ -35,16 +36,16 @@ class LeaderboardPlugin(Plugin):
     def _get_usage_message(self) -> str:
         """获取使用说明消息"""
         return (
-            "\n💡 排位分数走势查询使用说明\n"
-            "━━━━━━━━━━━━━\n"
-            "▎用法: /lb <玩家ID> [天数]\n"
-            "▎示例: /lb BlueWarrior 7\n"
-            "━━━━━━━━━━━━━\n"
-            "💡 提示:\n"
-            "1. 天数参数可选，默认7天\n"
-            "2. 绑定ID后可直接查询\n"
-            "3. 支持查询1-30天的数据\n"
-            "━━━━━━━━━━━━━"
+            f"\n💡 排位分数走势查询使用说明\n"
+            f"{SEPARATOR}\n"
+            f"▎用法: /lb <玩家ID> [天数]\n"
+            f"▎示例: /lb BlueWarrior 7\n"
+            f"{SEPARATOR}\n"
+            f"💡 提示:\n"
+            f"1. 天数参数可选，默认7天\n"
+            f"2. 绑定ID后可直接查询\n"
+            f"3. 支持查询1-30天的数据\n"
+            f"{SEPARATOR}"
         )
         
     @on_command("lb", "查看玩家排位分数走势")
@@ -110,12 +111,12 @@ class LeaderboardPlugin(Plugin):
             if not player_id:
                 self.logger.debug(f"[{self.name}] 未提供玩家ID且未绑定")
                 await self.reply(handler, (
-                    "\n⚠️ 未提供玩家ID\n"
-                    "━━━━━━━━━━━━━\n"
-                    "💡 提示:\n"
-                    "1. 请使用 /bind 绑定你的embark id\n"
-                    "2. 或直接输入要查询的玩家ID\n"
-                    "━━━━━━━━━━━━━"
+                    f"\n⚠️ 未提供玩家ID\n"
+                    f"{SEPARATOR}\n"
+                    f"💡 提示:\n"
+                    f"1. 请使用 /bind 绑定你的embark id\n"
+                    f"2. 或直接输入要查询的玩家ID\n"
+                    f"{SEPARATOR}"
                 ))
                 return
                 
@@ -132,15 +133,6 @@ class LeaderboardPlugin(Plugin):
                 except ValueError:
                     await self.reply(handler, "⚠️ 时间范围必须是数字（天数）")
                     return
-            
-            # 发送加载提示
-            loading_message = [
-                f"\n⏰ 正在查询 {player_id} 的排位走势数据...",
-                "━━━━━━━━━━━━━",
-                "🤖你知道吗？",
-                f"[ {self.core.get_random_tip()} ]"
-            ]
-            await self.reply(handler, "\n".join(loading_message))
             
             # 获取历史数据
             try:
@@ -177,12 +169,12 @@ class LeaderboardPlugin(Plugin):
             
             status_text = (
                 f"\n📊 s6排位赛 | THE FINALS\n"
-                f"━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 f"▎玩家: {player_id}{' [' + club_tag + ']' if club_tag else ''}\n"
                 f"▎当前排名: #{latest_data['rank']}\n"
                 f"▎段位: {latest_data['leagueName']}\n"
                 f"▎分数: {latest_data['points']}\n"
-                f"━━━━━━━━━━━━━"
+                f"{SEPARATOR}"
             )
             
             # 发送图片和状态信息

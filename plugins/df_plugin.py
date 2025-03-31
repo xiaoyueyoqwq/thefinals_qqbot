@@ -3,6 +3,7 @@ from utils.message_handler import MessageHandler
 from core.df import DFQuery
 from utils.logger import bot_logger
 import asyncio
+from utils.templates import SEPARATOR
 
 class DFPlugin(Plugin):
     """底分查询插件"""
@@ -46,13 +47,13 @@ class DFPlugin(Plugin):
             
         except Exception as e:
             error_msg = (
-                "\n⚠️ 查询失败\n"
-                "━━━━━━━━━━━━━\n"
-                "💡 可能的原因:\n"
-                "1. 服务器连接超时\n"
-                "2. 数据暂时不可用\n"
-                "3. 系统正在维护\n"
-                "建议稍后重试"
+                f"\n⚠️ 查询失败\n"
+                f"{SEPARATOR}\n"
+                f"💡 可能的原因:\n"
+                f"1. 服务器连接超时\n"
+                f"2. 数据暂时不可用\n"
+                f"3. 系统正在维护\n"
+                f"建议稍后重试"
             )
             bot_logger.error(f"[{self.name}] 处理底分查询失败: {str(e)}")
             await handler.send_text(error_msg) 

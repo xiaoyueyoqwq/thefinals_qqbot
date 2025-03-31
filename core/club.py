@@ -8,6 +8,7 @@ from utils.base_api import BaseAPI
 from utils.config import settings
 from core.rank import RankQuery  # 添加 RankQuery 导入
 from utils.translator import translator
+from utils.templates import SEPARATOR
 
 class ClubAPI(BaseAPI):
     """俱乐部API封装"""
@@ -46,41 +47,7 @@ class ClubQuery:
     
     def __init__(self):
         self.api = ClubAPI()
-        self.tips = self._load_tips()
         self.rank_query = RankQuery()  # 创建 RankQuery 实例
-
-    def _load_tips(self) -> list:
-        """加载小知识数据"""
-        try:
-            tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "did_you_know.json")
-            bot_logger.debug(f"正在加载小知识文件: {tips_path}")
-            
-            # 确保data目录存在
-            os.makedirs(os.path.dirname(tips_path), exist_ok=True)
-            
-            with open(tips_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                tips = data.get("tips", [])
-                bot_logger.info(f"成功加载 {len(tips)} 条小知识")
-                return tips
-        except Exception as e:
-            bot_logger.error(f"加载小知识数据失败: {str(e)}")
-            return []
-
-    def _get_random_tip(self) -> str:
-        """获取随机小知识"""
-        if not self.tips:
-            return "暂无小知识"
-        return random.choice(self.tips)
-
-    def _format_loading_message(self, club_tag: str) -> str:
-        """格式化加载提示消息"""
-        return (
-            f"\n⏰正在查询 {club_tag} 的俱乐部数据...\n"
-            "━━━━━━━━━━━━━\n"
-            "🤖你知道吗？\n"
-            f"[ {self._get_random_tip()} ]"
-        )
 
     def _format_leaderboard_info(self, leaderboards: List[dict]) -> str:
         """格式化排行榜信息"""
@@ -135,16 +102,16 @@ class ClubQuery:
         if not club_data:
             return (
                 "\n⚠️ 未找到俱乐部数据\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "可能的原因:\n"
                 "1. 俱乐部标签输入错误\n"
                 "2. 俱乐部暂无排名数据\n"
                 "3. 数据尚未更新\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "💡 提示: 你可以:\n"
                 "1. 检查标签是否正确\n"
                 "2. 尝试使用模糊搜索\n"
-                "━━━━━━━━━━━━━"
+                f"{SEPARATOR}"
             )
 
         club = club_data[0]  # 获取第一个匹配的俱乐部
@@ -157,14 +124,14 @@ class ClubQuery:
         
         return (
             f"\n🎮 战队信息 | THE FINALS\n"
-            f"━━━━━━━━━━━━━\n"
+            f"{SEPARATOR}\n"
             f"📋 标签: {club_tag}\n"
             f"👥 成员列表 (共{len(members)}人):\n"
             f"{members_info}\n"
-            f"━━━━━━━━━━━━━\n"
+            f"{SEPARATOR}\n"
             f"📊 战队排名:\n"
             f"{self._format_leaderboard_info(leaderboards)}\n"
-            f"━━━━━━━━━━━━━"
+            f"{SEPARATOR}"
         )
 
     async def process_club_command(self, club_tag: str = None) -> str:
@@ -172,10 +139,10 @@ class ClubQuery:
         if not club_tag:
             return (
                 "\n❌ 未提供俱乐部标签\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "🎮 使用方法:\n"
                 "1. /club 俱乐部标签\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "💡 小贴士:\n"
                 "1. 标签区分大小写\n"
                 "2. 可使用模糊搜索\n"

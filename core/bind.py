@@ -5,6 +5,7 @@ import shutil
 from datetime import datetime
 from typing import Optional, Dict, List, Callable, Any
 from utils.logger import bot_logger
+from utils.templates import SEPARATOR
 
 class BindManager:
     """用户游戏ID绑定管理器
@@ -367,57 +368,54 @@ class BindManager:
         """异步处理绑定命令"""
         if not args:
             return self._get_help_message()
-
-        # 处理解绑请求
-        if args.lower() == "unbind":
-            if await self.unbind_user_async(user_id):
-                return "✅ 已解除游戏ID绑定"
-            return "❌ 您当前没有绑定游戏ID"
-
-        # 处理状态查询
-        if args.lower() == "status":
-            bind_info = self.get_bind_info(user_id)
-            if bind_info:
-                bind_time = datetime.fromisoformat(bind_info["bind_time"]).strftime("%Y-%m-%d %H:%M:%S")
-                return (
-                    "📋 当前绑定信息\n"
-                    "━━━━━━━━━━━━━━━\n"
-                    f"游戏ID: {bind_info['game_id']}\n"
-                    f"绑定时间: {bind_time}"
-                )
-            return "❌ 您当前没有绑定游戏ID"
-
-        # 处理绑定请求
-        if not self._validate_game_id(args):
-            return "❌ 无效的游戏ID格式"
             
-        if await self.bind_user_async(user_id, args):
+        if not self._validate_game_id(args):
             return (
-                "✅ 绑定成功！\n"
-                "━━━━━━━━━━━━━\n"
-                f"游戏ID: {args}\n\n"
-                "现在可以直接使用:\n"
-                "/r - 查询排位\n"
-                "/wt - 查询世界巡回赛\n"
-                "/lb - 查询排位分数走势"
+                "\n❌ 无效的游戏ID格式\n"
+                f"{SEPARATOR}\n"
+                "正确格式: PlayerName#1234\n"
+                "要求:\n"
+                "1. 必须包含#号\n"
+                "2. #号后必须是4位数字\n"
+                "3. 必须为精确EmbarkID"
             )
-        return "❌ 绑定失败，请稍后重试"
-
+            
+        try:
+            success = await self.bind_user_async(user_id, args)
+            if success:
+                return (
+                    "\n✅ 绑定成功！\n"
+                    f"{SEPARATOR}\n"
+                    f"游戏ID: {args}\n\n"
+                    "现在可以直接使用:\n"
+                    "/r - 查询排位\n"
+                    "/wt - 查询世界巡回赛\n"
+                    "/lb - 查询排位分数走势"
+                )
+            else:
+                return "❌ 绑定失败，请稍后重试"
+        except TimeoutError:
+            bot_logger.error("绑定操作超时")
+            return "⚠️ 操作超时，请稍后重试"
+        except Exception as e:
+            bot_logger.error(f"绑定失败: {str(e)}")
+            return "❌ 绑定失败，请稍后重试"
+            
     def process_bind_command(self, user_id: str, args: str) -> str:
-        """同步处理绑定命令（为保持兼容）"""
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(self.process_bind_command_async(user_id, args))
-
+        """处理绑定命令（同步版本）"""
+        return asyncio.run(self.process_bind_command_async(user_id, args))
+        
     def _get_help_message(self) -> str:
         """获取帮助信息"""
         return (
-            "📝 绑定功能说明\n"
-            "━━━━━━━━━━━━━━━\n"
+            "\n📝 绑定功能说明\n"
+            f"{SEPARATOR}\n"
             "▎绑定ID：/bind 你的游戏ID\n"
-            "▎解除绑定：/bind unbind\n"
-            "▎查看状态：/bind status\n"
-            "━━━━━━━━━━━━━━━\n"
+            "▎解除绑定：/unbind\n"
+            "▎查看状态：/status\n"
+            f"{SEPARATOR}\n"
             "绑定后可直接使用:\n"
             "/r - 查询排位\n"
-            "/wt - 查询世界巡回赛"
-        ) 
+            "/wt - 查询世界巡回赛\n"
+            "/lb - 查询排位分数走势"
+        )

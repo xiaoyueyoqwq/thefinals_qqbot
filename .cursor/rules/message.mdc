@@ -1,4 +1,9 @@
 ---
+description: 
+globs: 
+alwaysApply: false
+---
+---
 description: --- description: 消息格式规范与建议，用于保持THE FINALS QQ机器人消息的一致性和可读性 globs: ["plugins/*.py", "core/*.py", "utils/message*.py"] alwaysApply: true ---
 globs: 
 alwaysApply: false
@@ -20,8 +25,8 @@ return "\n".join(message)
 2. 消息头部应包含表情符号，增强视觉识别度
 
 3. 分隔线格式统一使用：
-```
-"━━━━━━━━━━━━━"
+```python
+from utils.templates import SEPARATOR
 ```
 
 4. 消息尾部可以添加额外信息，例如小贴士
@@ -34,7 +39,7 @@ def _format_loading_message(self, player_name: str, season: str = None) -> str:
     season = season or settings.CURRENT_SEASON
     message = [
         f"\n⏰正在查询 {player_name} 的 {season.lower()} 赛季数据...",
-        "━━━━━━━━━━━━━",  # 分割线
+        SEPARATOR,  # 分割线
         "🤖你知道吗？",
         f"[ {self._get_random_tip()} ]"
     ]
@@ -66,7 +71,7 @@ def format_result_message(self, data: Dict[str, Any]) -> str:
     ])
     
     # 添加结尾
-    message.append("━━━━━━━━━━━━━")
+    message.append(SEPARATOR)
     
     return "\n".join(message)
 ```
@@ -88,11 +93,11 @@ self._messages = {
 ```python
 help_message = (
     "\n❌ 未提供玩家ID\n"
-    "━━━━━━━━━━━━━\n"
+    f"{SEPARATOR}\n"
     "✅ 正确用法:\n"
     "1. /命令 玩家ID\n"
     "2. /命令 玩家ID 参数\n"
-    "━━━━━━━━━━━━━\n"
+    f"{SEPARATOR}\n"
     "💡 小贴士:\n"
     "1. 可以使用 /bind 绑定ID\n"
     "2. 参数可选: xxx~xxx\n"
@@ -126,4 +131,4 @@ help_message = (
 4. 消息内容不要过长，保持简洁
 5. 使用表情符号增强可读性，但不要过度使用
 6. 对于较长的消息，使用分隔线分隔不同部分
-7. 所有用户提示应该清晰明了，包含示例 
+7. 所有用户提示应该清晰明了，包含示例

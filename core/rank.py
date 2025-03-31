@@ -10,6 +10,7 @@ from utils.message_api import FileType, MessageAPI
 from utils.config import settings
 from core.season import SeasonManager, SeasonConfig
 from datetime import datetime, timedelta
+from utils.templates import SEPARATOR
 import uuid
 import json
 
@@ -383,19 +384,8 @@ class RankQuery:
         # 检查是否有任何赛季的数据
         valid_data = {season: data for season, data in season_data.items() if data}
         if not valid_data:
-            error_msg = (
-                    "\n⚠️ 未找到玩家数据\n"
-                    "━━━━━━━━━━━━━\n"
-                    "可能的原因:\n"
-                    "1. 玩家ID输入错误\n"
-                    "2. 玩家排名太低\n"
-                    "3. 你是zako\n"
-                    "━━━━━━━━━━━━━\n"
-                    "💡 提示: 你可以:\n"
-                    "1. 检查ID是否正确\n"
-                    "2. 尝试使用精确搜索\n"
-                    "3. 尝试查询其他赛季"
-            )
+            # 直接返回简洁的错误信息
+            error_msg = "\n⚠️ 未找到玩家数据"
             return None, error_msg, None, None
 
     async def process_rank_command(self, player_name: str = None, season: str = None) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
@@ -408,11 +398,11 @@ class RankQuery:
             if not player_name:
                 error_msg = (
                     "\n❌ 未提供玩家ID\n"
-                    "━━━━━━━━━━━━━\n"
+                    f"{SEPARATOR}\n"
                     "🎮 使用方法:\n"
                     "1. /rank 玩家ID\n"
                     "2. /rank 玩家ID 赛季\n"
-                    "━━━━━━━━━━━━━\n"
+                    f"{SEPARATOR}\n"
                     "💡 小贴士:\n"
                     "1. 可以使用 /bind 绑定ID\n"
                     f"2. 赛季可选: {', '.join(self.seasons.keys())}\n"
@@ -436,6 +426,7 @@ class RankQuery:
                 
                 # 检查数据并格式化响应
                 if not any(season_data.values()):
+                    # 注意：这里直接调用 format_response，如果找不到数据，它会返回简洁错误
                     return self.format_response(player_name, season_data)
                     
                 # 准备模板数据

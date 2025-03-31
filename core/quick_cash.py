@@ -4,6 +4,7 @@ from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
 from core.season import SeasonConfig
+from utils.templates import SEPARATOR
 
 class QuickCashAPI(BaseAPI):
     """快速提现API封装"""
@@ -84,20 +85,8 @@ class QuickCashAPI(BaseAPI):
             str: 格式化后的消息
         """
         if not data:
-            return (
-                "\n⚠️ 未找到玩家数据\n"
-                "━━━━━━━━━━━━━\n"
-                "可能的原因:\n"
-                "1. 玩家ID输入错误\n"
-                "2. 玩家暂无排名数据\n"
-                "3. 数据尚未更新\n"
-                "━━━━━━━━━━━━━\n"
-                "💡 提示: 你可以:\n"
-                "1. 检查ID是否正确\n"
-                "2. 尝试使用模糊搜索\n"
-                "3. 稍后再试\n"
-                "━━━━━━━━━━━━━"
-            )
+            # 直接返回简洁的错误信息
+            return "\n⚠️ 未找到玩家数据"
             
         # 获取基础数据
         name = data.get("name", "未知")
@@ -120,10 +109,10 @@ class QuickCashAPI(BaseAPI):
         # 格式化消息
         return (
             f"\n💰 {SeasonConfig.CURRENT_SEASON}快速提现 | THE FINALS\n"
-            f"━━━━━━━━━━━━━\n"
+            f"{SEPARATOR}\n"
             f"📋 玩家: {name}{club_tag}\n"
             f"🖥️ 平台: {platform}\n"
             f"📊 排名: #{rank}\n"
             f"💵 奖金: ${points:,}\n"
-            f"━━━━━━━━━━━━━"
-        ) 
+            f"{SEPARATOR}"
+        )

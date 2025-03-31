@@ -1,6 +1,7 @@
 from core.plugin import Plugin, on_command
 from utils.message_handler import MessageHandler
 from utils.logger import bot_logger
+from utils.templates import SEPARATOR
 import asyncio
 import datetime
 
@@ -38,11 +39,11 @@ class TestPlugin(Plugin):
             # 发送完成消息
             await handler.send_text(
                 f"\n✅ 测试日志生成完成\n"
-                f"━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 f"📊 统计信息:\n"
                 f"▫️ 生成日志数量: 1000条\n"
                 f"▫️ 耗时: {duration:.2f}秒\n"
-                f"━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 f"💡 提示: 日志将在午夜时自动轮转\n"
                 f"可以手动修改时间测试轮转功能"
             )

@@ -4,6 +4,7 @@ from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
 from core.season import SeasonManager
+from utils.templates import SEPARATOR
 
 class PowerShiftAPI(BaseAPI):
     """平台争霸API封装"""
@@ -104,31 +105,18 @@ class PowerShiftQuery:
     def format_response(self, player_name: str, data: Optional[dict]) -> str:
         """格式化响应消息"""
         if not data or not data.get("data"):
-            return (
-                "\n⚠️ 未找到玩家数据\n"
-                "━━━━━━━━━━━━━\n"
-                "可能的原因:\n"
-                "1. 玩家ID输入错误\n"
-                "2. 玩家未参与平台争霸\n"
-                "3. API服务暂时不可用\n"
-                "━━━━━━━━━━━━━\n"
-                "💡 提示: 你可以:\n"
-                "1. 尝试输入更精确的ID\n"
-                "2. 检查拼写是否正确\n"
-                "3. 稍后再试\n"
-                "━━━━━━━━━━━━━"
-            )
+            return "\n⚠️ 未找到玩家数据"
 
         if result := self.api._format_player_data(data["data"]):
             name, platforms, rank, score = result
             return (
                 f"\n🏆 平台争霸 | THE FINALS\n"
-                f"━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 f"📋 玩家: {name}\n"
                 f"🖥️ 平台: {platforms}\n"
                 f"📊 排名: {rank}\n"
                 f"💵 奖金: {score}\n"
-                f"━━━━━━━━━━━━━"
+                f"{SEPARATOR}"
             )
                 
         return "\n⚠️ 未找到玩家数据"
@@ -138,10 +126,10 @@ class PowerShiftQuery:
         if not player_name:
             return (
                 "\n❌ 未提供玩家ID\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "🎮 使用方法:\n"
                 "- /ps 玩家ID\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "💡 小贴士:\n"
                 "1. 支持模糊搜索\n"
                 "2. 可以使用 /bind 绑定ID\n"

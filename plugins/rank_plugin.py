@@ -5,6 +5,7 @@ from core.rank import RankQuery
 from core.bind import BindManager
 from core.season import SeasonManager, SeasonConfig
 from utils.logger import bot_logger
+from utils.templates import SEPARATOR
 import json
 import os
 import random
@@ -19,43 +20,7 @@ class RankPlugin(Plugin):
         self.rank_query = RankQuery()
         self.bind_manager = BindManager()
         self.season_manager = SeasonManager()
-        self.tips = self._load_tips()
         bot_logger.debug(f"[{self.name}] 初始化排名查询插件")
-        
-    def _load_tips(self) -> list:
-        """加载小知识数据"""
-        try:
-            tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "did_you_know.json")
-            bot_logger.debug(f"[{self.name}] 正在加载小知识文件: {tips_path}")
-            
-            # 确保data目录存在
-            os.makedirs(os.path.dirname(tips_path), exist_ok=True)
-            
-            with open(tips_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                tips = data.get("tips", [])
-                bot_logger.info(f"[{self.name}] 成功加载 {len(tips)} 条小知识")
-                return tips
-        except Exception as e:
-            bot_logger.error(f"[{self.name}] 加载小知识数据失败: {str(e)}")
-            return []
-            
-    def _get_random_tip(self) -> str:
-        """获取随机小知识"""
-        if not self.tips:
-            bot_logger.warning(f"[{self.name}] 小知识列表为空")
-            return "暂无小知识"
-        return random.choice(self.tips)
-
-    def _format_loading_message(self, player_name: str, season: str) -> str:
-        """格式化加载提示消息"""
-        message = [
-            f"\n⏰正在查询 {player_name} 的 {season} 赛季数据...",
-            "━━━━━━━━━━━━━",  # 分割线
-            "🤖你知道吗？",
-            f"[ {self._get_random_tip()} ]"
-        ]
-        return "\n".join(message)
         
     @on_command("rank", "查询排名信息")
     async def query_rank(self, handler: MessageHandler, content: str) -> None:
@@ -71,16 +36,16 @@ class RankPlugin(Plugin):
             if len(parts) <= 1:  # 没有参数，使用绑定ID和默认赛季
                 if not bound_id:
                     await self.reply(handler, (
-                        "\n❌ 未提供玩家ID\n"
-                        "━━━━━━━━━━━━━\n"
-                        "🎮 使用方法:\n"
-                        "1. /rank 玩家ID\n"
-                        "2. /rank 玩家ID 赛季\n"
-                        "━━━━━━━━━━━━━\n"
-                        "💡 小贴士:\n"
-                        "1. 可以使用 /bind 绑定ID\n"
-                        "2. 赛季可选: s1~s6\n"
-                        "3. 需要输入完整ID"
+                        f"\n❌ 未提供玩家ID\n"
+                        f"{SEPARATOR}\n"
+                        f"🎮 使用方法:\n"
+                        f"1. /rank 玩家ID\n"
+                        f"2. /rank 玩家ID 赛季\n"
+                        f"{SEPARATOR}\n"
+                        f"💡 小贴士:\n"
+                        f"1. 可以使用 /bind 绑定ID\n"
+                        f"2. 赛季可选: s1~s6\n"
+                        f"3. 需要输入完整ID"
                     ))
                     return
                 player_name = bound_id
@@ -105,9 +70,6 @@ class RankPlugin(Plugin):
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
-            # 发送初始提示消息
-            await self.reply(handler, self._format_loading_message(player_name, season))
-                
             # 查询排名并生成图片
             image_data, error_msg, _, _ = await self.rank_query.process_rank_command(
                 f"{player_name} {season}"

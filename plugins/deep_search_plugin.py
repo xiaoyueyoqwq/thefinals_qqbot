@@ -3,6 +3,7 @@ from utils.message_handler import MessageHandler
 from core.deep_search import DeepSearch
 from utils.logger import bot_logger
 import asyncio
+from utils.templates import SEPARATOR
 
 class DeepSearchPlugin(Plugin):
     """深度搜索插件"""
@@ -42,10 +43,10 @@ class DeepSearchPlugin(Plugin):
             on_cooldown, remaining = await self.deep_search.is_on_cooldown(user_id)
             if on_cooldown:
                 error_msg = (
-                    "\n❌ 查询过于频繁\n"
-                    "━━━━━━━━━━━━━\n"
-                    f"需要等待 {remaining} 秒才能再次查询"
-                    "请稍后再试"
+                    f"\n❌ 查询过于频繁\n"
+                    f"{SEPARATOR}\n"
+                    f"需要等待 {remaining} 秒才能再次查询\n"
+                    f"请稍后再试"
                 )
                 await handler.send_text(error_msg)
                 return
@@ -58,8 +59,8 @@ class DeepSearchPlugin(Plugin):
             
             if not is_valid:
                 error_msg = (
-                    "\n❌ 查询参数无效\n"
-                    "━━━━━━━━━━━━━\n"
+                    f"\n❌ 查询参数无效\n"
+                    f"{SEPARATOR}\n"
                     f"💡 小贴士: {error_message}"
                 )
                 await handler.send_text(error_msg)
@@ -84,13 +85,13 @@ class DeepSearchPlugin(Plugin):
             
         except Exception as e:
             error_msg = (
-                "\n💡 小贴士: 搜索失败\n"
-                "━━━━━━━━━━━━━\n"
-                "可能的原因:\n"
-                "1. 服务器连接超时\n"
-                "2. 数据暂时不可用\n"
-                "3. 系统正在维护\n"
-                "请稍后重试"
+                f"\n💡 小贴士: 搜索失败\n"
+                f"{SEPARATOR}\n"
+                f"可能的原因:\n"
+                f"1. 服务器连接超时\n"
+                f"2. 数据暂时不可用\n"
+                f"3. 系统正在维护\n"
+                f"请稍后重试"
             )
             bot_logger.error(f"[{self.name}] 处理深度搜索失败: {str(e)}")
             await handler.send_text(error_msg) 

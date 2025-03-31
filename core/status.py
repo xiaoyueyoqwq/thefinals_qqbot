@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from utils.logger import bot_logger
 from utils.config import settings
+from utils.templates import SEPARATOR
 
 class StatusMonitor:
     """状态监控类"""
@@ -56,11 +57,11 @@ class StatusMonitor:
         """格式化状态消息"""
         message = [
             f"\n🚀机器人状态 | THE FINALS",
-            "━━━━━━━━━━━━━",
+            SEPARATOR,
             "📊 硬件状态",
             f"• CPU: {hardware['cpu']}%",
             f"• RAM: {hardware['ram']}%",
-            "━━━━━━━━━━━━━",
+            SEPARATOR,
             "🌐 接口状态"
         ]
         
@@ -76,10 +77,10 @@ class StatusMonitor:
             message.append(f"• {name}: {icon} {status}")
             
         message.extend([
-            "━━━━━━━━━━━━━",
+            SEPARATOR,
             "⏰ 运行状态",
             f"• 已正常运行: {self.get_uptime()}",
-            "━━━━━━━━━━━━━"
+            SEPARATOR
         ])
         
         return "\n".join(message)
