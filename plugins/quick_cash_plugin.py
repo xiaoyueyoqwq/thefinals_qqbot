@@ -23,15 +23,6 @@ class QuickCashPlugin(Plugin):
         self.api = QuickCashAPI()
         self.bind_manager = BindManager()
         
-    def _format_loading_message(self, player_name: str, season: str = None) -> str:
-        """格式化加载提示消息"""
-        season = season or settings.CURRENT_SEASON
-        message = [
-            f"\n⏰正在查询 {player_name} 的 {season.lower()} 赛季快速提现数据...",
-            SEPARATOR  # 分割线
-        ]
-        return "\n".join(message)
-        
     @on_command("qc", "查询快速提现数据")
     async def handle_quick_cash_command(self, handler, content: str):
         """处理快速提现查询命令
@@ -73,10 +64,6 @@ class QuickCashPlugin(Plugin):
                     f"{SEPARATOR}"
                 ))
                 return
-            
-            # 发送加载提示
-            loading_message = self._format_loading_message(player_name)
-            await self.reply(handler, loading_message)
             
             # 获取数据
             data = await self.api.get_quick_cash_data(player_name)

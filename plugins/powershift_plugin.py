@@ -31,14 +31,6 @@ class PowerShiftPlugin(Plugin):
         }
         bot_logger.debug(f"[{self.name}] 初始化平台争霸查询插件")
 
-    def _format_loading_message(self, player_name: str) -> str:
-        """格式化加载提示消息"""
-        message = [
-            f"\n⏰正在查询 {player_name} 的平台争霸数据...",
-            SEPARATOR
-        ]
-        return "\n".join(message)
-        
     @on_command("ps", "查询平台争霸信息")
     async def query_powershift(self, handler: MessageHandler, content: str) -> None:
         """查询平台争霸信息"""
@@ -59,9 +51,6 @@ class PowerShiftPlugin(Plugin):
                 player_name = parts[1].strip()
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}")
-            
-            # 发送初始提示消息
-            await self.reply(handler, self._format_loading_message(player_name))
             
             # 执行查询
             result = await self.powershift_query.process_ps_command(player_name)

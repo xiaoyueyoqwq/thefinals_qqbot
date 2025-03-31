@@ -37,15 +37,6 @@ class WorldTourPlugin(Plugin):
         }
         bot_logger.debug(f"[{self.name}] 初始化世界巡回赛查询插件")
         
-    def _format_loading_message(self, player_name: str, season: str = None) -> str:
-        """格式化加载提示消息"""
-        season = season or settings.CURRENT_SEASON
-        message = [
-            f"\n⏰正在查询 {player_name} 的 {season.lower()} 赛季世界巡回赛数据...",
-            SEPARATOR  # 分割线
-        ]
-        return "\n".join(message)
-        
     @on_command("wt", "查询世界巡回赛信息")
     async def query_world_tour(self, handler: MessageHandler, content: str) -> None:
         """查询世界巡回赛信息"""

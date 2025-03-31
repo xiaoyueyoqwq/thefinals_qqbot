@@ -49,13 +49,6 @@ class ClubQuery:
         self.api = ClubAPI()
         self.rank_query = RankQuery()  # 创建 RankQuery 实例
 
-    def _format_loading_message(self, club_tag: str) -> str:
-        """格式化加载提示消息"""
-        return (
-            f"\n⏰正在查询 {club_tag} 的俱乐部数据...\n"
-            f"{SEPARATOR}"
-        )
-
     def _format_leaderboard_info(self, leaderboards: List[dict]) -> str:
         """格式化排行榜信息"""
         if not leaderboards:

@@ -22,14 +22,6 @@ class RankPlugin(Plugin):
         self.season_manager = SeasonManager()
         bot_logger.debug(f"[{self.name}] 初始化排名查询插件")
         
-    def _format_loading_message(self, player_name: str, season: str) -> str:
-        """格式化加载提示消息"""
-        message = [
-            f"\n⏰正在查询 {player_name} 的 {season} 赛季数据...",
-            SEPARATOR  # 分割线
-        ]
-        return "\n".join(message)
-        
     @on_command("rank", "查询排名信息")
     async def query_rank(self, handler: MessageHandler, content: str) -> None:
         """处理rank命令查询排名"""
@@ -78,9 +70,6 @@ class RankPlugin(Plugin):
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
-            # 发送初始提示消息
-            await self.reply(handler, self._format_loading_message(player_name, season))
-                
             # 查询排名并生成图片
             image_data, error_msg, _, _ = await self.rank_query.process_rank_command(
                 f"{player_name} {season}"

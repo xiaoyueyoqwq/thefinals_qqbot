@@ -379,6 +379,15 @@ class RankQuery:
                 self._preheated = False
             return None
 
+    def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]]) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
+        """格式化响应消息"""
+        # 检查是否有任何赛季的数据
+        valid_data = {season: data for season, data in season_data.items() if data}
+        if not valid_data:
+            # 直接返回简洁的错误信息
+            error_msg = "\n⚠️ 未找到玩家数据"
+            return None, error_msg, None, None
+
     async def process_rank_command(self, player_name: str = None, season: str = None) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
         """处理排位查询命令"""
         try:
@@ -415,10 +424,10 @@ class RankQuery:
                 # 查询玩家数据
                 season_data = {season: await self.api.get_player_stats(player_name, season)}
                 
-                # 检查数据，如果找不到则直接返回错误
+                # 检查数据并格式化响应
                 if not any(season_data.values()):
-                    error_msg = "\n⚠️ 未找到玩家数据"
-                    return None, error_msg, None, None
+                    # 注意：这里直接调用 format_response，如果找不到数据，它会返回简洁错误
+                    return self.format_response(player_name, season_data)
                     
                 # 准备模板数据
                 template_data = self.prepare_template_data(season_data[season], season)
@@ -432,11 +441,10 @@ class RankQuery:
                     error_msg = "\n⚠️ 生成图片时出错"
                     return None, error_msg, None, None
                     
-                # 返回成功结果
                 return image_data, None, season_data, template_data
                 
             except Exception as e:
-                bot_logger.error(f"处理rank命令内部查询或生成时出错: {str(e)}")
+                bot_logger.error(f"处理rank命令时出错: {str(e)}")
                 bot_logger.exception(e)
                 error_msg = "\n⚠️ 查询失败，请稍后重试"
                 return None, error_msg, None, None

@@ -45,13 +45,6 @@ class RankAllPlugin(Plugin):
         }
         bot_logger.debug(f"[{self.name}] 初始化全赛季排名查询插件")
 
-    def _format_loading_message(self, player_name: str) -> str:
-        """格式化加载提示消息"""
-        return (
-            f"\n⏰正在查询 {player_name} 的全赛季数据...\n"
-            f"{SEPARATOR}"
-        )
-
     def _validate_embark_id(self, player_id: str) -> bool:
         """验证embarkID格式
         
@@ -90,9 +83,6 @@ class RankAllPlugin(Plugin):
                 return
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}")
-            
-            # 发送初始提示消息
-            await self.reply(handler, self._format_loading_message(player_name))
             
             # 使用核心功能查询数据
             all_data = await self.rank_all.query_all_seasons(player_name)

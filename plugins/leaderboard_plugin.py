@@ -134,13 +134,6 @@ class LeaderboardPlugin(Plugin):
                     await self.reply(handler, "⚠️ 时间范围必须是数字（天数）")
                     return
             
-            # 发送加载提示
-            loading_message = [
-                f"\n⏰ 正在查询 {player_id} 的排位走势数据...",
-                SEPARATOR
-            ]
-            await self.reply(handler, "\n".join(loading_message))
-            
             # 获取历史数据
             try:
                 self.logger.debug(f"[{self.name}] 开始获取历史数据: player_id={player_id}, time_range={time_range}")
