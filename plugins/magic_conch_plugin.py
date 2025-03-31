@@ -2,6 +2,7 @@ from core.plugin import Plugin, on_command
 from utils.message_handler import MessageHandler
 from utils.logger import bot_logger
 from core.magic_conch import MagicConch
+from utils.templates import SEPARATOR
 
 class MagicConchPlugin(Plugin):
     """神奇海螺插件"""
@@ -18,13 +19,13 @@ class MagicConchPlugin(Plugin):
         try:
             if not content.strip():
                 await handler.send_text(
-                    "\n❌ 请输入你的问题\n"
-                    "━━━━━━━━━━━━━\n"
-                    "🎮 使用方法:\n"
-                    "/ask <你的问题>\n"
-                    "━━━━━━━━━━━━━\n"
-                    "💡 示例:\n"
-                    "/ask 我今天会遇到好事吗？"
+                    f"\n❌ 请输入你的问题\n"
+                    f"{SEPARATOR}\n"
+                    f"🎮 使用方法:\n"
+                    f"/ask <你的问题>\n"
+                    f"{SEPARATOR}\n"
+                    f"💡 示例:\n"
+                    f"/ask 我今天会遇到好事吗？"
                 )
                 return
                 

@@ -46,9 +46,6 @@ class LeaderboardCore(BaseAPI):
         font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'font', 'SourceHanSansSC-Medium.otf')
         self.font = FontProperties(fname=font_path)
         
-        # 加载小知识
-        self.tips = self._load_tips()
-        
         # 预设图表样式
         self._setup_plot_style()
 
@@ -210,31 +207,6 @@ class LeaderboardCore(BaseAPI):
         except Exception as e:
             self.logger.error(f"生成走势图失败: {str(e)}")
             raise
-
-    def _load_tips(self) -> list:
-        """加载小知识数据"""
-        try:
-            tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "did_you_know.json")
-            bot_logger.debug(f"[LeaderboardCore] 正在加载小知识文件: {tips_path}")
-            
-            # 确保data目录存在
-            os.makedirs(os.path.dirname(tips_path), exist_ok=True)
-            
-            with open(tips_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                tips = data.get("tips", [])
-                bot_logger.info(f"[LeaderboardCore] 成功加载 {len(tips)} 条小知识")
-                return tips
-        except Exception as e:
-            bot_logger.error(f"[LeaderboardCore] 加载小知识数据失败: {str(e)}")
-            return []
-            
-    def get_random_tip(self) -> str:
-        """获取随机小知识"""
-        if not self.tips:
-            bot_logger.warning(f"[LeaderboardCore] 小知识列表为空")
-            return "暂无小知识"
-        return random.choice(self.tips)
 
     async def fetch_player_history(self, player_id: str, time_range: int = 604800) -> List[Dict[str, Any]]:
         """

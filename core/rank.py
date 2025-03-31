@@ -10,6 +10,7 @@ from utils.message_api import FileType, MessageAPI
 from utils.config import settings
 from core.season import SeasonManager, SeasonConfig
 from datetime import datetime, timedelta
+from utils.templates import SEPARATOR
 import uuid
 import json
 
@@ -378,26 +379,6 @@ class RankQuery:
                 self._preheated = False
             return None
 
-    def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]]) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
-        """格式化响应消息"""
-        # 检查是否有任何赛季的数据
-        valid_data = {season: data for season, data in season_data.items() if data}
-        if not valid_data:
-            error_msg = (
-                    "\n⚠️ 未找到玩家数据\n"
-                    "━━━━━━━━━━━━━\n"
-                    "可能的原因:\n"
-                    "1. 玩家ID输入错误\n"
-                    "2. 玩家排名太低\n"
-                    "3. 你是zako\n"
-                    "━━━━━━━━━━━━━\n"
-                    "💡 提示: 你可以:\n"
-                    "1. 检查ID是否正确\n"
-                    "2. 尝试使用精确搜索\n"
-                    "3. 尝试查询其他赛季"
-            )
-            return None, error_msg, None, None
-
     async def process_rank_command(self, player_name: str = None, season: str = None) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
         """处理排位查询命令"""
         try:
@@ -408,11 +389,11 @@ class RankQuery:
             if not player_name:
                 error_msg = (
                     "\n❌ 未提供玩家ID\n"
-                    "━━━━━━━━━━━━━\n"
+                    f"{SEPARATOR}\n"
                     "🎮 使用方法:\n"
                     "1. /rank 玩家ID\n"
                     "2. /rank 玩家ID 赛季\n"
-                    "━━━━━━━━━━━━━\n"
+                    f"{SEPARATOR}\n"
                     "💡 小贴士:\n"
                     "1. 可以使用 /bind 绑定ID\n"
                     f"2. 赛季可选: {', '.join(self.seasons.keys())}\n"
@@ -434,9 +415,10 @@ class RankQuery:
                 # 查询玩家数据
                 season_data = {season: await self.api.get_player_stats(player_name, season)}
                 
-                # 检查数据并格式化响应
+                # 检查数据，如果找不到则直接返回错误
                 if not any(season_data.values()):
-                    return self.format_response(player_name, season_data)
+                    error_msg = "\n⚠️ 未找到玩家数据"
+                    return None, error_msg, None, None
                     
                 # 准备模板数据
                 template_data = self.prepare_template_data(season_data[season], season)
@@ -450,10 +432,11 @@ class RankQuery:
                     error_msg = "\n⚠️ 生成图片时出错"
                     return None, error_msg, None, None
                     
+                # 返回成功结果
                 return image_data, None, season_data, template_data
                 
             except Exception as e:
-                bot_logger.error(f"处理rank命令时出错: {str(e)}")
+                bot_logger.error(f"处理rank命令内部查询或生成时出错: {str(e)}")
                 bot_logger.exception(e)
                 error_msg = "\n⚠️ 查询失败，请稍后重试"
                 return None, error_msg, None, None

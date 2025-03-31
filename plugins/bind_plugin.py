@@ -2,6 +2,7 @@ from core.plugin import Plugin, on_command, on_keyword, Event, EventType
 from utils.message_handler import MessageHandler
 from core.bind import BindManager
 from utils.logger import bot_logger
+from utils.templates import SEPARATOR
 import json
 
 class BindPlugin(Plugin):
@@ -44,7 +45,7 @@ class BindPlugin(Plugin):
         if not self._validate_game_id(args):
             await self.reply(handler,
                 "\n❌ 无效的游戏ID格式\n"
-                "━━━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "正确格式: PlayerName#1234\n"
                 "要求:\n"
                 "1. 必须包含#号\n"
@@ -62,7 +63,7 @@ class BindPlugin(Plugin):
             if success:
                 await self.reply(handler,
                     "\n✅ 绑定成功！\n"
-                    "━━━━━━━━━━━━━━━\n"
+                    f"{SEPARATOR}\n"
                     f"游戏ID: {args}\n\n"
                     "现在可以直接使用:\n"
                     "/r - 查询排位\n"
@@ -107,7 +108,7 @@ class BindPlugin(Plugin):
                 last_updated = bind_info.get("last_updated", "未知")
                 await self.reply(handler,
                     "\n📋 当前绑定信息\n"
-                    "━━━━━━━━━━━━━━━\n"
+                    f"{SEPARATOR}\n"
                     f"游戏ID: {bind_info['game_id']}\n"
                     f"绑定时间: {bind_time}\n"
                     f"最后更新: {last_updated}"
@@ -122,11 +123,11 @@ class BindPlugin(Plugin):
         """获取帮助信息"""
         return (
             "\n📝 绑定功能说明\n"
-            "━━━━━━━━━━━━━━━\n"
+            f"{SEPARATOR}\n"
             "▎绑定ID：/bind 你的游戏ID\n"
             "▎解除绑定：/unbind\n"
             "▎查看状态：/status\n"
-            "━━━━━━━━━━━━━━━\n"
+            f"{SEPARATOR}\n"
             "绑定后可直接使用:\n"
             "/r - 查询排位\n"
             "/wt - 查询世界巡回赛\n"

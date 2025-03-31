@@ -1,6 +1,7 @@
 from typing import Optional
 from utils.logger import bot_logger
 from utils.config import settings
+from utils.templates import SEPARATOR
 
 class AboutUs:
     """关于信息类"""
@@ -31,7 +32,7 @@ class AboutUs:
         try:
             return (
                 "\n🎮 THE FINALS | 群工具箱\n"
-                "━━━━━━━━━━━━━\n"
+                f"{SEPARATOR}\n"
                 "🤖 功能列表:\n"
                 "• /rank <ID> [赛季] - 查询排位数据\n"
                 "• /all <ID> - 查询全赛季数据\n"
@@ -61,7 +62,7 @@ class AboutUs:
                 "💡 问题反馈:\n"
                 "• 请联系xiaoyueyoqwq@gmail邮箱\n"
                 "• 或者github搜索thefinals-qqbot查阅源码\n"
-                "━━━━━━━━━━━━━"
+                f"{SEPARATOR}"
             )
         except Exception as e:
             bot_logger.error(f"获取关于信息时出错: {str(e)}")

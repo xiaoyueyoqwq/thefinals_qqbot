@@ -10,6 +10,7 @@ import json
 import random
 from core.season import SeasonManager, SeasonConfig
 from difflib import SequenceMatcher
+from utils.templates import SEPARATOR
 
 class DeepSearch:
     """深度搜索功能类"""
@@ -34,9 +35,6 @@ class DeepSearch:
         # 初始化赛季管理器
         self.season_manager = SeasonManager()
 
-        # 初始化小知识列表
-        self.tips = self._load_tips()
-        
     async def start(self):
         """启动深度搜索服务"""
         bot_logger.info("[DeepSearch] 启动深度搜索服务")
@@ -293,30 +291,6 @@ class DeepSearch:
             (user_id, query)
         )
     
-    def _load_tips(self) -> list:
-        """加载小知识数据"""
-        try:
-            tips_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "did_you_know.json")
-            bot_logger.debug(f"正在加载小知识文件: {tips_path}")
-            
-            # 确保data目录存在
-            os.makedirs(os.path.dirname(tips_path), exist_ok=True)
-            
-            with open(tips_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                tips = data.get("tips", [])
-                bot_logger.info(f"成功加载 {len(tips)} 条小知识")
-                return tips
-        except Exception as e:
-            bot_logger.error(f"加载小知识数据失败: {str(e)}")
-            return []
-
-    def _get_random_tip(self) -> str:
-        """获取随机小知识"""
-        if not self.tips:
-            return "暂无小知识"
-        return random.choice(self.tips)
-
     def _format_loading_message(self, query: str) -> str:
         """格式化加载提示消息
         
@@ -327,9 +301,7 @@ class DeepSearch:
             str: 格式化后的消息
         """
         message = f"\n⏰正在深度查询 {query.replace('/ds', '').strip()} 的玩家数据...\n"
-        message += "━━━━━━━━━━━━━\n"
-        message += "🤖你知道吗？\n"
-        message += f"[ {self._get_random_tip()} ]"
+        message += f"{SEPARATOR}\n"
         return message
 
     async def format_search_results(self, query: str, results: List[Dict[str, Any]]) -> str:
@@ -343,16 +315,16 @@ class DeepSearch:
             str: 格式化后的消息
         """
         message = f"\n🔎 深度搜索 | {query.replace('/ds', '').strip()}\n"
-        message += "━━━━━━━━━━━━━\n"
+        message += f"{SEPARATOR}\n"
         
         if not results:
             message += "\n❌ 未查询到对应的玩家信息\n"
-            message += "━━━━━━━━━━━━━\n"
+            message += f"{SEPARATOR}\n"
             message += "💡 小贴士:\n"
             message += "1. 请检查ID是否正确\n"
             message += "2. 尝试使用不同的搜索关键词\n"
             message += "3. 该玩家可能不在当前赛季排行榜中\n"
-            message += "━━━━━━━━━━━━━"
+            message += f"{SEPARATOR}"
             return message
         
         message += "👀 所有结果:\n"
@@ -365,7 +337,7 @@ class DeepSearch:
             player_display = f"[{club_tag}]{player_id}" if club_tag else player_id
             message += f"▎{player_display} [{score}]\n"
         
-        message += "━━━━━━━━━━━━━"
+        message += f"{SEPARATOR}"
         return message
     
     async def stop(self):
