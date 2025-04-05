@@ -291,19 +291,6 @@ class DeepSearch:
             (user_id, query)
         )
     
-    def _format_loading_message(self, query: str) -> str:
-        """格式化加载提示消息
-        
-        Args:
-            query: 搜索查询
-            
-        Returns:
-            str: 格式化后的消息
-        """
-        message = f"\n⏰正在深度查询 {query.replace('/ds', '').strip()} 的玩家数据...\n"
-        message += f"{SEPARATOR}\n"
-        return message
-
     async def format_search_results(self, query: str, results: List[Dict[str, Any]]) -> str:
         """格式化搜索结果消息
         
