@@ -72,9 +72,6 @@ class DeepSearchPlugin(Plugin):
             # 记录搜索历史
             await self.deep_search.add_search_history(user_id, query)
             
-            # 显示加载消息
-            loading_message = self.deep_search._format_loading_message(query)
-            await handler.send_text(loading_message)
             
             # 执行搜索
             results = await self.deep_search.search(query)
@@ -87,11 +84,6 @@ class DeepSearchPlugin(Plugin):
             error_msg = (
                 f"\n💡 小贴士: 搜索失败\n"
                 f"{SEPARATOR}\n"
-                f"可能的原因:\n"
-                f"1. 服务器连接超时\n"
-                f"2. 数据暂时不可用\n"
-                f"3. 系统正在维护\n"
-                f"请稍后重试"
             )
             bot_logger.error(f"[{self.name}] 处理深度搜索失败: {str(e)}")
             await handler.send_text(error_msg) 

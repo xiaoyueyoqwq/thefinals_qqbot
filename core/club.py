@@ -102,15 +102,6 @@ class ClubQuery:
         if not club_data:
             return (
                 "\n⚠️ 未找到俱乐部数据\n"
-                f"{SEPARATOR}\n"
-                "可能的原因:\n"
-                "1. 俱乐部标签输入错误\n"
-                "2. 俱乐部暂无排名数据\n"
-                "3. 数据尚未更新\n"
-                f"{SEPARATOR}\n"
-                "💡 提示: 你可以:\n"
-                "1. 检查标签是否正确\n"
-                "2. 尝试使用模糊搜索\n"
                 f"{SEPARATOR}"
             )
 

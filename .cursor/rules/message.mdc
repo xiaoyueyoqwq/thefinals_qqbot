@@ -4,6 +4,11 @@ globs:
 alwaysApply: false
 ---
 ---
+description: 
+globs: 
+alwaysApply: false
+---
+---
 description: --- description: 消息格式规范与建议，用于保持THE FINALS QQ机器人消息的一致性和可读性 globs: ["plugins/*.py", "core/*.py", "utils/message*.py"] alwaysApply: true ---
 globs: 
 alwaysApply: false
