@@ -1,10 +1,12 @@
 from typing import Optional, Dict, List, Tuple
 import asyncio
+import json
 from utils.logger import bot_logger
 from utils.config import settings
 from utils.base_api import BaseAPI
 from core.season import SeasonManager
 from utils.templates import SEPARATOR
+from utils.cache_manager import CacheManager
 
 class WorldTourAPI(BaseAPI):
     """世界巡回赛API封装"""
@@ -13,6 +15,13 @@ class WorldTourAPI(BaseAPI):
         super().__init__(settings.api_base_url, timeout=10)
         self.platform = "crossplay"
         self.season_manager = SeasonManager()
+        self.cache = CacheManager()
+        self._initialized = False
+        self._lock = asyncio.Lock()
+        self._update_task = None
+        self._stop_event = asyncio.Event()
+        self._force_stop = False
+        
         # 支持的赛季列表
         self.seasons = {
             season_id: (self._get_season_icon(season_id), season_id, f"season {season_id[1:]}")
@@ -24,20 +33,131 @@ class WorldTourAPI(BaseAPI):
             "Accept": "application/json",
             "User-Agent": "TheFinals-Bot/1.0"
         }
-
-    def _get_season_icon(self, season_id: str) -> str:
-        """获取赛季图标"""
-        icons = {
-            "s3": "🎮",
-            "s4": "🎯",
-            "s5": "🌟",
-            "s6": "💫"
-        }
-        return icons.get(season_id, "🎮")
-
+        
+        bot_logger.info("[WorldTourAPI] 初始化完成")
+        
+    async def initialize(self):
+        """初始化API"""
+        if self._initialized:
+            return
+            
+        try:
+            async with self._lock:
+                if self._initialized:
+                    return
+                    
+                # 注册缓存数据库
+                await self.cache.register_database("world_tour")
+                
+                # 立即获取一次所有赛季数据
+                bot_logger.info("[WorldTourAPI] 开始初始化数据...")
+                for season_id in self.seasons:
+                    try:
+                        await self._update_season_data(season_id)
+                    except Exception as e:
+                        bot_logger.error(f"[WorldTourAPI] 初始化赛季 {season_id} 数据失败: {str(e)}")
+                bot_logger.info("[WorldTourAPI] 数据初始化完成")
+                
+                # 创建更新任务
+                if not self._update_task:
+                    self._update_task = asyncio.create_task(self._update_loop())
+                    bot_logger.debug(f"[WorldTourAPI] 创建数据更新任务, rotation: {settings.UPDATE_INTERVAL}秒")
+                
+                self._initialized = True
+                bot_logger.info("[WorldTourAPI] 初始化完成")
+                
+        except Exception as e:
+            bot_logger.error(f"[WorldTourAPI] 初始化失败: {str(e)}")
+            raise
+            
+    async def _update_loop(self):
+        """数据更新循环"""
+        try:
+            while not (self._stop_event.is_set() or self._force_stop):
+                try:
+                    # 检查强制停止标志
+                    if self._force_stop:
+                        return
+                        
+                    # 更新所有支持的赛季数据
+                    for season_id in self.seasons:
+                        if self._force_stop:
+                            return
+                        await self._update_season_data(season_id)
+                        
+                    # 等待下一次更新
+                    for _ in range(settings.UPDATE_INTERVAL):
+                        if self._force_stop:
+                            return
+                        await asyncio.sleep(1)
+                        
+                except Exception as e:
+                    if self._force_stop:
+                        return
+                    bot_logger.error(f"[WorldTourAPI] 更新循环错误: {str(e)}")
+                    await asyncio.sleep(5)
+                    
+        finally:
+            bot_logger.info("[WorldTourAPI] 数据更新循环已停止")
+            
+    async def _update_season_data(self, season: str):
+        """更新指定赛季的数据"""
+        try:
+            url = f"/v1/leaderboard/{season}worldtour/{self.platform}"
+            response = await self.get(url, headers=self.headers)
+            if not response or response.status_code != 200:
+                return
+                
+            data = self.handle_response(response)
+            if not isinstance(data, dict) or not data.get("count"):
+                return
+                
+            # 更新玩家数据缓存
+            cache_data = {}
+            for player in data.get("data", []):
+                player_name = player.get("name", "").lower()
+                if player_name:
+                    cache_key = f"player_{player_name}_{season}"
+                    cache_data[cache_key] = json.dumps(player)
+            
+            # 批量更新缓存
+            if cache_data:
+                await self.cache.batch_set_cache(
+                    "world_tour",
+                    cache_data,
+                    expire_seconds=settings.UPDATE_INTERVAL * 2
+                )
+                
+            # 更新top_players缓存
+            top_players = [p["name"] for p in data.get("data", [])[:5]]
+            await self.cache.set_cache(
+                "world_tour",
+                f"top_players_{season}",
+                json.dumps(top_players),
+                expire_seconds=settings.UPDATE_INTERVAL
+            )
+            
+            bot_logger.debug(f"[WorldTourAPI] 赛季 {season} 数据更新完成")
+            
+        except Exception as e:
+            bot_logger.error(f"[WorldTourAPI] 更新赛季 {season} 数据失败: {str(e)}")
+            
     async def get_player_stats(self, player_name: str, season: str) -> Optional[dict]:
         """查询玩家在指定赛季的数据"""
         try:
+            # 确保已初始化
+            await self.initialize()
+            
+            # 尝试从缓存获取数据
+            cache_key = f"player_{player_name.lower()}_{season}"
+            cached_data = await self.cache.get_cache("world_tour", cache_key)
+            if cached_data:
+                try:
+                    return json.loads(cached_data)
+                except json.JSONDecodeError:
+                    pass
+            
+            # 如果缓存未命中，从API获取数据
             url = f"/v1/leaderboard/{season}worldtour/{self.platform}"
             params = {"name": player_name}
             
@@ -49,23 +169,58 @@ class WorldTourAPI(BaseAPI):
             if not isinstance(data, dict) or not data.get("count"):
                 return None
                 
-            # 如果是完整ID，直接返回第一个匹配
+            # 处理数据
+            result = None
             if "#" in player_name:
-                return data["data"][0] if data.get("data") else None
-                
-            # 否则进行模糊匹配
-            matches = []
-            for player in data.get("data", []):
-                name = player.get("name", "").lower()
-                if player_name.lower() in name:
-                    matches.append(player)
-                    
-            # 返回最匹配的结果（通常是第一个）
-            return matches[0] if matches else None
+                # 完整ID，直接返回第一个匹配
+                result = data["data"][0] if data.get("data") else None
+            else:
+                # 模糊匹配
+                matches = []
+                for player in data.get("data", []):
+                    name = player.get("name", "").lower()
+                    if player_name.lower() in name:
+                        matches.append(player)
+                result = matches[0] if matches else None
+            
+            # 缓存数据（如果有结果）
+            if result:
+                await self.cache.set_cache(
+                    "world_tour",
+                    cache_key,
+                    json.dumps(result),
+                    expire_seconds=settings.UPDATE_INTERVAL * 2
+                )
+            
+            return result
             
         except Exception as e:
             bot_logger.error(f"查询失败 - 赛季: {season}, 错误: {str(e)}")
             return None
+            
+    async def force_stop(self):
+        """强制停止更新循环"""
+        self._force_stop = True
+        self._stop_event.set()
+        
+        if self._update_task and not self._update_task.done():
+            self._update_task.cancel()
+            try:
+                await self._update_task
+            except asyncio.CancelledError:
+                pass
+            
+        bot_logger.info("[WorldTourAPI] 更新任务已停止")
+
+    def _get_season_icon(self, season_id: str) -> str:
+        """获取赛季图标"""
+        icons = {
+            "s3": "🎮",
+            "s4": "🎯",
+            "s5": "🌟",
+            "s6": "💫"
+        }
+        return icons.get(season_id, "🎮")
 
     def _format_player_data(self, data: dict) -> Tuple[str, str, str, str, str]:
         """格式化玩家数据"""

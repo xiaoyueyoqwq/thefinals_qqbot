@@ -500,6 +500,12 @@ class MyBot(botpy.Client):
             # 初始化浏览器
             await self._init_browser()
             
+            # 初始化 WorldTourAPI
+            from core.world_tour import WorldTourAPI
+            world_tour_api = WorldTourAPI()
+            await world_tour_api.initialize()
+            register_resource(world_tour_api)
+            
             # 初始化插件
             await self._init_plugins()
             

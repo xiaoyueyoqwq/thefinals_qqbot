@@ -2,15 +2,14 @@ import os
 import asyncio
 from typing import Optional, Tuple, Dict, List
 from pathlib import Path
-from playwright.async_api import Page
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
-from utils.browser import browser_manager
 from utils.message_api import FileType, MessageAPI
 from utils.config import settings
 from core.season import SeasonManager, SeasonConfig
 from datetime import datetime, timedelta
 from utils.templates import SEPARATOR
+from core.image_generator import ImageGenerator
 import uuid
 import json
 
@@ -116,11 +115,12 @@ class RankQuery:
     """排位查询功能"""
     _instance = None
     _lock = asyncio.Lock()
+    _initialized = False
+    _preheated = False
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(RankQuery, cls).__new__(cls)
-            cls._instance._initialized = False
         return cls._instance
     
     def __init__(self):
@@ -129,7 +129,8 @@ class RankQuery:
             
         self.api = RankAPI()
         self.resources_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
-        self.html_template_path = os.path.join(self.resources_dir, "templates", "rank.html")
+        self.template_dir = os.path.join(self.resources_dir, "templates")
+        self.html_template_path = os.path.join(self.template_dir, "rank.html")
         
         # 使用SeasonConfig中的赛季配置
         self.seasons = SeasonConfig.SEASONS
@@ -178,95 +179,87 @@ class RankQuery:
             "Ruby": "ruby"
         }
         
-        # 页面相关
-        self._page: Optional[Page] = None
-        self._lock = asyncio.Lock()
-        self._template_cache = {}
+        # 初始化图片生成器
+        self.image_generator = ImageGenerator(self.template_dir)
         self._initialized = True
-        self._preheated = False
         
         bot_logger.info("RankQuery单例初始化完成")
         
     async def initialize(self):
         """初始化 RankQuery"""
-        try:
-            bot_logger.info("[RankQuery] 开始初始化...")
-            await self.api.wait_for_init()
-            bot_logger.info("[RankQuery] 初始化完成")
-        except Exception as e:
-            bot_logger.error(f"[RankQuery] 初始化失败: {str(e)}")
-            raise
-        
-    async def _preheat_page(self):
-        """预热页面实例"""
         if self._preheated:
             return
             
         try:
-            # 确保页面已创建
-            await self._ensure_page_ready()
+            async with self._lock:
+                if self._preheated:
+                    return
+                    
+                bot_logger.info("[RankQuery] 开始初始化...")
+                await self.api.wait_for_init()
+                
+                # 预热图片生成器
+                await self._preheat_image_generator()
+                
+                self._preheated = True
+                bot_logger.info("[RankQuery] 初始化完成")
+        except Exception as e:
+            bot_logger.error(f"[RankQuery] 初始化失败: {str(e)}")
+            raise
             
-            # 预加载基础模板
-            base_html = self._template_cache.get('base')
-            if not base_html:
-                with open(self.html_template_path, 'r', encoding='utf-8') as f:
-                    base_html = f.read()
-                self._template_cache['base'] = base_html
+    async def _preheat_image_generator(self):
+        """预热图片生成器"""
+        try:
+            # 添加必需的资源
+            required_resources = []
             
-            # 预加载一个空的模板数据
-            empty_data = {
-                "player_name": "",
-                "player_tag": "",
-                "rank": "",
+            # 添加段位图标
+            for icon_name in self.rank_icon_map.values():
+                required_resources.append(f"../images/rank_icons/{icon_name}.png")
+                
+            # 添加所有赛季背景
+            for season_bg in self.season_backgrounds.values():
+                if season_bg not in required_resources:  # 避免重复添加
+                    required_resources.append(season_bg)
+                    
+            # 添加默认背景（使用当前赛季的背景）
+            current_season = SeasonConfig.CURRENT_SEASON
+            default_bg = self.season_backgrounds.get(current_season)
+            if default_bg and default_bg not in required_resources:
+                required_resources.append(default_bg)
+                
+            bot_logger.info(f"[RankQuery] 准备预加载 {len(required_resources)} 个资源文件")
+            
+            # 注册必需资源
+            await self.image_generator.add_required_resources(required_resources)
+            
+            # 准备预热数据
+            preload_data = {
+                "player_name": "PlayerName",
+                "player_tag": "0000",
+                "rank": "0",
                 "rank_icon": "../images/rank_icons/bronze-4.png",
-                "score": "",
-                "rank_text": "",
-                "rank_trend": "",
-                "rank_trend_color": "",
+                "score": "0",
+                "rank_text": "Bronze 4",
+                "rank_trend": "=",
+                "rank_trend_color": "text-gray-500",
                 "rank_change": "",
-                "background": f"../images/seasons/{SeasonConfig.CURRENT_SEASON}.png"
+                "background": default_bg
             }
             
-            # 渲染空模板
-            html_content = base_html
-            for key, value in empty_data.items():
-                html_content = html_content.replace(f"{{{{ {key} }}}}", str(value))
-                
-            # 设置页面内容并等待加载
-            await self._page.set_content(html_content)
-            await self._page.wait_for_selector('.rank-icon img', timeout=1000)
-            await self._page.wait_for_selector('.bg-container', timeout=1000)
+            bot_logger.info("[RankQuery] 开始预热图片生成器")
             
-            # 预热完成标记
-            self._preheated = True
-            bot_logger.info("页面预热完成")
+            # 预热图片生成器
+            await self.image_generator.preheat(
+                self.html_template_path,
+                preload_data
+            )
+            
+            bot_logger.info("[RankQuery] 图片生成器预热完成")
             
         except Exception as e:
-            bot_logger.error(f"页面预热失败: {str(e)}")
-            self._preheated = False
-            
-    async def _ensure_page_ready(self):
-        """确保页面已准备就绪"""
-        if not self._page:
-            async with self._lock:
-                if not self._page:
-                    # 获取浏览器实例并创建页面
-                    self._page = await browser_manager.create_page()
-                    if not self._page:
-                        raise Exception("无法创建页面")
-                    
-                    # 预加载模板
-                    if 'base' not in self._template_cache:
-                        with open(self.html_template_path, 'r', encoding='utf-8') as f:
-                            self._template_cache['base'] = f.read()
-                    
-                    # 设置页面路径为HTML目录
-                    await self._page.goto(f"file://{os.path.dirname(self.html_template_path)}", wait_until='domcontentloaded')
-                    
-                    # 开始预热
-                    await self._preheat_page()
-                    
-                    bot_logger.info("RankQuery页面初始化完成")
+            bot_logger.error(f"[RankQuery] 预热图片生成器失败: {str(e)}")
+            raise
 
     def _get_rank_icon_path(self, league: str) -> str:
         """获取段位图标路径"""
@@ -333,52 +326,6 @@ class RankQuery:
             bot_logger.error(f"准备模板数据时出错: {str(e)}")
             return None
 
-    async def generate_rank_image(self, template_data: dict) -> Optional[bytes]:
-        """生成排位图片"""
-        try:
-            # 确保页面已准备就绪
-            await self._ensure_page_ready()
-
-            async with self._lock:  # 使用锁确保线程安全
-                # 替换模板变量
-                html_content = self._template_cache['base']
-                for key, value in template_data.items():
-                    html_content = html_content.replace(f"{{{{ {key} }}}}", str(value))
-
-                # 更新页面内容
-                await self._page.set_content(html_content)
-                
-                # 等待关键元素加载完成
-                try:
-                    await asyncio.gather(
-                        self._page.wait_for_selector('.rank-icon img', timeout=300),
-                        self._page.wait_for_selector('.bg-container', timeout=500)
-                    )
-                except Exception as e:
-                    bot_logger.error(f"等待元素加载超时: {str(e)}")
-                    pass
-
-                # 等待一小段时间确保渲染完成
-                await asyncio.sleep(0.1)
-
-                # 截图并压缩
-                screenshot = await self._page.screenshot(
-                    full_page=True,
-                    type='jpeg',  # 使用jpeg格式以减小文件大小
-                    quality=85,   # 设置压缩质量
-                    scale='device'
-                )
-                return screenshot
-
-        except Exception as e:
-            bot_logger.error(f"生成排位图片时出错: {str(e)}")
-            # 如果发生错误,关闭当前页面并重置状态
-            if self._page:
-                await self._page.close()
-                self._page = None
-                self._preheated = False
-            return None
-
     def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]]) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
         """格式化响应消息"""
         # 检查是否有任何赛季的数据
@@ -436,7 +383,11 @@ class RankQuery:
                     return None, error_msg, None, None
                     
                 # 生成图片
-                image_data = await self.generate_rank_image(template_data)
+                image_data = await self.image_generator.generate_image(
+                    template_data=template_data,
+                    wait_selectors=['.rank-icon img', '.bg-container']
+                )
+                
                 if not image_data:
                     error_msg = "\n⚠️ 生成图片时出错"
                     return None, error_msg, None, None
