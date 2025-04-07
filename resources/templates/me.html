@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE FINALS - Player Stats</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Rajdhani', sans-serif;
+        }
+
+        body {
+            background-color: #000;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('../images/seasons/s3.png');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.6;
+            filter: brightness(0.7) contrast(1.1);
+            z-index: -1;
+        }
+
+        .container {
+            width: 1200px;
+            height: 675px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(5px);
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+            padding: 40px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .player-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .player-name {
+            font-size: 3.5em;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(227,30,36,0.5);
+        }
+
+        .club-tag {
+            font-size: 1.8em;
+            color: rgba(255,255,255,0.7);
+            font-weight: 600;
+        }
+
+        .main-stats {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 40px;
+            margin: 20px 0;
+            height: 450px;
+        }
+
+        .stat-card {
+            background: rgba(227,30,36,0.1);
+            padding: 30px;
+            border-left: 4px solid #E31E24;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .stat-card.highlight {
+            background: rgba(227,30,36,0.15);
+            grid-row: span 2;
+        }
+
+        .stat-label {
+            font-size: 1.2em;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+
+        .league-info {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .league-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: -10px;
+            position: relative;
+        }
+
+        .league-icon {
+            width: 65px;
+            height: 65px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 10px rgba(227,30,36,0.3));
+            margin-top: -12px;
+            transform: translateY(-3px);
+        }
+
+        .league-name {
+            font-size: 3.8em;
+            font-weight: 700;
+            color: #E31E24;
+            line-height: 0.9;
+            margin-top: -5px;
+        }
+
+        .grade-badge {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 3em;
+            font-weight: 700;
+            padding: 0 15px;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .grade-badge::before {
+            content: 'GRADE';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.35em;
+            font-weight: 600;
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 3px;
+            text-shadow: none;
+        }
+
+        /* 最高级 SSSR */
+        .grade-badge.sssr {
+            color: #FFC700;
+            text-shadow: 0 0 15px rgba(255, 199, 0, 0.6),
+                        0 0 30px rgba(255, 199, 0, 0.4);
+            background: linear-gradient(to right, #FFC700 0%, #FFF5D4 50%, #FFC700 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: shine 2s linear infinite;
+        }
+
+        .grade-badge.sssr::before {
+            background: linear-gradient(to right, #FFC700, #FFF5D4);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* SSS级 */
+        .grade-badge.sss {
+            color: #FFD700;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+            background: linear-gradient(to right, #FFD700, #FDB931);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .grade-badge.sss::before {
+            color: rgba(255, 215, 0, 0.7);
+        }
+
+        /* SS级 */
+        .grade-badge.ss {
+            color: #FFD700;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+        }
+
+        .grade-badge.ss::before {
+            color: rgba(255, 215, 0, 0.7);
+        }
+
+        /* S级 */
+        .grade-badge.s {
+            color: #FDB931;
+            text-shadow: 0 0 15px rgba(253, 185, 49, 0.4);
+        }
+
+        .grade-badge.s::before {
+            color: rgba(253, 185, 49, 0.7);
+        }
+
+        /* A+级 */
+        .grade-badge.a-plus {
+            color: #E31E24;
+            text-shadow: 0 0 15px rgba(227, 30, 36, 0.4);
+        }
+
+        .grade-badge.a-plus::before {
+            color: rgba(227, 30, 36, 0.7);
+        }
+
+        /* A级 */
+        .grade-badge.a {
+            color: #FF4B4B;
+            text-shadow: 0 0 15px rgba(255, 75, 75, 0.4);
+        }
+
+        .grade-badge.a::before {
+            color: rgba(255, 75, 75, 0.7);
+        }
+
+        /* B级 */
+        .grade-badge.b {
+            color: #808080;
+            text-shadow: 0 0 15px rgba(128, 128, 128, 0.4);
+        }
+
+        /* C级 */
+        .grade-badge.c {
+            color: #A0A0A0;
+            text-shadow: 0 0 15px rgba(160, 160, 160, 0.3);
+        }
+
+        @keyframes shine {
+            0% {
+                background-position: 0% center;
+            }
+            100% {
+                background-position: 200% center;
+            }
+        }
+
+        .league-score-container {
+            display: flex;
+            align-items: baseline;
+            gap: 15px;
+        }
+
+        .league-score {
+            font-size: 2.5em;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .league-rank-tag {
+            font-size: 1.2em;
+            color: rgba(255,255,255,0.4);
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+
+        .league-rank-tag span {
+            color: rgba(255,255,255,0.8);
+            margin-left: 5px;
+        }
+
+        .league-rank-badge {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, rgba(227,30,36,0.2), rgba(227,30,36,0.05));
+            padding: 8px 15px;
+            border-radius: 4px;
+            border: 1px solid rgba(227,30,36,0.3);
+            font-size: 1.2em;
+            color: rgba(255,255,255,0.9);
+            letter-spacing: 1px;
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .league-rank-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: #E31E24;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(227,30,36,0.5);
+        }
+
+        .league-rank-number {
+            font-weight: 600;
+            color: #E31E24;
+            text-shadow: 0 0 10px rgba(227,30,36,0.3);
+        }
+
+        .chart-container {
+            flex-grow: 1;
+            position: relative;
+            margin-top: 20px;
+            height: calc(100% - 160px);
+        }
+
+        .chart {
+            position: relative;
+            height: 100%;
+            width: 100%;
+        }
+
+        .chart-path {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            fill: none;
+            stroke: #E31E24;
+            stroke-width: 3;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 8px rgba(227,30,36,0.5));
+            animation: drawLine 2s ease-out forwards;
+        }
+
+        @keyframes drawLine {
+            0% {
+                stroke-dasharray: 1000;
+                stroke-dashoffset: 1000;
+            }
+            100% {
+                stroke-dasharray: 1000;
+                stroke-dashoffset: 0;
+            }
+        }
+
+        .chart-dots {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+            border: 1px solid rgba(255, 215, 0, 0.6);
+            opacity: 0.9;
+            transform: translateY(2px);
+        }
+
+        .chart-label {
+            position: absolute;
+            font-size: 0.9em;
+            color: rgba(255, 215, 0, 0.9);
+            font-weight: 500;
+            text-shadow: 0 0 3px rgba(255, 215, 0, 0.2);
+        }
+
+        .chart-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            opacity: 0.2;
+        }
+
+        .grid-line {
+            width: 100%;
+            height: 1px;
+            background: rgba(255,255,255,0.5);
+        }
+
+        .rank {
+            font-size: 5em;
+            color: #E31E24;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .world-tour-value {
+            font-size: 3em;
+            color: #fff;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 30px 5px;
+            height: 170px;
+        }
+
+        .footer-text {
+            font-size: 1.2em;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .highlight-text {
+            color: #E31E24;
+        }
+
+        .rank-info, .earnings-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .group-rank {
+            font-size: 1.1em;
+            color: rgba(255,255,255,0.4);
+            margin-top: auto;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            letter-spacing: 1px;
+        }
+
+        .group-rank span {
+            color: rgba(255,255,255,0.8);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <div class="header">
+                <div class="player-info">
+                    <div class="player-name">{{ player_name }}</div>
+                    <div class="club-tag">{{ club_tag }}</div>
+                </div>
+            </div>
+
+            <div class="main-stats">
+                <div class="stat-card highlight">
+                    <div class="stat-label">Current League</div>
+                    <div class="league-info">
+                        <div class="league-header">
+                            <img src="{{ league_icon_url }}" alt="{{ league_name }}" class="league-icon">
+                            <div class="league-name">{{ league_name }}</div>
+                            <div class="grade-badge {{ grade_class }}">{{ grade_text }}</div>
+                        </div>
+                        <div class="league-score-container">
+                            <div class="league-score">{{ league_score }} RS</div>
+                            <div class="league-rank-tag">RANK<span>#{{ league_rank }}</span></div>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-grid">
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                        </div>
+                        <div class="chart">
+                            <svg class="chart-path" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                <path d="{{ chart_path }}" fill="none"/>
+                            </svg>
+                            <div class="chart-dots" style="left: {{ chart_dot_left }}%; bottom: calc({{ chart_dot_bottom }}% - 2px);"></div>
+                            <div class="chart-label" style="left: {{ chart_label_left }}%; bottom: calc({{ chart_label_bottom }}% + 20px);">{{ chart_label_text }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="rank-info">
+                        <div class="stat-label">Global Ranking</div>
+                        <div class="rank">#{{ global_rank }}</div>
+                        <div class="group-rank">RANK <span>#{{ global_group_rank }}</span></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="earnings-info">
+                        <div class="stat-label">World Tour Earnings</div>
+                        <div class="world-tour-value">$ {{ world_tour_earnings }}</div>
+                        <div class="group-rank">RANK <span>#{{ wt_group_rank }}</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <div class="footer-text">THE FINALS STATS</div>
+                <div class="footer-text">SEASON {{ season_number }}</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 
