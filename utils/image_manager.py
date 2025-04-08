@@ -3,7 +3,8 @@ import time
 import uuid
 import shutil
 import asyncio
-import imghdr
+from PIL import Image
+from io import BytesIO
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
@@ -66,13 +67,17 @@ class ImageManager:
                 return False
                 
             # 检查文件类型
-            image_type = imghdr.what(None, h=image_data)
-            if image_type not in self.ALLOWED_TYPES:
-                bot_logger.warning(f"不支持的图片类型: {image_type}")
+            try:
+                with Image.open(BytesIO(image_data)) as img:
+                    image_type = img.format.lower()
+                    if image_type not in self.ALLOWED_TYPES:
+                        bot_logger.warning(f"不支持的图片类型: {image_type}")
+                        return False
+                    return True
+            except Exception as e:
+                bot_logger.warning(f"无效的图片格式: {str(e)}")
                 return False
                 
-            return True
-            
         except Exception as e:
             bot_logger.error(f"验证图片失败: {str(e)}")
             return False
@@ -156,10 +161,11 @@ class ImageManager:
         if file_path.exists():
             # 验证文件类型
             try:
-                if imghdr.what(file_path) not in self.ALLOWED_TYPES:
-                    bot_logger.warning(f"发现无效的图片文件: {image_id}")
-                    os.remove(file_path)
-                    return None
+                with Image.open(file_path) as img:
+                    if img.format.lower() not in self.ALLOWED_TYPES:
+                        bot_logger.warning(f"发现无效的图片文件: {image_id}")
+                        os.remove(file_path)
+                        return None
             except:
                 return None
                 

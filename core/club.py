@@ -103,8 +103,7 @@ class ClubQuery:
         """格式化响应消息"""
         if not club_data:
             return (
-                "\n⚠️ 未找到俱乐部数据\n"
-                f"{SEPARATOR}"
+                "\n⚠️ 未找到俱乐部数据"
             )
 
         club = club_data[0]  # 获取第一个匹配的俱乐部
