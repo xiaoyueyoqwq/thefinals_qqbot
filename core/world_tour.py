@@ -33,7 +33,7 @@ class WorldTourAPI(BaseAPI):
             "Accept": "application/json",
             "User-Agent": "TheFinals-Bot/1.0"
         }
-
+        
         bot_logger.info("[WorldTourAPI] 初始化完成")
         
     async def initialize(self):
@@ -141,7 +141,7 @@ class WorldTourAPI(BaseAPI):
             
         except Exception as e:
             bot_logger.error(f"[WorldTourAPI] 更新赛季 {season} 数据失败: {str(e)}")
-
+            
     async def get_player_stats(self, player_name: str, season: str) -> Optional[dict]:
         """查询玩家在指定赛季的数据"""
         try:
@@ -331,4 +331,4 @@ class WorldTourQuery:
             
         except Exception as e:
             bot_logger.error(f"处理世界巡回赛查询命令时出错: {str(e)}")
-            return "\n⚠️ 查询过程中发生错误，请稍后重试" 
+            return "\n⚠️ 查询过程中发生错误，请稍后重试"
