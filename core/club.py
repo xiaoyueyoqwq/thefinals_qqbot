@@ -26,7 +26,7 @@ class ClubAPI(BaseAPI):
         try:
             # 构建完整的URL，移除可能的命令前缀
             clean_tag = club_tag.strip().strip('[]')  # 移除空格和中括号
-            url = f"{self.api_prefix}/clubs?clubTagFilter={clean_tag}&exactClubTag={str(exact_match).lower()}"
+            url = f"{self.api_prefix}/clubs?exactClubTag={str(exact_match).lower()}"
             
             response = await self.get(url, headers=self.headers)
             if not response or response.status_code != 200:
@@ -36,7 +36,9 @@ class ClubAPI(BaseAPI):
             if not isinstance(data, list) or not data:
                 return None
                 
-            return data
+            # 在返回的数据中过滤匹配的俱乐部标签
+            filtered_data = [club for club in data if club.get("clubTag", "").lower() == clean_tag.lower()]
+            return filtered_data
             
         except Exception as e:
             bot_logger.error(f"查询俱乐部失败 - 标签: {club_tag}, 错误: {str(e)}")
