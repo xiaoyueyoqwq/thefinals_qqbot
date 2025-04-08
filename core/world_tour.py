@@ -331,4 +331,4 @@ class WorldTourQuery:
             
         except Exception as e:
             bot_logger.error(f"处理世界巡回赛查询命令时出错: {str(e)}")
-            return "\n⚠️ 查询过程中发生错误，请稍后重试" 
+            return "\n⚠️ 查询过程中发生错误，请稍后重试"
