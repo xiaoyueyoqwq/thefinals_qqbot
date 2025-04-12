@@ -5,6 +5,10 @@ from datetime import datetime
 from utils.logger import bot_logger
 from utils.config import settings
 from utils.templates import SEPARATOR
+try:
+    from utils.memory_manager import MemoryManager
+except ImportError:
+    MemoryManager = None
 
 class StatusMonitor:
     """状态监控类"""
@@ -17,10 +21,26 @@ class StatusMonitor:
             "排行榜API": settings.api_base_url,
             "Moliatopia API": "https://api.moliatopia.icu:8443"
         }
+        self.memory_manager = MemoryManager() if MemoryManager else None
         
     def get_hardware_status(self) -> dict:
         """获取硬件状态"""
         try:
+            # 优先使用memory_manager的数据
+            if self.memory_manager:
+                try:
+                    memory_info = self.memory_manager._get_memory_info()
+                    if memory_info and 'rss' in memory_info:
+                        total_memory = psutil.virtual_memory().total
+                        memory_percent = (memory_info['rss'] / total_memory) * 100
+                        return {
+                            "cpu": psutil.cpu_percent(interval=1),
+                            "ram": round(memory_percent, 1)
+                        }
+                except (AttributeError, Exception) as e:
+                    bot_logger.warning(f"[StatusMonitor] 使用memory_manager获取状态失败，切换到备用方案: {str(e)}")
+            
+            # Fallback到原有逻辑
             cpu_percent = psutil.cpu_percent(interval=1)
             memory = psutil.virtual_memory()
             return {

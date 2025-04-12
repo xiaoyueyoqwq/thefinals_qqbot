@@ -9,6 +9,8 @@ from typing import Dict, Any, List, Optional
 from utils.config import settings
 from core.season import SeasonManager
 from utils.base_api import BaseAPI
+from utils.cache_manager import CacheManager
+import time
 
 class DFQuery:
     """底分查询功能类"""
@@ -25,6 +27,10 @@ class DFQuery:
         # 初始化数据库管理器
         self.db = DatabaseManager(self.db_path)
         
+        # 初始化缓存管理器
+        self.cache_manager = CacheManager()
+        self._cache_key = "df_scores"
+        
         # 初始化其他属性
         self._save_lock = asyncio.Lock()  # 添加保存锁
         self._last_save_date = None
@@ -32,6 +38,16 @@ class DFQuery:
         self._should_stop = asyncio.Event()
         self._running_tasks = set()
         self._update_task = None
+        
+        # 监控统计
+        self._stats = {
+            "updates": 0,  # 更新次数
+            "errors": 0,   # 错误次数
+            "last_success": None,  # 上次成功时间
+            "last_error": None,    # 上次错误时间
+            "avg_update_time": 0,  # 平均更新时间
+        }
+        self._stats_lock = asyncio.Lock()
         
     async def _init_db(self):
         """初始化SQLite数据库"""
@@ -90,6 +106,10 @@ class DFQuery:
             # 初始化数据库
             await self._init_db()
             
+            # 初始化缓存
+            bot_logger.info("[DFQuery] 正在初始化缓存...")
+            await self.cache_manager.register_database("df")
+            
             # 启动更新任务
             if not self._update_task:
                 self._update_task = asyncio.create_task(self._update_loop())
@@ -99,21 +119,75 @@ class DFQuery:
             bot_logger.error(f"[DFQuery] 启动失败: {str(e)}")
             raise
             
+    async def _update_stats(self, success: bool, update_time: float = 0):
+        """更新监控统计"""
+        async with self._stats_lock:
+            if success:
+                self._stats["updates"] += 1
+                self._stats["last_success"] = datetime.now()
+                # 使用移动平均计算平均更新时间
+                if self._stats["avg_update_time"] == 0:
+                    self._stats["avg_update_time"] = update_time
+                else:
+                    self._stats["avg_update_time"] = (
+                        self._stats["avg_update_time"] * 0.9 + update_time * 0.1
+                    )
+            else:
+                self._stats["errors"] += 1
+                self._stats["last_error"] = datetime.now()
+                
+    async def _check_db_connection(self) -> dict:
+        """检查数据库连接状态"""
+        status = {
+            "connected": False,
+            "last_operation": None,
+            "error": None,
+            "transaction_active": False
+        }
+        
+        try:
+            db_key = str(self.db_path)
+            status["transaction_active"] = self.db._transactions[db_key]["active"]
+            
+            async with self.db.transaction():
+                await self.db.execute_simple("SELECT 1")
+                status["connected"] = True
+                status["last_operation"] = datetime.now().isoformat()
+        except Exception as e:
+            status["error"] = str(e)
+            
+        return status
+        
     async def _update_loop(self):
         """数据更新循环"""
         try:
             while not self._should_stop.is_set():
                 try:
+                    start_time = time.time()
+                    
+                    # 检查数据库状态
+                    db_status = await self._check_db_connection()
+                    bot_logger.info(f"[DFQuery] 数据库状态: {db_status}")
+                    
+                    if not db_status["connected"]:
+                        raise DatabaseError(f"数据库连接失败: {db_status['error']}")
+                    
                     # 更新数据
+                    bot_logger.info("[DFQuery] 开始更新数据")
                     await self.fetch_leaderboard()
+                    
+                    # 计算更新时间
+                    update_time = time.time() - start_time
+                    await self._update_stats(True, update_time)
+                    
+                    bot_logger.info(f"[DFQuery] 更新完成，耗时: {update_time:.2f}秒")
                     
                     # 等待2分钟
                     await asyncio.sleep(120)
                     
                 except Exception as e:
-                    if self._should_stop.is_set():
-                        return
-                    bot_logger.error(f"[DFQuery] 更新循环错误: {str(e)}")
+                    await self._update_stats(False)
+                    bot_logger.error(f"[DFQuery] 更新循环错误: {str(e)}", exc_info=True)
                     await asyncio.sleep(5)
                     
         finally:
@@ -136,12 +210,14 @@ class DFQuery:
             # 准备更新操作
             update_time = datetime.now()
             operations = []
+            cache_data = {}
             
             # 只保存第500名和第10000名的数据
             target_ranks = {500, 10000}
             for player_data in all_data:
                 rank = player_data.get('rank')
                 if rank in target_ranks:
+                    # 准备数据库更新
                     operations.append((
                         '''INSERT OR REPLACE INTO leaderboard
                            (rank, player_id, score, update_time)
@@ -149,9 +225,26 @@ class DFQuery:
                         (rank, player_data.get('name'), 
                          player_data.get('rankScore'), update_time)
                     ))
+                    
+                    # 准备缓存数据
+                    cache_data[str(rank)] = {
+                        "player_id": player_data.get('name'),
+                        "score": player_data.get('rankScore'),
+                        "update_time": update_time.isoformat()
+                    }
             
-            # 执行更新
+            # 更新数据库
             await self.db.execute_transaction(operations)
+            
+            # 更新缓存
+            if cache_data:
+                await self.cache_manager.set_cache(
+                    "df",
+                    self._cache_key,
+                    json.dumps(cache_data),
+                    expire_seconds=120
+                )
+            
             bot_logger.info("[DFQuery] 已更新排行榜数据")
             
         except Exception as e:
@@ -162,7 +255,15 @@ class DFQuery:
     async def get_bottom_scores(self) -> Dict[str, Any]:
         """获取底分数据"""
         try:
-            # 从数据库获取最新数据
+            # 先尝试从缓存获取
+            cached_data = await self.cache_manager.get_cache("df", self._cache_key)
+            if cached_data:
+                try:
+                    return json.loads(cached_data)
+                except json.JSONDecodeError:
+                    bot_logger.warning("[DFQuery] 缓存数据解析失败，将从数据库获取")
+            
+            # 从数据库获取
             results = await self.db.fetch_all(
                 '''SELECT rank, player_id, score, update_time 
                    FROM leaderboard'''
@@ -176,6 +277,16 @@ class DFQuery:
                     "score": score,
                     "update_time": datetime.fromisoformat(update_time)
                 }
+                
+            # 更新缓存
+            if scores:
+                await self.cache_manager.set_cache(
+                    "df",
+                    self._cache_key,
+                    json.dumps(scores),
+                    expire_seconds=120
+                )
+                
             return scores
             
         except Exception as e:
@@ -397,7 +508,7 @@ class DFQuery:
     async def format_score_message(self, data: Dict[str, Any]) -> str:
         """格式化分数消息
         Args:
-            data: 包含分数数据的字典
+            data: 包含分数数据的字典，使用 "500" 和 "10000" 作为键
         Returns:
             str: 格式化后的消息
         """
@@ -555,6 +666,18 @@ class DFQuery:
                 await asyncio.sleep(300)
                 
         bot_logger.debug("[DFQuery] 每日数据保存任务已停止")
+
+    async def get_stats(self) -> dict:
+        """获取监控统计信息"""
+        async with self._stats_lock:
+            return {
+                "updates": self._stats["updates"],
+                "errors": self._stats["errors"],
+                "last_success": self._stats["last_success"].isoformat() if self._stats["last_success"] else None,
+                "last_error": self._stats["last_error"].isoformat() if self._stats["last_error"] else None,
+                "avg_update_time": round(self._stats["avg_update_time"], 2),
+                "db_status": await self._check_db_connection()
+            }
 
 class DFApi:
     def __init__(self):
