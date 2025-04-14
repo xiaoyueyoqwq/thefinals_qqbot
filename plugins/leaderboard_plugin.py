@@ -139,14 +139,16 @@ class LeaderboardPlugin(Plugin):
                 self.logger.debug(f"[{self.name}] 开始获取历史数据: player_id={player_id}, time_range={time_range}")
                 history_data = await self.core.fetch_player_history(player_id, time_range)
                 self.logger.debug(f"[{self.name}] 获取到历史数据: {len(history_data) if history_data else 0} 条记录")
-            except Exception as e:
-                self.logger.error(f"[{self.name}] 获取历史数据失败: {str(e)}\n{traceback.format_exc()}")
-                raise
-            
-            if not history_data:
-                await self.reply(handler, f"⚠️ 未找到玩家 {player_id} 的历史数据")
-                return
                 
+                if not history_data:
+                    await self.reply(handler, f"⚠️ 未找到玩家历史数据")
+                    return
+            except Exception as e:
+                # 所有异常都当作未找到玩家信息处理
+                self.logger.info(f"[{self.name}] 获取玩家信息失败，视为未找到玩家: {str(e)}")
+                await self.reply(handler, f"⚠️ 未找到玩家历史数据")
+                return
+            
             # 生成走势图
             try:
                 self.logger.debug(f"[{self.name}] 开始生成走势图")

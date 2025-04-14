@@ -349,12 +349,11 @@ class MyBot(botpy.Client):
     def _setup_memory_management(self):
         """设置内存管理"""
         # 配置垃圾回收
-        gc.enable()
-        gc.set_threshold(700, 10, 5)
+        gc.enable()  # 启用垃圾回收
+        gc.set_threshold(700, 10, 5)  # 设置垃圾回收阈值
         
         # 启动内存监控
-        from utils.memory_manager import memory_manager
-        self._memory_monitor = asyncio.create_task(memory_manager.start_monitoring())
+        self._memory_monitor = asyncio.create_task(memory_monitor_task())
         
         # 注册资源
         register_resource(self)
@@ -385,7 +384,7 @@ class MyBot(botpy.Client):
         """停止机器人"""
         try:
             # 停止内存监控
-            if hasattr(self, '_memory_monitor') and self._memory_monitor and not self._memory_monitor.done():
+            if self._memory_monitor and not self._memory_monitor.done():
                 self._memory_monitor.cancel()
                 try:
                     await self._memory_monitor

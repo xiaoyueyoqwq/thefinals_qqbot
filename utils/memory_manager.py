@@ -223,10 +223,6 @@ class MemoryManager:
         self.cleanup_manager = MemoryCleanupManager()
         self.monitoring = False
         self._monitor_task = None
-        self._last_check_time = time.time()
-        self._health_check_interval = 300  # 5分钟检查一次健康状态
-        self._memory_history = []  # 存储最近的内存使用记录
-        self._high_memory_handled = False  # 是否已处理高内存情况
         self._initialized = True
         
     async def start_monitoring(self):
@@ -236,7 +232,6 @@ class MemoryManager:
             
         self.monitoring = True
         self._monitor_task = asyncio.create_task(self._monitor_loop())
-        self._last_check_time = time.time()
         bot_logger.info("内存监控已启动")
         
     async def stop_monitoring(self):
@@ -254,103 +249,24 @@ class MemoryManager:
         """监控循环"""
         while self.monitoring:
             try:
-                now = time.time()
                 # 获取内存信息
                 memory_info = self._get_memory_info()
                 
-                # 记录内存历史
-                self._memory_history.append({
-                    'timestamp': now,
-                    'memory': memory_info
-                })
-                # 只保留最近24小时的数据
-                self._memory_history = [
-                    x for x in self._memory_history 
-                    if now - x['timestamp'] < 86400
-                ]
-                
                 # 记录日志
                 self.logger.log_memory_status(memory_info)
-                
-                # 检查是否需要采取行动
-                if memory_info['rss'] > 800 * 1024 * 1024 and not self._high_memory_handled:  # 800MB
-                    await self._handle_high_memory(memory_info)
-                elif memory_info['rss'] < 700 * 1024 * 1024 and self._high_memory_handled:
-                    # 如果内存降到700MB以下，重置处理标志
-                    self._high_memory_handled = False
                 
                 # 确定是否需要清理
                 cleanup_level = self.cleanup_manager.get_cleanup_level(memory_info)
                 if cleanup_level:
                     await self.cleanup_manager.execute_cleanup(cleanup_level)
                 
-                # 更新检查时间
-                self._last_check_time = now
-                
                 # 等待下次检查
                 await asyncio.sleep(60)  # 每分钟检查一次
                 
             except Exception as e:
                 bot_logger.error(f"内存监控出错: {str(e)}")
-                # 错误恢复机制
-                await self._handle_monitor_error()
                 await asyncio.sleep(60)
                 
-    async def _handle_high_memory(self, memory_info: dict):
-        """处理高内存使用情况"""
-        try:
-            bot_logger.warning(f"内存使用超过800MB: {memory_info['rss'] / 1024 / 1024:.1f}MB")
-            
-            # 1. 首先尝试温和的清理
-            await self.cleanup_manager.execute_cleanup('warning')
-            
-            # 2. 等待一段时间看效果
-            await asyncio.sleep(30)
-            
-            # 3. 检查清理效果
-            new_memory_info = self._get_memory_info()
-            if new_memory_info['rss'] > 800 * 1024 * 1024:
-                # 如果还是高于阈值，尝试更强力的清理
-                bot_logger.warning("清理后内存仍然过高，执行强制清理...")
-                await self.cleanup_manager.execute_cleanup('critical')
-                
-            self._high_memory_handled = True
-            
-        except Exception as e:
-            bot_logger.error(f"处理高内存使用时出错: {str(e)}")
-            
-    async def _handle_monitor_error(self):
-        """处理监控错误"""
-        try:
-            # 如果超过10分钟没有检查，重启监控
-            if time.time() - self._last_check_time > 600:
-                bot_logger.warning("监控任务可能已停止，尝试重启...")
-                self.monitoring = False
-                await asyncio.sleep(1)
-                await self.start_monitoring()
-                
-        except Exception as e:
-            bot_logger.error(f"处理监控错误时出错: {str(e)}")
-            
-    def get_memory_history(self) -> list:
-        """获取内存使用历史"""
-        return self._memory_history
-        
-    def get_memory_stats(self) -> dict:
-        """获取内存统计信息"""
-        if not self._memory_history:
-            return {}
-            
-        current = self._memory_history[-1]['memory']['rss']
-        memory_values = [x['memory']['rss'] for x in self._memory_history]
-        
-        return {
-            'current': current,
-            'max': max(memory_values),
-            'min': min(memory_values),
-            'average': sum(memory_values) / len(memory_values)
-        }
-        
     def _get_memory_info(self) -> dict:
         """获取内存信息"""
         process = psutil.Process()
