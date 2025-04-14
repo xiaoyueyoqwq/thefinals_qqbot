@@ -149,38 +149,49 @@ class Season:
             start_time = datetime.now()
             bot_logger.info(f"[Season] 开始更新赛季 {self.season_id} 数据")
             
-            # 1. 从API获取数据
-            url = SeasonConfig.get_api_url(self.season_id)
-            response = await self.api.get(url)
-            if not response or response.status_code != 200:
-                bot_logger.error(f"[Season] API请求失败: {self.season_id}")
+            # 1. 获取玩家列表
+            api_url = SeasonConfig.get_api_url(self.season_id)
+            response = await self.api.get(api_url)
+            players = []
+            
+            if response and response.status_code == 200:
+                data = response.json()
+                players = data.get("data", [])
+                bot_logger.info(f"[Season] 获取到赛季 {self.season_id} 数据: {len(players)} 条记录")
+            else:
+                bot_logger.error(f"[Season] 获取赛季 {self.season_id} 数据失败: {response.status_code if response else 'No response'}")
                 return
                 
-            data = self.api.handle_response(response)
-            if not isinstance(data, dict):
-                bot_logger.error(f"[Season] API返回数据格式错误: {self.season_id}")
-                return
-                
-            players = data.get("data", [])
             if not players:
-                bot_logger.warning(f"[Season] 未获取到玩家数据: {self.season_id}")
+                bot_logger.warning(f"[Season] 赛季 {self.season_id} 无数据")
                 return
                 
             # 2. 更新存储
             if self._is_current:
                 # 使用缓存存储
-                cache_data = {}
-                for player in players:
-                    player_name = player.get("name", "").lower()
-                    if player_name:
-                        cache_key = f"player_{player_name}"
-                        cache_data[cache_key] = json.dumps(player)
+                # 优化: 生成新数据前先清理旧数据
+                if hasattr(self._storage, 'cleanup_expired'):
+                    await self._storage.cleanup_expired(self.cache_name)
                 
-                await self._storage.batch_set_cache(
-                    self.cache_name,
-                    cache_data,
-                    expire_seconds=self.update_interval * 2
-                )
+                # 优化: 减少内存使用的批量更新
+                batch_size = 100  # 每批处理的玩家数
+                for i in range(0, len(players), batch_size):
+                    batch = players[i:i+batch_size]
+                    cache_data = {}
+                    for player in batch:
+                        player_name = player.get("name", "").lower()
+                        if player_name:
+                            cache_key = f"player_{player_name}"
+                            cache_data[cache_key] = json.dumps(player)
+                    
+                    if cache_data:
+                        await self._storage.batch_set_cache(
+                            self.cache_name,
+                            cache_data,
+                            expire_seconds=self.update_interval * 2
+                        )
+                        # 优化: 清理局部变量，帮助GC
+                        del cache_data
                 
                 # 更新top_players缓存
                 top_players = [p["name"] for p in players[:5]]
@@ -190,19 +201,36 @@ class Season:
                     json.dumps(top_players),
                     expire_seconds=self.update_interval
                 )
+                
+                # 优化: 手动触发GC
+                import gc
+                gc.collect()
             else:
                 # 使用持久化存储
-                operations = []
-                for player in players:
-                    player_name = player.get("name", "").lower()
-                    if player_name:
-                        operations.append((
-                            "INSERT OR REPLACE INTO player_data (player_name, data, updated_at) VALUES (?, ?, ?)",
-                            (player_name, json.dumps(player), int(datetime.now().timestamp()))
-                        ))
+                # 删除旧数据
+                try:
+                    await self._storage.execute("DELETE FROM player_data WHERE updated_at < ?", 
+                                               (int(datetime.now().timestamp()) - self.update_interval * 3,))
+                except Exception as e:
+                    bot_logger.error(f"[Season] 清理过期数据失败: {str(e)}")
                 
-                if operations:
-                    await self._storage.execute_transaction(operations)
+                # 批量插入新数据
+                batch_size = 50
+                for i in range(0, len(players), batch_size):
+                    batch = players[i:i+batch_size]
+                    operations = []
+                    for player in batch:
+                        player_name = player.get("name", "").lower()
+                        if player_name:
+                            operations.append((
+                                "INSERT OR REPLACE INTO player_data (player_name, data, updated_at) VALUES (?, ?, ?)",
+                                (player_name, json.dumps(player), int(datetime.now().timestamp()))
+                            ))
+                    
+                    if operations:
+                        await self._storage.execute_transaction(operations)
+                        # 清理局部变量，帮助GC
+                        del operations
             
             duration = (datetime.now() - start_time).total_seconds()
             bot_logger.info(f"[Season] 赛季 {self.season_id} 数据更新完成, 耗时: {duration:.2f}秒")
@@ -329,7 +357,7 @@ class HistorySeason:
         self.table_name = "player_data"
         self._persistence = persistence
         
-        # 【修改】删除重复日志：原本这里有“历史赛季 {season_id} 初始化完成”
+        # 【修改】删除重复日志：原本这里有"历史赛季 {season_id} 初始化完成"
         # bot_logger.debug(f"历史赛季 {season_id} 初始化完成")  # <-- 移除这一行
         
     async def initialize(self) -> None:

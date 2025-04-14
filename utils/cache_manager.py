@@ -112,6 +112,10 @@ class CacheManager:
         self._save_task = None
         self._save_interval = 60  # 60秒自动保存一次
         
+        # 自动清理过期缓存任务
+        self._cleanup_task = None
+        self._cleanup_interval = 1800  # 30分钟自动清理一次
+        
         self._initialized = True
         bot_logger.info("CacheManager初始化完成")
         
@@ -138,6 +142,10 @@ class CacheManager:
                 # 启动自动保存
                 if not self._save_task:
                     self._save_task = asyncio.create_task(self._auto_save())
+                
+                # 启动自动清理
+                if not self._cleanup_task:
+                    self._cleanup_task = asyncio.create_task(self._auto_cleanup())
             
             bot_logger.info(f"[CacheManager] 缓存 {name} 注册完成")
             
@@ -306,6 +314,87 @@ class CacheManager:
             for name in self._caches:
                 await self._save_cache(name)
 
+    async def _auto_cleanup(self) -> None:
+        """自动清理过期缓存任务"""
+        while True:
+            try:
+                await asyncio.sleep(self._cleanup_interval)
+                # 清理所有缓存
+                for db_name in self.get_registered_databases():
+                    await self.cleanup_expired(db_name)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                bot_logger.error(f"[CacheManager] 自动清理过期缓存失败: {str(e)}")
+                await asyncio.sleep(60)  # 出错后等待一分钟再试
+                
+    async def cleanup_expired(self, db_name: str) -> None:
+        """清理指定数据库中的过期数据
+        
+        Args:
+            db_name: 数据库名称
+        """
+        try:
+            cache = self._caches.get(db_name)
+            if not cache:
+                return
+                
+            async with cache._lock:
+                now = int(datetime.now().timestamp())
+                # 找出所有过期的键
+                expired_keys = [
+                    key for key, expire_at in cache.expire_times.items()
+                    if expire_at and now >= expire_at
+                ]
+                
+                # 如果有过期数据则记录日志
+                if expired_keys:
+                    bot_logger.debug(f"[CacheManager] 清理缓存 {db_name} 中的 {len(expired_keys)} 个过期项")
+                
+                # 删除过期数据
+                for key in expired_keys:
+                    if key in cache.data:
+                        del cache.data[key]
+                    if key in cache.expire_times:
+                        del cache.expire_times[key]
+                    cache.dirty_keys.add(key)
+                    
+        except Exception as e:
+            bot_logger.error(f"[CacheManager] 清理过期缓存失败 {db_name}: {str(e)}")
+            
+    async def cleanup_cache(self, db_name: str) -> None:
+        """清理指定数据库中的所有数据，但保留关键数据
+        
+        Args:
+            db_name: 数据库名称
+        """
+        try:
+            cache = self._caches.get(db_name)
+            if not cache:
+                return
+                
+            # 保留recent_或critical_开头的键
+            async with cache._lock:
+                keys_to_delete = [
+                    key for key in cache.data.keys() 
+                    if not (key.startswith("recent_") or key.startswith("critical_"))
+                ]
+                
+                # 如果有数据可清理则记录日志
+                if keys_to_delete:
+                    bot_logger.info(f"[CacheManager] 清理缓存 {db_name} 中的 {len(keys_to_delete)} 个非关键项")
+                
+                # 删除数据
+                for key in keys_to_delete:
+                    if key in cache.data:
+                        del cache.data[key]
+                    if key in cache.expire_times:
+                        del cache.expire_times[key]
+                    cache.dirty_keys.add(key)
+                    
+        except Exception as e:
+            bot_logger.error(f"[CacheManager] 清理缓存失败 {db_name}: {str(e)}")
+
     async def cleanup(self) -> None:
         """清理资源并停止自动保存任务"""
         try:
@@ -317,6 +406,15 @@ class CacheManager:
                 except asyncio.CancelledError:
                     pass
                 self._save_task = None
+                
+            # 取消自动清理任务
+            if self._cleanup_task and not self._cleanup_task.done():
+                self._cleanup_task.cancel()
+                try:
+                    await self._cleanup_task
+                except asyncio.CancelledError:
+                    pass
+                self._cleanup_task = None
             
             # 最后一次保存所有缓存
             await self.save_all()

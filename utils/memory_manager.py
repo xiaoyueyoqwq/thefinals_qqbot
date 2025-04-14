@@ -207,40 +207,34 @@ class MemoryCleanupManager:
 
 class MemoryManager:
     """内存管理器"""
-    _instance = None
-    _initialized = False
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-    
     def __init__(self):
-        if self._initialized:
-            return
-            
-        self.logger = MemoryLogger()
-        self.cleanup_manager = MemoryCleanupManager()
         self.monitoring = False
-        self._monitor_task = None
-        self._initialized = True
+        self.monitor_task = None
+        self.cleanup_manager = MemoryCleanupManager()
+        self.logger = MemoryLogger()
+        self.previous_rss = 0
+        self.memory_growth_counter = 0
+        self.last_cleanup_time = 0
         
     async def start_monitoring(self):
-        """启动监控"""
-        if self._monitor_task and not self._monitor_task.done():
+        """启动内存监控"""
+        if self.monitoring:
             return
             
         self.monitoring = True
-        self._monitor_task = asyncio.create_task(self._monitor_loop())
+        self.monitor_task = asyncio.create_task(self._monitor_loop())
         bot_logger.info("内存监控已启动")
         
     async def stop_monitoring(self):
-        """停止监控"""
+        """停止内存监控"""
+        if not self.monitoring:
+            return
+            
         self.monitoring = False
-        if self._monitor_task:
-            self._monitor_task.cancel()
+        if self.monitor_task:
+            self.monitor_task.cancel()
             try:
-                await self._monitor_task
+                await self.monitor_task
             except asyncio.CancelledError:
                 pass
         bot_logger.info("内存监控已停止")
@@ -252,12 +246,33 @@ class MemoryManager:
                 # 获取内存信息
                 memory_info = self._get_memory_info()
                 
+                # 计算内存增长
+                current_rss = memory_info['rss']
+                memory_growth = current_rss - self.previous_rss
+                
+                # 检测连续内存增长
+                if memory_growth > 1 * 1024 * 1024:  # 增长超过1MB
+                    self.memory_growth_counter += 1
+                    # 如果连续5次增长超过1MB，且距离上次清理超过5分钟，则执行清理
+                    now = time.time()
+                    if self.memory_growth_counter >= 5 and now - self.last_cleanup_time > 300:
+                        bot_logger.warning(f"检测到连续内存增长，主动执行清理: 当前RSS={current_rss/1024/1024:.2f}MB")
+                        await self.cleanup_manager.execute_cleanup('warning')
+                        self.last_cleanup_time = now
+                        self.memory_growth_counter = 0
+                else:
+                    self.memory_growth_counter = 0
+                
+                # 更新上次RSS值
+                self.previous_rss = current_rss
+                
                 # 记录日志
                 self.logger.log_memory_status(memory_info)
                 
                 # 确定是否需要清理
                 cleanup_level = self.cleanup_manager.get_cleanup_level(memory_info)
                 if cleanup_level:
+                    self.last_cleanup_time = time.time()
                     await self.cleanup_manager.execute_cleanup(cleanup_level)
                 
                 # 等待下次检查
