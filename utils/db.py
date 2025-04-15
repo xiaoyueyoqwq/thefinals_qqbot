@@ -407,69 +407,76 @@ class DatabaseManager:
         bot_logger.info("所有数据库连接池和缓存已清理完成")
         
     async def execute_transaction(self, operations: list[tuple[str, tuple]]) -> None:
-        """执行事务"""
-        if not operations:
-            return
-            
+        """执行一组数据库操作作为一个原子事务"""
         db_key = str(self.db_path)
-        
-        # 检查事务超时
-        if await self._check_transaction_timeout(db_key):
-            bot_logger.warning(f"检测到超时事务，已重置状态: {db_key}")
+        # 获取或创建锁
+        if db_key not in self._locks:
+            self._locks[db_key] = asyncio.Lock()
+        if db_key not in self._transactions:
+            self._transactions[db_key] = {"active": False, "start_time": None, "connection": None}
             
-        async with self._locks[db_key]:  # 使用全局锁而不是事务锁
-            # 获取连接并确保其有效
+        async with self._locks[db_key]:
+            # 检查事务超时
+            if await self._check_transaction_timeout(db_key):
+                raise DatabaseError("事务已超时并被回滚")
+                
+            # 获取连接
             conn = await self.get_connection()
-            if not await self._check_connection(conn):
-                raise DatabaseError("事务开始前发现无效连接")
-                
-            # 开始事务
+            
+            # 检查是否已在事务中
+            already_in_transaction = conn.in_transaction
+            if already_in_transaction:
+                bot_logger.debug(f"已在事务中 ({db_key})，直接执行操作")
+            
             try:
-                self._transactions[db_key].update({
-                    "active": True,
-                    "start_time": datetime.now(),
-                    "connection": conn
-                })
+                # 如果不在事务中，则开始新事务
+                if not already_in_transaction:
+                    # 更新事务状态记录
+                    self._transactions[db_key].update({
+                        "active": True,
+                        "start_time": datetime.now(),
+                        "connection": conn
+                    })
+                    # 使用immediate模式避免死锁
+                    await conn.execute("BEGIN IMMEDIATE")
+                    bot_logger.debug(f"启动新事务 ({db_key})")
                 
-                # 使用immediate模式避免死锁
-                await conn.execute("BEGIN IMMEDIATE")
-                
-                try:
-                    # 执行所有操作
-                    for sql, params in operations:
-                        await conn.execute(sql, params)
-                        
-                    # 提交事务
+                # 执行所有操作
+                for sql, params in operations:
+                    await conn.execute(sql, params)
+                    
+                # 如果是新启动的事务，则提交
+                if not already_in_transaction:
                     await conn.commit()
-                    bot_logger.debug(f"事务成功提交: {len(operations)} 个操作")
-                    
-                except Exception as e:
-                    # 回滚事务
-                    await conn.rollback()
-                    bot_logger.error(f"事务执行失败，已回滚: {str(e)}")
-                    raise DatabaseError(f"事务执行失败: {str(e)}")
-                    
-                finally:
+                    bot_logger.debug(f"新事务成功提交 ({db_key}): {len(operations)} 个操作")
                     # 重置事务状态
                     self._transactions[db_key].update({
                         "active": False,
                         "start_time": None,
                         "connection": None
                     })
+                else:
+                    # 如果是嵌套调用，只记录操作完成
+                    bot_logger.debug(f"在现有事务中成功执行 {len(operations)} 个操作 ({db_key})")
                     
             except Exception as e:
-                # 确保事务状态被重置
-                self._transactions[db_key].update({
-                    "active": False,
-                    "start_time": None,
-                    "connection": None
-                })
-                # 尝试回滚任何可能的未完成事务
-                try:
-                    await conn.rollback()
-                except Exception:
-                    pass
-                raise DatabaseError(f"事务初始化失败: {str(e)}")
+                bot_logger.error(f"事务执行失败 ({db_key}): {str(e)}", exc_info=True)
+                # 如果是新启动的事务，则回滚
+                if not already_in_transaction:
+                    try:
+                        await conn.rollback()
+                        bot_logger.warning(f"新事务已回滚 ({db_key})")
+                    except Exception as rb_exc:
+                        bot_logger.error(f"事务回滚失败 ({db_key}): {str(rb_exc)}")
+                    finally:
+                        # 确保重置事务状态
+                        self._transactions[db_key].update({
+                            "active": False,
+                            "start_time": None,
+                            "connection": None
+                        })
+                # 如果是嵌套调用，异常应该由外部事务处理，这里只抛出
+                raise DatabaseError(f"事务操作执行失败 ({db_key}): {str(e)}")
                 
     async def _check_transaction_timeout(self, db_key: str) -> bool:
         """检查事务是否超时"""

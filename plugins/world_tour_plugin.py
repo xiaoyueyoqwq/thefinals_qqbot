@@ -114,7 +114,15 @@ class WorldTourPlugin(Plugin):
     async def on_load(self) -> None:
         """插件加载时的处理"""
         await super().on_load()
-        await self.load_data()  # 加载持久化数据
+        # 主动初始化 WorldTourAPI，确保后台任务启动
+        try:
+            bot_logger.info(f"[{self.name}] 开始主动初始化 WorldTourAPI...")
+            await self.world_tour_query.api.initialize()
+            bot_logger.info(f"[{self.name}] WorldTourAPI 初始化完成。")
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 主动初始化 WorldTourAPI 失败: {str(e)}", exc_info=True)
+            
+        await self.load_data()  # 加载持久化数据 (插件自身的数据)
         await self.load_config()  # 加载配置
         bot_logger.info(f"[{self.name}] 世界巡回赛查询插件已加载")
         
