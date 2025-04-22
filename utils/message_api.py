@@ -6,6 +6,7 @@ import random
 from dataclasses import dataclass
 from collections import deque
 from utils.logger import bot_logger
+from .url_check import obfuscate_urls
 
 # 消息类型枚举
 class MessageType(IntEnum):
@@ -430,6 +431,12 @@ class MessageAPI:
             bool: 是否发送成功
         """
         try:
+            # 对消息内容进行 URL 混淆
+            content = obfuscate_urls(content)
+
+            if not group_id:
+                raise ValueError("Group ID cannot be empty")
+
             # 如果没有提供msg_seq，生成一个随机的
             if msg_seq is None:
                 msg_seq = random.randint(1, 100000)
@@ -505,6 +512,12 @@ class MessageAPI:
     ) -> bool:
         """发送私聊消息"""
         try:
+            # 对消息内容进行 URL 混淆
+            content = obfuscate_urls(content)
+
+            if not user_id:
+                raise ValueError("User ID cannot be empty")
+
             msg_data = {
                 "content": content,
                 "msg_type": msg_type.value,
