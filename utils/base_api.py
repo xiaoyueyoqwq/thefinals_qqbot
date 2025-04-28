@@ -174,14 +174,15 @@ class BaseAPI:
         json: Optional[Dict] = None,
         headers: Optional[Dict] = None,
         use_cache: bool = True,
+        _is_backup: bool = False,  # 新增参数，标记是否为备用请求
         **kwargs
     ) -> httpx.Response:
-        """发送HTTP请求"""
+        """发送HTTP请求，支持主备切换"""
         url = self._build_url(endpoint)
         bot_logger.debug(f"[BaseAPI] 发起请求: {method} {url}")
         
-        # 对GET请求使用缓存
-        if use_cache and method.upper() == "GET":
+        # 对GET请求使用缓存（仅主请求）
+        if use_cache and method.upper() == "GET" and not _is_backup:
             cache_key = self.get_cache_key(endpoint, params)
             cached_data = await self.get_cached_data(cache_key)
             if cached_data is not None:
@@ -208,16 +209,44 @@ class BaseAPI:
                     response.raise_for_status()
                     bot_logger.debug(f"[BaseAPI] 请求成功: {response.status_code}")
                     
-                    # 缓存成功的GET请求结果
-                    if use_cache and method.upper() == "GET":
+                    # 缓存成功的GET请求结果（仅主请求）
+                    if use_cache and method.upper() == "GET" and not _is_backup:
                         cache_key = self.get_cache_key(endpoint, params)
                         await self.set_cache_data(cache_key, response)
                         bot_logger.debug("[BaseAPI] 响应已缓存")
                     
                     return response
                     
+            except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError, httpx.RemoteProtocolError, httpx.NetworkError) as e:
+                # 仅主请求、主域名、且未切换过时，才尝试主备切换
+                main_api_prefix = "https://api.the-finals-leaderboard.com/"
+                if (not _is_backup and url.startswith(main_api_prefix)):
+                    backup_url = url.replace(
+                        main_api_prefix, "https://99z.top/https://api.the-finals-leaderboard.com/", 1
+                    )
+                    bot_logger.warning(f"[BaseAPI] 主API请求失败（{type(e).__name__}: {e}），尝试备用API: {backup_url}")
+                    try:
+                        async with self.get_client() as client:
+                            response = await client.request(
+                                method=method,
+                                url=backup_url,
+                                params=params,
+                                data=data,
+                                json=json,
+                                headers=headers,
+                                **kwargs
+                            )
+                            response.raise_for_status()
+                            bot_logger.debug(f"[BaseAPI] 备用API请求成功: {response.status_code}")
+                            return response
+                    except Exception as be:
+                        bot_logger.error(f"[BaseAPI] 备用API请求也失败: {type(be).__name__}: {be}")
+                        raise be
+                bot_logger.error(f"[BaseAPI] 请求失败: {type(e).__name__}: {e}")
+                raise
             except httpx.RequestError as e:
-                bot_logger.error(f"[BaseAPI] 请求失败: {str(e)}")
+                # 其他RequestError
+                bot_logger.error(f"[BaseAPI] 请求失败: {type(e).__name__}: {e}")
                 raise
     
     @classmethod
