@@ -219,10 +219,11 @@ class BaseAPI:
                     
             except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError, httpx.RemoteProtocolError, httpx.NetworkError) as e:
                 # 仅主请求、主域名、且未切换过时，才尝试主备切换
-                main_api_prefix = "https://api.the-finals-leaderboard.com/"
+                main_api_prefix = settings.API_STANDARD_URL.rstrip('/') + '/'
+                backup_api_prefix = settings.API_BACKUP_URL.rstrip('/') + '/'
                 if (not _is_backup and url.startswith(main_api_prefix)):
                     backup_url = url.replace(
-                        main_api_prefix, "https://99z.top/https://api.the-finals-leaderboard.com/", 1
+                        main_api_prefix, backup_api_prefix, 1
                     )
                     bot_logger.warning(f"[BaseAPI] 主API请求失败（{type(e).__name__}: {e}），尝试备用API: {backup_url}")
                     try:

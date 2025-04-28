@@ -8,12 +8,13 @@ import asyncio
 from utils.base_api import BaseAPI
 from unittest.mock import patch, AsyncMock
 import httpx
+from utils.config import settings
 
 
 
 async def test_base_api_main_backup_switch():
     """测试BaseAPI主备切换机制（主API可用场景）"""
-    api = BaseAPI(base_url="https://api.the-finals-leaderboard.com")
+    api = BaseAPI(base_url=settings.API_STANDARD_URL)
     endpoint = "/v1/leaderboard/s6worldtour/crossplay"
     try:
         response = await api.get(endpoint, use_cache=False)
@@ -27,10 +28,10 @@ async def test_base_api_main_backup_switch():
 
 async def test_base_api_switch_to_backup():
     """强制模拟主API失败，确保会切换到备用API"""
-    api = BaseAPI(base_url="https://api.the-finals-leaderboard.com")
+    api = BaseAPI(base_url=settings.API_STANDARD_URL)
     endpoint = "/v1/leaderboard/s6worldtour/crossplay"
-    main_url = "https://api.the-finals-leaderboard.com/v1/leaderboard/s6worldtour/crossplay"
-    backup_url = "https://99z.top/https://api.the-finals-leaderboard.com/v1/leaderboard/s6worldtour/crossplay"
+    main_url = settings.API_STANDARD_URL.rstrip('/') + endpoint
+    backup_url = settings.API_BACKUP_URL.rstrip('/') + endpoint
     fake_backup_data = {"result": "from-backup"}
 
     async def fake_request(self, method, url, **kwargs):

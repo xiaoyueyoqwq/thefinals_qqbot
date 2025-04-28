@@ -33,6 +33,7 @@ class Settings:
     API_USE_PROXY = _config.get("api", {}).get("use_proxy", True)
     API_STANDARD_URL = _config.get("api", {}).get("standard", {}).get("base_url", "https://api.the-finals-leaderboard.com/v1")
     API_PROXY_URL = _config.get("api", {}).get("proxy", {}).get("base_url", "https://thefinals-api.luoxiaohei.cn")
+    API_BACKUP_URL = _config.get("api", {}).get("backup", {}).get("base_url", "https://99z.top/https://api.the-finals-leaderboard.com/v1")
     API_PREFIX = "/leaderboard"  # 移除重复的/v1前缀
     API_TIMEOUT = 10  # API超时时间(秒)
     API_MESSAGE = _config.get("api", {}).get("message", "欢迎使用 THE FINALS BOT API")
