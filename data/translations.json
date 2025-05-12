@@ -1,0 +1,38 @@
+{
+  "leaderboard_types": {
+    "patterns": [
+      {
+        "pattern": "^(?P<season>s\\d+)$",
+        "template": "{season}排位"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)sponsor$",
+        "template": "{season}粉丝"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)worldtour$",
+        "template": "{season}巡回"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)quickcash$",
+        "template": "{season}快提"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)bankit$",
+        "template": "{season}存钱"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)powershift$",
+        "template": "{season}争霸"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)teamdeathmatch$",
+        "template": "{season}死斗"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)terminalattack$",
+        "template": "{season}爆破"
+      }
+    ]
+  }
+} 

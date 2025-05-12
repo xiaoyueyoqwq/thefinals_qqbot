@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: --- description: 当需要处理赛季(season)相关的代码时，请务必阅读此规则。包含了赛季配置的正确导入方式、赛季管理器的使用方法和注意事项。 globs: ["**/season*.py", "**/world_tour.py", "**/rank*.py", "**/df.py"]  ---
+globs: 
+alwaysApply: false
+---
+# 赛季管理说明文档
+
+## 配置位置
+@utils/config.py
+```python
+# 赛季配置
+CURRENT_SEASON = _config.get("season", {}).get("current", "s6")  # 当前赛季
+UPDATE_INTERVAL = _config.get("season", {}).get("update_interval", 90)  # 更新间隔(秒)
+```
+
+## 赛季管理器
+@core/season.py
+- 使用 `SeasonManager` 类管理所有赛季相关操作
+- 通过 `get_all_seasons()` 获取所有可用赛季
+- 通过 `get_season(season_id)` 获取具体赛季实例
+
+## 开发注意事项
+
+### 1. 赛季配置获取
+- 使用 `from utils.config import settings` 导入配置
+- 通过 `settings.CURRENT_SEASON` 获取当前赛季
+- 不要硬编码赛季值，应该始终从配置获取
+
+### 2. 赛季管理器使用
+```python
+def __init__(self):
+    self.season_manager = SeasonManager()
+```
