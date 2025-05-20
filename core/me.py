@@ -52,6 +52,18 @@ class MeAPI:
         self._lock = asyncio.Lock()
         
         bot_logger.info("[MeAPI] 初始化完成")
+
+    async def close(self):
+        """Closes resources used by MeAPI."""
+        bot_logger.info("[MeAPI] Closing resources...")
+        if hasattr(self, 'image_generator') and self.image_generator:
+            try:
+                bot_logger.info("[MeAPI] Closing image generator...")
+                await self.image_generator.close()
+                bot_logger.info("[MeAPI] Image generator closed.")
+            except Exception as e:
+                bot_logger.error(f"[MeAPI] Error closing image generator: {str(e)}")
+        bot_logger.info("[MeAPI] Resources closed.")
         
     async def initialize(self):
         """初始化API"""
@@ -396,6 +408,18 @@ class MeQuery:
         self._initialized = True
         
         bot_logger.info("[MeQuery] 单例初始化完成")
+
+    async def close(self):
+        """Closes resources used by MeQuery."""
+        bot_logger.info("[MeQuery] Closing resources...")
+        if hasattr(self, 'api') and self.api and hasattr(self.api, 'close'):
+            try:
+                bot_logger.info("[MeQuery] Closing MeAPI...")
+                await self.api.close()
+                bot_logger.info("[MeQuery] MeAPI closed.")
+            except Exception as e:
+                bot_logger.error(f"[MeQuery] Error closing MeAPI: {str(e)}")
+        bot_logger.info("[MeQuery] Resources closed.")
         
     async def initialize(self):
         """初始化查询功能"""

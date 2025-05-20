@@ -112,4 +112,5 @@ class RankPlugin(Plugin):
     async def on_unload(self) -> None:
         """插件卸载时的处理"""
         await super().on_unload()
+        await self.rank_query.close()
         bot_logger.info(f"[{self.name}] 排名查询插件已卸载") 

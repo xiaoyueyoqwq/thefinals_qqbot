@@ -184,6 +184,26 @@ class RankQuery:
         self._initialized = True
         
         bot_logger.info("RankQuery单例初始化完成")
+
+    async def close(self):
+        """Closes resources used by RankQuery."""
+        bot_logger.info("[RankQuery] Closing resources...")
+        if hasattr(self, 'image_generator') and self.image_generator:
+            try:
+                bot_logger.info("[RankQuery] Closing image generator...")
+                await self.image_generator.close()
+                bot_logger.info("[RankQuery] Image generator closed.")
+            except Exception as e:
+                bot_logger.error(f"[RankQuery] Error closing image generator: {str(e)}")
+
+        if hasattr(self, 'api') and self.api and hasattr(self.api, 'stop'):
+            try:
+                bot_logger.info("[RankQuery] Stopping API...")
+                await self.api.stop()
+                bot_logger.info("[RankQuery] API stopped.")
+            except Exception as e:
+                bot_logger.error(f"[RankQuery] Error stopping API: {str(e)}")
+        bot_logger.info("[RankQuery] Resources closed.")
         
     async def initialize(self):
         """初始化 RankQuery"""

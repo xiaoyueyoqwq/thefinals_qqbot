@@ -100,4 +100,5 @@ class MePlugin(Plugin):
     async def on_unload(self) -> None:
         """插件卸载时的处理"""
         await super().on_unload()
+        await self.me_query.close()
         bot_logger.info(f"[{self.name}] 玩家个人数据查询插件已卸载") 

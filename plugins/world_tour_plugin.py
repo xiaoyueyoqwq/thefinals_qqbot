@@ -130,4 +130,5 @@ class WorldTourPlugin(Plugin):
         """插件卸载时的处理"""
         await self.save_data()  # 保存数据
         await super().on_unload()
+        await self.world_tour_query.api.force_stop()
         bot_logger.info(f"[{self.name}] 世界巡回赛查询插件已卸载") 
