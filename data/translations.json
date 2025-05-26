@@ -32,6 +32,10 @@
       {
         "pattern": "^(?P<season>s\\d+)terminalattack$",
         "template": "{season}爆破"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)heavyhitters$",
+        "template": "{season}全民曹飞"
       }
     ]
   }
