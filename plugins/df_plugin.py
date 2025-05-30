@@ -116,7 +116,7 @@ class DFPlugin(Plugin):
             response += "\n💡 关于安全分:\n"
             response += "本分数从thefinals,lol抓取\n"
             response += "如达到此分数则一定能拿红宝石\n"
-            response += "并且分数添加了500RS以做缓冲\n"
+            response += "并且分数添加了500RS以做缓冲"
 
             await handler.send_text(response)
 
