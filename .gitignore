@@ -61,6 +61,7 @@ cache/
 persistence/
 *.db-wal
 *.db-shm
+changes/
 
 
 # Distribution / packaging

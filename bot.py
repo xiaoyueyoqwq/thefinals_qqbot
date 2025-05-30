@@ -35,6 +35,7 @@ from utils.image_manager import ImageManager
 from datetime import datetime
 import argparse
 from pathlib import Path
+from core.df_safescore_fetcher import SafeScoreFetcher
 
 # 全局变量，用于在信号处理函数中访问
 client = None
@@ -343,6 +344,10 @@ class MyBot(botpy.Client):
         register_resource(self)
         register_resource(self.thread_pool)
         
+        # 初始化安全保证分数抓取器
+        self.safe_score_fetcher = SafeScoreFetcher()
+        register_resource(self.safe_score_fetcher)
+
         # 优化内存管理
         self._setup_memory_management()
         
@@ -508,7 +513,10 @@ class MyBot(botpy.Client):
             
             # 初始化插件
             await self._init_plugins()
-            
+
+            # 启动安全保证分数抓取器
+            await self.safe_score_fetcher.start()
+
             # 启动健康检查
             self.health_check_task = self.create_task(
                 self._health_check(),
@@ -736,15 +744,15 @@ class MyBot(botpy.Client):
                 # 第六阶段：取消所有运行中的任务
                 try:
                     async with asyncio.timeout(TASK_CANCEL_TIMEOUT):
-                        task_count = len(self._running_tasks)
                         # 使用列表复制避免迭代时修改集合
                         tasks_to_cancel = list(self._running_tasks)
-                        
+                        task_count = len(tasks_to_cancel) # 重新定义 task_count
+
                         # 先取消所有任务
                         for task in tasks_to_cancel:
                             if not task.done():
                                 task.cancel()
-                        
+
                         # 然后等待它们完成
                         for task in tasks_to_cancel:
                             if not task.done():
@@ -752,7 +760,7 @@ class MyBot(botpy.Client):
                                     await task
                                 except (asyncio.CancelledError, Exception):
                                     pass
-                        
+
                         bot_logger.debug(f"已取消 {task_count} 个运行中的任务")
                 except asyncio.TimeoutError:
                     bot_logger.warning("取消任务超时，继续其他清理")
@@ -760,7 +768,7 @@ class MyBot(botpy.Client):
                     bot_logger.error(f"取消任务时出错: {str(e)}")
                 finally:
                     self._running_tasks.clear()
-                
+
                 # 第七阶段：关闭浏览器实例
                 if self.browser_manager:
                     try:
@@ -802,6 +810,14 @@ class MyBot(botpy.Client):
                 except Exception as e:
                     bot_logger.error(f"最终资源清理时出错: {str(e)}")
                 
+                # 停止安全保证分数抓取器
+                if self.safe_score_fetcher:
+                    try:
+                        await self.safe_score_fetcher.stop()
+                        bot_logger.debug("安全保证分数抓取器已停止")
+                    except Exception as e:
+                        bot_logger.error(f"停止安全保证分数抓取器时出错: {str(e)}")
+
                 self._cleanup_done = True
                 bot_logger.info("资源清理完成")
                 
