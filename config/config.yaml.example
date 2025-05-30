@@ -57,4 +57,4 @@ translation:
 # 安全保证分数抓取配置
 safe_score:
   enabled: true  # 是否启用安全保证分数抓取
-  update_interval: 5 # 更新间隔(分钟)
+  update_interval: 30 # 更新间隔(分钟)
