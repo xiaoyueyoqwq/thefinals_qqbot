@@ -53,7 +53,7 @@ class DFPlugin(Plugin):
             update_time = datetime.now().strftime('%H:%M:%S')
 
             # 构建消息头部
-            response = f"✨{current_season}底分查询 | THE FINALS\n"
+            response = f"\n✨{current_season}底分查询 | THE FINALS\n"
             response += f"📊 更新时间: {update_time}\n"
 
             # 添加安全保证分数
