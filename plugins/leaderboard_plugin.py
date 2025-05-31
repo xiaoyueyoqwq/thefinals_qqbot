@@ -127,11 +127,11 @@ class LeaderboardPlugin(Plugin):
                     days = int(remaining_parts[0])
                     self.logger.debug(f"[{self.name}] 解析天数参数: {days}")
                     if days < 1 or days > 30:
-                        await self.reply(handler, "⚠️ 时间范围必须在1-30天之间")
+                        await self.reply(handler, "\n⚠️ 时间范围必须在1-30天之间")
                         return
                     time_range = days * 86400  # 将天数转换为秒
                 except ValueError:
-                    await self.reply(handler, "⚠️ 时间范围必须是数字（天数）")
+                    await self.reply(handler, "\n⚠️ 时间范围必须是数字（天数）")
                     return
             
             # 获取历史数据
@@ -141,12 +141,12 @@ class LeaderboardPlugin(Plugin):
                 self.logger.debug(f"[{self.name}] 获取到历史数据: {len(history_data) if history_data else 0} 条记录")
                 
                 if not history_data:
-                    await self.reply(handler, f"⚠️ 未找到玩家历史数据")
+                    await self.reply(handler, f"\n⚠️ 未找到玩家历史数据")
                     return
             except Exception as e:
                 # 所有异常都当作未找到玩家信息处理
                 self.logger.info(f"[{self.name}] 获取玩家信息失败，视为未找到玩家: {str(e)}")
-                await self.reply(handler, f"⚠️ 未找到玩家历史数据")
+                await self.reply(handler, f"\n⚠️ 输入的玩家ID不完整（没带尾号ID）")
                 return
             
             # 生成走势图
@@ -191,10 +191,10 @@ class LeaderboardPlugin(Plugin):
             
         except ValueError as e:
             self.logger.error(f"[{self.name}] 参数错误: {str(e)}\n{traceback.format_exc()}")
-            await self.reply(handler, f"⚠️ 错误: {str(e)}")
+            await self.reply(handler, f"\n⚠️ 错误: {str(e)}")
         except Exception as e:
             self.logger.error(f"[{self.name}] 获取数据失败: {str(e)}\n{traceback.format_exc()}")
-            await self.reply(handler, f"⚠️ 获取数据失败: {str(e)}")
+            await self.reply(handler, f"\n⚠️ 获取数据失败: {str(e)}")
 
 # 注册插件
 def get_plugin_class():
