@@ -415,7 +415,7 @@
       "empty_reload": "3.0s",
       "tactical_reload": "2.2s"
     },
-    "aliases": [".50 Akimbo", "沙鹰"]
+    "aliases": [".50", "沙鹰", "双枪"]
   },
   "Flamethrower": {
     "introduction": "“大火收汁”",
