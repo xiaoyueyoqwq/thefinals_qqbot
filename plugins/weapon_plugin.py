@@ -27,34 +27,31 @@ class WeaponPlugin(Plugin):
         try:
             # 移除命令前缀并提取武器名称
             args = content.strip()
-            
-            if not args:
+            weapon_name = args.replace("/weapon", "").strip() # 先提取武器名称
+
+            if not weapon_name: # 再检查提取到的武器名称是否为空
                 await self.reply(handler, (
-                    "❌ 未指定武器名称\n"
+                    "\n❌ 未指定武器名称\n"
                     f"{SEPARATOR}\n"
                     "🎮 使用方法:\n"
                     "- /weapon <武器名称>\n"
                     f"{SEPARATOR}\n"
                     "💡 小贴士:\n"
-                    "1. 武器名称需要完全匹配\n"
-                    "2. 注意大小写"
+                    "武器名称可以用别名"
                 ))
                 return
-                
-            # 提取实际的武器名称
-            weapon_name = args.replace("/weapon", "").strip()
-                
+
             # 调用 WeaponData 的方法获取格式化好的武器信息
             response = self.weapon_data.get_weapon_data(weapon_name)
-            
+
             if not response:
-                await self.reply(handler, f"⚠️ 未找到武器 {weapon_name} 的信息")
+                await self.reply(handler, f"\n⚠️ 未找到武器 {weapon_name} 的信息")
                 return
-            
+
             await self.reply(handler, response)
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理武器信息命令时发生错误: {str(e)}")
-            await self.reply(handler, "⚠️ 处理武器信息命令时发生错误，请稍后重试")
+            await self.reply(handler, "\n⚠️ 处理武器信息命令时发生错误，请稍后重试")
             
     async def on_load(self) -> None:
         """插件加载时的处理"""

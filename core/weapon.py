@@ -40,6 +40,7 @@ class WeaponData:
         返回:
         - Optional[str]: 格式化后的武器数据字符串，如果未找到则返回 None
         """
+
         normalized_query = query.lower()
 
         for weapon_name, data in self.weapon_data.items():
@@ -108,4 +109,4 @@ class WeaponData:
                 output += f"▎ {translated_key}: {value}\n"
             output += f"{SEPARATOR}\n"
 
-        return output.strip()
+        return output
