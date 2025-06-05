@@ -40,8 +40,8 @@
   "Dagger": {
     "introduction": "“曾经辉煌过，现在下水道”",
     "damage": {
-      "body": 60,
-      "secondary": "320 (暴击伤害)"
+      "body": "60/75（暴击伤害）",
+      "secondary": "320 (背刺伤害)"
     },
     "technical_data": {},
     "aliases": ["Dagger", "匕首"]
