@@ -45,7 +45,7 @@ class SafeScoreFetcher:
             await asyncio.sleep(self._update_interval)
 
     async def _fetch_safe_score(self):
-        bot_logger.info("开始抓取安全保证分数...\n") # 添加换行
+        bot_logger.info("开始抓取安全保证分数...")
         browser = None # Initialize browser to None
         safe_score = None # Initialize safe_score for the current attempt
         max_attempts = 10 # 最大重试次数
