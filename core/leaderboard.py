@@ -160,6 +160,10 @@ class LeaderboardCore(BaseAPI):
             self._plot_points(ax1, timestamps, points)
             self._plot_ranks(ax2, timestamps, ranks)
             
+            # 设置x轴范围，消除边距
+            ax1.set_xlim(timestamps[0], timestamps[-1])
+            ax2.set_xlim(timestamps[0], timestamps[-1])
+
             # 设置标题
             for ax, title_text in [(ax1, f'THE FINALS | {player_id} 排位走势'), (ax2, '排名变化')]:
                 title = ax.set_title(title_text, pad=20, fontsize=16, fontproperties=self.font, color='#FFFFFF')
@@ -236,4 +240,4 @@ class LeaderboardCore(BaseAPI):
                     
         except Exception as e:
             self.logger.error(f"获取玩家历史数据失败: {str(e)}")
-            raise 
+            raise

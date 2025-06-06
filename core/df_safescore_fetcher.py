@@ -45,11 +45,11 @@ class SafeScoreFetcher:
             await asyncio.sleep(self._update_interval)
 
     async def _fetch_safe_score(self):
-        bot_logger.info("开始抓取安全保证分数...")
+        bot_logger.info("开始抓取安全保证分数...\n") # 添加换行
         browser = None # Initialize browser to None
         safe_score = None # Initialize safe_score for the current attempt
-        max_attempts = 3 # 最大重试次数
-        attempt_delay = 5 # 重试间隔（秒），修改为5秒
+        max_attempts = 10 # 最大重试次数
+        attempt_delay = 5 # 重试间隔（秒）
 
         last_successful_score = self._safe_score # Store the last successful score before attempts
 
@@ -57,15 +57,15 @@ class SafeScoreFetcher:
             try:
                 bot_logger.info(f"尝试抓取安全保证分数 (第 {attempt + 1}/{max_attempts} 次)...")
                 async with async_playwright() as p:
-                    # 启动浏览器，设置超时
-                    browser = await p.chromium.launch(timeout=60000)
+                    # 启动浏览器，设置超时为15秒
+                    browser = await p.chromium.launch(timeout=15000)
                     page = await browser.new_page()
-                    # 导航到页面，设置超时
-                    await page.goto("https://thefinals.lol/leaderboard", timeout=60000)
+                    # 导航到页面，设置超时为15秒
+                    await page.goto("https://thefinals.lol/leaderboard", timeout=15000)
 
-                    # 等待页面加载或特定的元素出现，并等待其文本内容包含数字，设置超时
-                    await page.wait_for_selector('#safeThreshold', timeout=60000) # 增加等待时间
-                    await page.wait_for_function(r"document.getElementById('safeThreshold') && document.getElementById('safeThreshold').textContent.match(/[0-9]/)", timeout=60000) # 等待文本内容包含数字
+                    # 等待页面加载或特定的元素出现，并等待其文本内容包含数字，设置超时为15秒
+                    await page.wait_for_selector('#safeThreshold', timeout=15000)
+                    await page.wait_for_function(r"document.getElementById('safeThreshold') && document.getElementById('safeThreshold').textContent.match(/[0-9]/)", timeout=15000)
 
                     # Define the JavaScript function as a string
                     js_function_definition = r"""
@@ -115,17 +115,16 @@ function getSafeScoreFromDOM() {
                         bot_logger.info(f"[safe_score] 安全保证分数抓取成功: {safe_score}")
                         break # 成功获取，跳出循环
                     else:
-                         bot_logger.warning(f"[safe_score] 第 {attempt + 1}/{max_attempts} 次尝试未获取到有效分数.")
+                         bot_logger.warning(f"[safe_score] 第 {attempt + 1}/{max_attempts} 次尝试未获取到有效分数")
 
             except Exception as e:
-                bot_logger.error(f"[safe_score] 第 {attempt + 1}/{max_attempts} 次抓取安全保证分数时发生错误: {e}")
+                # 捕获所有异常（包括超时和Playwright错误），打印简化提示
+                bot_logger.warning(f"[safe_score] 获取安全分超时，正在重试 (第 {attempt + 1}/{max_attempts} 次)") # 使用用户指定的提示
+
                 # 如果不是最后一次尝试，等待一段时间后重试
                 if attempt < max_attempts - 1:
-                    bot_logger.info(f"[safe_score] 等待 {attempt_delay} 秒后重试...")
                     await asyncio.sleep(attempt_delay)
-                else:
-                    # 最后一次尝试失败，记录最终错误
-                    bot_logger.error(f"[safe_score] 抓取安全保证分数最终失败: {e}")
+                # 最后一次尝试失败的最终处理将在循环结束后进行
 
             finally:
                 if browser:
