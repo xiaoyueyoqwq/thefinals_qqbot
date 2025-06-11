@@ -2,8 +2,7 @@
 import sys
 import asyncio
 import concurrent.futures
-from functools import partial
-from typing import Optional, Any, Dict
+from typing import Any, Dict
 from injectors import inject_all as inject_botpy
 import botpy
 import uvicorn
@@ -22,9 +21,6 @@ import time
 import signal
 import gc
 import weakref
-
-
-import faulthandler
 import signal
 import platform
 import traceback
@@ -35,7 +31,6 @@ from utils.image_manager import ImageManager
 from datetime import datetime
 import argparse
 from pathlib import Path
-from core.df_safescore_fetcher import SafeScoreFetcher
 
 # 全局变量，用于在信号处理函数中访问
 client = None

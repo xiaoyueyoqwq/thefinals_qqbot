@@ -88,7 +88,7 @@ class BindPlugin(Plugin):
             )
             
             if success:
-                await self.reply(handler, "✅ 已解除游戏ID绑定")
+                await self.reply(handler, "\n✅ 已解除游戏ID绑定")
             else:
                 await self.reply(handler, "❌ 您当前没有绑定游戏ID")
         except TimeoutError:
