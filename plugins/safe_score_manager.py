@@ -40,7 +40,7 @@ class SafeScoreManagerPlugin(Plugin):
                 with open(self.whitelist_path, "r", encoding="utf-8") as f:
                     self.whitelist = yaml.safe_load(f)
                     if not isinstance(self.whitelist, list):
-                        bot_logger.warning("白名单格式不正确，应为列表。已重置为空列表。")
+                        bot_logger.warning("白名单格式不正确，应为列表。已重置为空列表")
                         self.whitelist = []
                 bot_logger.info(f"成功加载 {len(self.whitelist)} 个白名单用户")
             except Exception as e:
@@ -68,8 +68,8 @@ class SafeScoreManagerPlugin(Plugin):
 
         # 设置安全分
         if not self.is_authorized(user_id):
-            await self.reply(handler, "\n⚠️ 你没有权限执行此操作。")
-            bot_logger.warning(f"用户 {user_id} 尝试设置安全分但无权限。")
+            await self.reply(handler, "\n⚠️ 你没有权限执行此操作")
+            bot_logger.warning(f"用户 {user_id} 尝试设置安全分但无权限")
             return
 
         bot_logger.info(f"Received content for /safe: '{content}' (repr: {repr(content)})")
@@ -79,7 +79,7 @@ class SafeScoreManagerPlugin(Plugin):
         bot_logger.info(f"Cleaned content: '{cleaned_content}'")
 
         if not cleaned_content:
-            await self.reply(handler, "\n⚠️ 无效的输入，未检测到任何数字。")
+            await self.reply(handler, "\n⚠️ 无效的输入，未检测到任何数字")
             return
             
         try:
@@ -95,10 +95,10 @@ class SafeScoreManagerPlugin(Plugin):
             bot_logger.info(f"用户 {user_id} 将安全分更新为 {new_score}")
 
         except ValueError:
-            await self.reply(handler, "\n⚠️ 无效的输入，请输入一个有效的数字作为分数。")
+            await self.reply(handler, "\n⚠️ 无效的输入，请输入一个有效的数字作为分数")
         except Exception as e:
             bot_logger.error(f"更新安全分时出错: {e}", exc_info=True)
-            await self.reply(handler, "\n⚠️ 更新安全分时发生未知错误，请稍后再试。")
+            await self.reply(handler, "\n⚠️ 更新安全分时发生未知错误，请稍后再试")
 
     def get_safe_score(self) -> Tuple[Optional[int], Optional[float]]:
         """从插件状态获取安全分和最后更新时间"""
