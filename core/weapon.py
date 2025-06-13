@@ -99,8 +99,8 @@ class WeaponData:
                 'pellet_damage': '每颗弹丸伤害',
                 'pellet_count': '弹丸数量',
                 'secondary': '次要攻击',
-                'bullet_damage': '每颗子弹伤害',
-                'head_bullet_damage': '每颗子弹爆头伤害',
+                'bullet_damage': '子弹伤害',
+                'head_bullet_damage': '子弹爆头伤害',
                 'bullet_count': '子弹数量',
                 'direct': '直接命中伤害',
                 'splash': '溅射伤害',
@@ -187,6 +187,6 @@ class WeaponData:
                 output += f"▎ {class_name}: 无法击杀\n"
             else:
                 output += f"▎ {class_name}: {ttk:.3f}s\n"
-        output += f"{SEPARATOR}\n"
+        output += f"{SEPARATOR}"
 
         return output
