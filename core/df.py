@@ -144,17 +144,20 @@ class DFQuery:
             "error": None,
             "transaction_active": False
         }
+        db_key = str(self.db_path)
         
         try:
-            db_key = str(self.db_path)
-            status["transaction_active"] = self.db._transactions[db_key]["active"]
+            # 检查自定义事务包装器的状态
+            if db_key in self.db._transactions:
+                status["transaction_active"] = self.db._transactions[db_key].get("active", False)
+
+            await self.db.fetch_one("SELECT 1")
             
-            async with self.db.transaction():
-                await self.db.execute_simple("SELECT 1")
-                status["connected"] = True
-                status["last_operation"] = datetime.now().isoformat()
+            status["connected"] = True
+            status["last_operation"] = datetime.now().isoformat()
         except Exception as e:
             status["error"] = str(e)
+            status["connected"] = False
             
         return status
         

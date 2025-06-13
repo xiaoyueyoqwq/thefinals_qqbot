@@ -12,7 +12,7 @@
     },
     "technical_data": {
       "rpm": "220/950",
-      "magazine_size": "21",
+      "magazine_size": "24",
       "empty_reload": "1.75s",
       "tactical_reload": "1.45s"
     },
@@ -49,8 +49,8 @@
   "LH1": {
     "introduction": "“抽死你”",
     "damage": {
-      "body": 40,
-      "head": 80
+      "body": 42,
+      "head": 84
     },
     "damage_decay": {
       "min_range": 50,
@@ -420,7 +420,7 @@
   "Flamethrower": {
     "introduction": "“大火收汁”",
     "damage": {
-      "body": 30
+      "body": 27
     },
     "technical_data": {
       "rpm": "170",
@@ -561,8 +561,8 @@
   "Sledgehammer": {
     "introduction": "“拆迁队专武”",
     "damage": {
-      "body": 115,
-      "secondary": 200
+      "body": 100,
+      "secondary": 154
     },
     "technical_data": {},
     "aliases": ["Sledgehammer", "大锤"]
