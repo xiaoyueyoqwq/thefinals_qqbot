@@ -16,7 +16,14 @@
       "empty_reload": "1.75s",
       "tactical_reload": "1.45s"
     },
-    "aliases": ["93R"]
+    "aliases": [
+      "93R"
+    ],
+    "ttk": {
+      "150": 0.53,
+      "250": 1.2,
+      "350": 1.66
+    }
   },
   "ARN-220": {
     "introduction": "“糖豆发射器”",
@@ -35,7 +42,16 @@
       "empty_reload": "2.80s/0.75s",
       "tactical_reload": "2.45s"
     },
-    "aliases": ["ARN-220", "ARN"]
+    "aliases": [
+      "ARN-220",
+      "ARN",
+      "ARN220"
+    ],
+    "ttk": {
+      "150": 0.67,
+      "250": 1.17,
+      "350": 1.67
+    }
   },
   "Dagger": {
     "introduction": "“曾经辉煌过，现在下水道”",
@@ -44,7 +60,10 @@
       "secondary": "320 (背刺伤害)"
     },
     "technical_data": {},
-    "aliases": ["Dagger", "匕首"]
+    "aliases": [
+      "Dagger",
+      "匕首"
+    ]
   },
   "LH1": {
     "introduction": "“抽死你”",
@@ -63,7 +82,15 @@
       "empty_reload": "2.85s",
       "tactical_reload": "1.95s"
     },
-    "aliases": ["LH1", "烧火棍"]
+    "aliases": [
+      "LH1",
+      "烧火棍"
+    ],
+    "ttk": {
+      "150": 0.67,
+      "250": 1.33,
+      "350": 1.78
+    }
   },
   "M11": {
     "introduction": "“手把轮椅枪”",
@@ -82,7 +109,15 @@
       "empty_reload": "1.85s",
       "tactical_reload": "1.55s"
     },
-    "aliases": ["M11", "吹风机"]
+    "aliases": [
+      "M11",
+      "吹风机"
+    ],
+    "ttk": {
+      "150": 0.54,
+      "250": 0.9,
+      "350": 1.26
+    }
   },
   "M26 Matter": {
     "introduction": "“各方面性能看起来都不错”",
@@ -101,7 +136,10 @@
       "empty_reload": "2.45s",
       "tactical_reload": "2.05s"
     },
-    "aliases": ["M26 Matter", "矮喷"]
+    "aliases": [
+      "M26 Matter",
+      "矮喷"
+    ]
   },
   "Recurve Bow": {
     "introduction": "“私人弓箭”",
@@ -115,7 +153,12 @@
       "magazine_size": "∞ (无限)",
       "empty_reload": "0.75s (指箭矢准备时间)"
     },
-    "aliases": ["Recurve Bow", "反曲弓", "弓", "Bow"]
+    "aliases": [
+      "Recurve Bow",
+      "反曲弓",
+      "弓",
+      "Bow"
+    ]
   },
   "SH1900": {
     "introduction": "出生短喷",
@@ -134,7 +177,15 @@
       "empty_reload": "2.6s",
       "tactical_reload": "2.2s"
     },
-    "aliases": ["SH1900", "短喷"]
+    "aliases": [
+      "SH1900",
+      "短喷"
+    ],
+    "ttk": {
+      "150": 0,
+      "250": 0.75,
+      "350": 0.75
+    }
   },
   "SR-84": {
     "introduction": "“私人矮子狙”",
@@ -153,7 +204,12 @@
       "empty_reload": "3.35s",
       "tactical_reload": "1.95s"
     },
-    "aliases": ["SR-84", "矮子狙", "矮狙", "狙"]
+    "aliases": [
+      "SR-84",
+      "矮子狙",
+      "矮狙",
+      "狙"
+    ]
   },
   "Sword": {
     "introduction": "“以前很畜生，现在下水道”",
@@ -162,7 +218,10 @@
       "secondary": 105
     },
     "technical_data": {},
-    "aliases": ["Sword", "长剑"]
+    "aliases": [
+      "Sword",
+      "长剑"
+    ]
   },
   "Throwing Knives": {
     "introduction": "“s2的王者”",
@@ -175,7 +234,10 @@
       "rpm": "545.45 (主攻击), 27.7 (次要攻击)",
       "magazine_size": "∞ (无限)"
     },
-    "aliases": ["Throwing Knives", "飞刀"]
+    "aliases": [
+      "Throwing Knives",
+      "飞刀"
+    ]
   },
   "V9S": {
     "introduction": "“哒哒哒哒~”",
@@ -194,7 +256,16 @@
       "empty_reload": "1.5s",
       "tactical_reload": "1.25s"
     },
-    "aliases": ["V9S", "小手枪", "手枪"]
+    "aliases": [
+      "V9S",
+      "小手枪",
+      "手枪"
+    ],
+    "ttk": {
+      "150": 0.5,
+      "250": 1,
+      "350": 1.33
+    }
   },
   "XP-54": {
     "introduction": "“又被一脚踢死了”",
@@ -213,7 +284,15 @@
       "empty_reload": "2.5s",
       "tactical_reload": "2.25s"
     },
-    "aliases": ["XP-54"]
+    "aliases": [
+      "XP-54",
+      "xp54"
+    ],
+    "ttk": {
+      "150": 0.56,
+      "250": 0.99,
+      "350": 1.41
+    }
   },
   "AKM": {
     "introduction": "“最好控的枪”",
@@ -232,7 +311,14 @@
       "empty_reload": "2.35s",
       "tactical_reload": "2.35s"
     },
-    "aliases": ["AKM"]
+    "aliases": [
+      "AKM"
+    ],
+    "ttk": {
+      "150": 0.7,
+      "250": 1.2,
+      "350": 1.7
+    }
   },
   "CB-01 Repeater": {
     "introduction": "“也就欺负欺负矮子了”",
@@ -251,7 +337,11 @@
       "empty_reload": "5.05s",
       "tactical_reload": "Segmented (分段式)"
     },
-    "aliases": ["CB-01 Repeater", "CB-01", "杠杆"]
+    "aliases": [
+      "CB-01 Repeater",
+      "CB-01",
+      "杠杆"
+    ]
   },
   "Cerberus 12GA": {
     "introduction": "“出生龙息”",
@@ -270,7 +360,16 @@
       "empty_reload": "2.45s",
       "tactical_reload": "Segmented (分段式)"
     },
-    "aliases": ["Cerberus 12GA", "龙息", "龙息喷"]
+    "aliases": [
+      "Cerberus 12GA",
+      "龙息",
+      "龙息喷"
+    ],
+    "ttk": {
+      "150": 0.6,
+      "250": 1.8,
+      "350": 1.8
+    }
   },
   "CL-40": {
     "introduction": "“给你麻麻都炸飞”",
@@ -284,7 +383,11 @@
       "empty_reload": "4.65s",
       "tactical_reload": "Segmented (分段式)"
     },
-    "aliases": ["CL-40", "中榴"]
+    "aliases": [
+      "CL-40",
+      "中榴",
+      "CL40"
+    ]
   },
   "Dual Blades": {
     "introduction": "“超级反弹！”",
@@ -292,7 +395,10 @@
       "body": "连续攻击: 50×2 → 60×2 → 65"
     },
     "technical_data": {},
-    "aliases": ["Dual Blades", "双刀"]
+    "aliases": [
+      "Dual Blades",
+      "双刀"
+    ]
   },
   "FAMAS": {
     "introduction": "“已经变激光枪了”",
@@ -311,7 +417,15 @@
       "empty_reload": "2.6s",
       "tactical_reload": "2.15s"
     },
-    "aliases": ["FAMAS", "法马斯"]
+    "aliases": [
+      "FAMAS",
+      "法马斯"
+    ],
+    "ttk": {
+      "150": 0.77,
+      "250": 1.22,
+      "350": 1.94
+    }
   },
   "FCAR": {
     "introduction": "“不怎么战术的战术步枪”",
@@ -330,7 +444,14 @@
       "empty_reload": "2.1s",
       "tactical_reload": "2.1s"
     },
-    "aliases": ["FCAR"]
+    "aliases": [
+      "FCAR"
+    ],
+    "ttk": {
+      "150": 0.67,
+      "250": 1.22,
+      "350": 1.67
+    }
   },
   "Model 1887": {
     "introduction": "“R.I.P 面包师”",
@@ -349,7 +470,10 @@
       "empty_reload": "4.3s",
       "tactical_reload": "Segmented (分段式)"
     },
-    "aliases": ["Model 1887", "中喷"]
+    "aliases": [
+      "1887",
+      "中喷"
+    ]
   },
   "Pike-556": {
     "introduction": "“三枪一个矮子”",
@@ -368,7 +492,12 @@
       "empty_reload": "3.25s",
       "tactical_reload": "2.1s"
     },
-    "aliases": ["Pike-556", "556", "Pike"]
+    "aliases": [
+      "Pike-556",
+      "556",
+      "Pike",
+      "Pike556"
+    ]
   },
   "R.357": {
     "introduction": "“锁子哥专武”",
@@ -387,7 +516,16 @@
       "empty_reload": "2.5s",
       "tactical_reload": "2.2s"
     },
-    "aliases": ["R.357", "左轮", "R357"]
+    "aliases": [
+      "R.357",
+      "左轮",
+      "R357"
+    ],
+    "ttk": {
+      "150": 0.86,
+      "250": 1.29,
+      "350": 1.71
+    }
   },
   "Riot Shield": {
     "introduction": "“碧桂园五星级保安”",
@@ -396,7 +534,10 @@
       "secondary": "100% (伤害格挡率)"
     },
     "technical_data": {},
-    "aliases": ["Riot Shield", "防爆盾"]
+    "aliases": [
+      "Riot Shield",
+      "防爆盾"
+    ]
   },
   ".50 Akimbo": {
     "introduction": "“燕双鹰！”",
@@ -415,7 +556,11 @@
       "empty_reload": "3.0s",
       "tactical_reload": "2.2s"
     },
-    "aliases": [".50", "沙鹰", "双枪"]
+    "aliases": [
+      ".50",
+      "沙鹰",
+      "双枪"
+    ]
   },
   "Flamethrower": {
     "introduction": "“大火收汁”",
@@ -428,7 +573,10 @@
       "empty_reload": "3.55s",
       "tactical_reload": "3.55s"
     },
-    "aliases": ["Flamethrower", "喷火器"]
+    "aliases": [
+      "Flamethrower",
+      "喷火器"
+    ]
   },
   "KS-23": {
     "introduction": "“属于胖子的左轮”",
@@ -446,7 +594,11 @@
       "empty_reload": "4.36s",
       "tactical_reload": "Segmented (分段式)"
     },
-    "aliases": ["KS-23", "独头喷"]
+    "aliases": [
+      "KS-23",
+      "独头喷",
+      "KS23"
+    ]
   },
   "Lewis Gun": {
     "introduction": "“Pro哥专武”",
@@ -465,7 +617,15 @@
       "empty_reload": "3.55s",
       "tactical_reload": "3.25s"
     },
-    "aliases": ["Lewis Gun", "刘易斯"]
+    "aliases": [
+      "Lewis Gun",
+      "刘易斯"
+    ],
+    "ttk": {
+      "150": 0.72,
+      "250": 1.32,
+      "350": 1.8
+    }
   },
   "M134 Minigun": {
     "introduction": "“站桩挨打枪”",
@@ -484,7 +644,16 @@
       "empty_reload": "5.25s",
       "tactical_reload": "5.0s"
     },
-    "aliases": ["M134 Minigun", "M134机枪", "加特林"]
+    "aliases": [
+      "M134 Minigun",
+      "M134机枪",
+      "加特林"
+    ],
+    "ttk": {
+      "150": 0.52,
+      "250": 0.88,
+      "350": 1.24
+    }
   },
   "M60": {
     "introduction": "“Pro哥的第二把专武”",
@@ -503,7 +672,14 @@
       "empty_reload": "3.55s",
       "tactical_reload": "3.55s"
     },
-    "aliases": ["M60"]
+    "aliases": [
+      "M60"
+    ],
+    "ttk": {
+      "150": 0.72,
+      "250": 1.24,
+      "350": 1.76
+    }
   },
   "MGL32": {
     "introduction": "“物理学抛物线入门”",
@@ -515,9 +691,12 @@
       "rpm": "90",
       "magazine_size": "6",
       "empty_reload": "3.1s",
-      "tactical_reload": "2.85s"
+      "tactical_reload": "Segmented (分段式)"
     },
-    "aliases": ["MGL32", "重榴"]
+    "aliases": [
+      "MGL32",
+      "重榴"
+    ]
   },
   "SA1216": {
     "introduction": "“↑↓↑↓ + waaaaaa”",
@@ -536,7 +715,16 @@
       "empty_reload": "3.25s",
       "tactical_reload": "2.35s"
     },
-    "aliases": ["SA1216", "四连喷", "胖喷"]
+    "aliases": [
+      "SA1216",
+      "四连喷",
+      "胖喷"
+    ],
+    "ttk": {
+      "150": 0.63,
+      "250": 0.95,
+      "350": 1.9
+    }
   },
   "ShAK-50": {
     "introduction": "“伤害一直是个迷”",
@@ -556,7 +744,16 @@
       "empty_reload": "3.2s",
       "tactical_reload": "2.4s"
     },
-    "aliases": ["ShAK-50", "SHAK"]
+    "aliases": [
+      "ShAK-50",
+      "SHAK",
+      "ShAK50"
+    ],
+    "ttk": {
+      "150": 0.57,
+      "250": 1.14,
+      "350": 1.57
+    }
   },
   "Sledgehammer": {
     "introduction": "“拆迁队专武”",
@@ -565,7 +762,10 @@
       "secondary": 154
     },
     "technical_data": {},
-    "aliases": ["Sledgehammer", "大锤"]
+    "aliases": [
+      "Sledgehammer",
+      "大锤"
+    ]
   },
   "Spear": {
     "introduction": "“平台杀手”",
@@ -574,6 +774,9 @@
       "secondary": "105×3 (三次攻击)"
     },
     "technical_data": {},
-    "aliases": ["Spear", "长矛"]
+    "aliases": [
+      "Spear",
+      "长矛"
+    ]
   }
 }

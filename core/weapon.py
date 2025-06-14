@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import math
 from typing import Dict, Any, Optional
 from utils.templates import SEPARATOR  # 导入分隔线模板
 
@@ -51,25 +50,6 @@ class WeaponData:
                 return self._format_weapon_data(weapon_name, data)
 
         return None
-
-    def _calculate_ttk(self, weapon_damage: float, fire_rate: int) -> Dict[str, float]:
-        """
-        根据武器伤害和射速计算击杀不同体型目标的TTK。
-        """
-        if weapon_damage <= 0 or fire_rate <= 0:
-            return {"重型": float('inf'), "中型": float('inf'), "轻型": float('inf')}
-
-        class_hp = {'重型': 350, '中型': 250, '轻型': 150}
-        ttk_results = {}
-
-        for class_name, hp in class_hp.items():
-            # 向上取整计算击杀所需子弹数
-            bullets_to_kill = math.ceil(hp / weapon_damage)
-            # TTK 公式: 60 ÷ 射速 × (击杀需要的子弹数 - 1)
-            ttk = (60 / fire_rate) * (bullets_to_kill - 1)
-            ttk_results[class_name] = ttk
-        
-        return ttk_results
 
     def _format_weapon_data(self, weapon_name: str, data: Dict[str, Any]) -> str:
         """
@@ -122,18 +102,7 @@ class WeaponData:
 
         # 提取身体伤害和射速，用于后续计算
         technical_data = data.get('technical_data', {})
-        body_damage_per_shot = 0
         
-        if 'body' in damage:
-            body_damage_str = str(damage['body'])
-            match = re.search(r'^\d+', body_damage_str)
-            if match:
-                body_damage_per_shot = int(match.group())
-        elif 'pellet_damage' in damage and 'pellet_count' in damage:
-            body_damage_per_shot = damage.get('pellet_damage', 0) * damage.get('pellet_count', 0)
-        elif 'bullet_damage' in damage and 'bullet_count' in damage:
-            body_damage_per_shot = damage.get('bullet_damage', 0) * damage.get('bullet_count', 0)
-
         rpm = 0
         if 'rpm' in technical_data:
             rpm_str = str(technical_data['rpm'])
@@ -169,24 +138,23 @@ class WeaponData:
                     output += f"▎ {translated_key}: {value}\n"
 
             # 3. 最后显示DPS
-            if body_damage_per_shot > 0 and rpm > 0:
-                dps = int(body_damage_per_shot * rpm / 60)
-                output += f"▎ 每秒伤害 (DPS): {dps}\n"
+            dps = int(rpm / 60)
+            output += f"▎ 每秒伤害 (DPS): {dps}\n"
 
             output += f"{SEPARATOR}\n"
 
-        # TTK 计算与显示
-        output += "▎🔒 武器TTK:\n"
-        ttks = self._calculate_ttk(body_damage_per_shot, rpm)
-        
-        # 确保输出顺序并处理无法击杀的情况
-        class_order = ['重型', '中型', '轻型']
-        for class_name in class_order:
-            ttk = ttks.get(class_name, float('inf'))
-            if ttk == float('inf'):
-                output += f"▎ {class_name}: 无法击杀\n"
-            else:
-                output += f"▎ {class_name}: {ttk:.3f}s\n"
-        output += f"{SEPARATOR}"
+        # TTK 显示 (Read from JSON instead of calculating)
+        ttk_data = data.get('ttk', {})
+        if ttk_data:
+            output += "▎🔒 武器TTK:\n"
+            # Ensure output order and handle missing data
+            class_hp_map = {'轻型': '150', '中型': '250', '重型': '350'}
+            for class_name, hp_key in class_hp_map.items():
+                ttk_value = ttk_data.get(hp_key)
+                if ttk_value is not None:
+                    output += f"▎ {class_name} ({hp_key} HP): {ttk_value:.3f}s\n"
+                else:
+                    output += f"▎ {class_name} ({hp_key} HP): N/A\n"
+            output += f"{SEPARATOR}"
 
         return output
