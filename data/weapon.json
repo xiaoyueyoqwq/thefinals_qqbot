@@ -11,7 +11,7 @@
       "decay_multiplier": 0.4
     },
     "technical_data": {
-      "rpm": "220/950",
+      "rpm": "220",
       "magazine_size": "24",
       "empty_reload": "1.75s",
       "tactical_reload": "1.45s"
@@ -412,7 +412,7 @@
       "decay_multiplier": 0.5
     },
     "technical_data": {
-      "rpm": "220/1050",
+      "rpm": "220",
       "magazine_size": "27",
       "empty_reload": "2.6s",
       "tactical_reload": "2.15s"

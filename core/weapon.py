@@ -138,7 +138,10 @@ class WeaponData:
                     output += f"▎ {translated_key}: {value}\n"
 
             # 3. 最后显示DPS
-            dps = int(rpm / 60)
+            # 获取躯干伤害
+            body_damage = damage.get('body', 0) # 获取躯干伤害，如果不存在则为0
+            # 计算DPS: (射速 * 躯干伤害) / 60
+            dps = int((rpm * body_damage) / 60) if rpm > 0 and body_damage > 0 else 0 # 确保射速和伤害大于0才计算
             output += f"▎ 每秒伤害 (DPS): {dps}\n"
 
             output += f"{SEPARATOR}\n"

@@ -145,7 +145,8 @@ class RankQuery:
             "s3": "../images/seasons/s3.png",
             "s4": "../images/seasons/s4.png",
             "s5": "../images/seasons/s5.png",
-            "s6": "../images/seasons/s6.jpg"
+            "s6": "../images/seasons/s6.jpg",
+            "s7": "../images/seasons/s7.jpg",
         }
         
         # 段位图标映射表
