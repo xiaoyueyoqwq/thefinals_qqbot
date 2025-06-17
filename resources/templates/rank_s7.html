@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 预加载本地资源 -->
+    <link rel="preload" href="../images/thefinals_logo.png" as="image">
+    <link rel="preload" href="../fonts/google_font.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ background }}" as="image">
+    <style>
+        /* 字体定义 */
+        @font-face {
+            font-family: 'CustomFont';
+            src: url('../fonts/google_font.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        
+        /* 基础样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'CustomFont', system-ui, -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #fff;
+        }
+        
+        /* 布局类 */
+        .flex {
+            display: flex;
+        }
+        
+        .flex-col {
+            flex-direction: column;
+        }
+        
+        .items-center {
+            align-items: center;
+        }
+        
+        .justify-center {
+            justify-content: center;
+        }
+        
+        .justify-between {
+            justify-content: space-between;
+        }
+        
+        .gap-2 {
+            gap: 0.5rem;
+        }
+        
+        /* 玻璃态效果 */
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            will-change: transform;
+        }
+        
+        /* 背景图片 */
+        .bg-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background-image: url('{{ background }}');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            position: relative;
+            will-change: transform;
+            transform: translateZ(0);
+        }
+        
+        /* 标题区域 */
+        .title-container {
+            width: 100%;
+            max-width: 72rem;
+            margin-bottom: 2rem;
+        }
+        
+        .title-text {
+            color: #000;
+            font-size: 4.5rem;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            letter-spacing: 2px;
+        }
+        
+        .title-logo {
+            height: 98px;
+            width: auto;
+            margin: 0 0.5rem;
+            object-fit: contain;
+        }
+        
+        /* 内容盒子 */
+        .content-box {
+            width: 1200px;
+            height: 180px;
+            border-radius: 1.5rem;
+            padding: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 6px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+            background: linear-gradient(to right, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.2));
+        }
+        
+        /* 玩家信息 */
+        .player-info {
+            display: flex;
+            align-items: center;
+        }
+        
+        .player-text {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .player-name {
+            color: #fff;
+            font-size: 2.25rem;
+            font-weight: bold;
+        }
+        
+        .player-tag {
+            color: #d1d5db;
+            font-size: 1.5rem;
+        }
+        
+        /* 排名信息 */
+        .rank-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .rank-number {
+            color: #fff;
+            font-size: 3rem;
+            font-weight: bold;
+        }
+        
+        .rank-label {
+            color: #d1d5db;
+            font-size: 1.25rem;
+        }
+        
+        /* 段位信息 */
+        .tier-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .rank-icon {
+            transform: translateZ(0);
+        }
+        
+        .rank-icon img {
+            width: 6rem;
+            height: 6rem;
+            object-fit: contain;
+        }
+        
+        .rank-text {
+            color: #fff;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            letter-spacing: 1px;
+        }
+        
+        /* 分数信息 */
+        .score-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        
+        .score-number {
+            color: #fff;
+            font-size: 3rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            letter-spacing: 1px;
+        }
+        
+        .score-label {
+            color: #d1d5db;
+            font-size: 1.25rem;
+        }
+        
+        /* 水印 */
+        .watermark {
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            color: #fff;
+            opacity: 0.5;
+        }
+        
+        /* 性能优化 */
+        img {
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            transform: translateZ(0);
+            width: auto;
+            height: auto;
+            max-width: 100%;
+        }
+        
+        /* 垂直分隔线样式 */
+        .vertical-divider {
+            width: 1px;
+            height: 80%;
+            background: rgba(255, 255, 255, 0.2);
+            margin: 0 1rem;
+            align-self: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-container">
+        <!-- 标题 -->
+        <div class="title-container">
+            <h1 class="title-text">
+                <img src="../images/rank_info.png" alt="The Finals Logo" class="title-logo" loading="eager" decoding="async">
+            </h1>
+        </div>
+        
+        <!-- 玻璃态信息框 -->
+        <div class="content-box glass-effect">
+            <!-- 玩家ID -->
+            <div class="player-info">
+                <div class="player-text">
+                    <span class="player-name">{{ player_name }}</span>
+                    <span class="player-tag">#{{ player_tag }}</span>
+                </div>
+            </div>
+            
+            <!-- 垂直分隔线 -->
+            <div class="vertical-divider"></div>
+            
+            <!-- 排名 -->
+            <div class="rank-info">
+                <span class="rank-number">#{{ rank }}</span>
+                <div class="flex items-center gap-2">
+                    <span class="rank-label">RANK</span>
+                    <span class="rank-change {{ rank_trend_color }}">{{ rank_trend }}{{ rank_change }}</span>
+                </div>
+            </div>
+
+            <!-- 段位信息 -->
+            <div class="tier-info">
+                <!-- 段位图标 -->
+                <div class="rank-icon">
+                    <img src="{{ rank_icon }}" alt="rank" loading="eager" decoding="async">
+                </div>
+                <!-- 段位文本 -->
+                <span class="rank-text">{{ rank_text }}</span>
+            </div>
+            
+            <!-- 分数 -->
+            <div class="score-info">
+                <span class="score-number">{{ score }}RS</span>
+                <span class="score-label">SCORE</span>
+            </div>
+        </div>
+        
+        <!-- 水印 -->
+        <div class="watermark">
+            @Null_Pointer_ERR#5119 Picture | @Kuroko#0157 Design
+        </div>
+    </div>
+</body>
+</html>

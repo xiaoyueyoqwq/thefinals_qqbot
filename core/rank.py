@@ -382,10 +382,30 @@ class RankQuery:
                 if not template_data:
                     error_msg = "\n⚠️ 处理玩家数据时出错"
                     return None, error_msg, None, None
-                    
-                # 生成图片
+
+                # 根据赛季选择HTML模板文件路径
+                if season == "s7":
+                    html_template_path_to_use = os.path.join(self.template_dir, "rank_s7.html")
+                else:
+                    html_template_path_to_use = self.html_template_path # 默认模板 rank.html
+
+                # 读取HTML模板内容
+                try:
+                    with open(html_template_path_to_use, 'r', encoding='utf-8') as f:
+                        html_template_content = f.read()
+                except FileNotFoundError:
+                    error_msg = f"\n❌ 模板文件未找到: {os.path.basename(html_template_path_to_use)}"
+                    bot_logger.error(error_msg)
+                    return None, error_msg, None, None
+                except Exception as e:
+                    error_msg = f"\n⚠️ 读取模板文件时出错: {str(e)}"
+                    bot_logger.error(error_msg, exc_info=True)
+                    return None, error_msg, None, None
+
+                # 生成图片，传入HTML模板内容
                 image_data = await self.image_generator.generate_image(
                     template_data=template_data,
+                    html_content=html_template_content, # 传入模板内容
                     wait_selectors=['.rank-icon img', '.bg-container']
                 )
                 

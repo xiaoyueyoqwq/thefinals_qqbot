@@ -183,6 +183,7 @@ class ImageGenerator:
         return hashlib.sha256(json_str.encode()).hexdigest()
             
     async def generate_image(self, template_data: dict, 
+                           html_content: Optional[str] = None, # 添加新的参数
                            wait_selectors: Optional[List[str]] = None,
                            image_quality: int = 85) -> Optional[bytes]:
         """生成图片"""
@@ -199,7 +200,7 @@ class ImageGenerator:
                 content_hash = self._compute_content_hash(template_data)
                 
                 # 如果内容没有变化且资源加载正常，直接截图
-                if content_hash == self._last_content_hash and not self._resource_load_error:
+                if content_hash == self._last_content_hash and not self._resource_load_error and self._page:
                     bot_logger.info("[ImageGenerator] 使用缓存内容生成图片")
                     return await self._page.screenshot(
                         full_page=True,
@@ -208,37 +209,44 @@ class ImageGenerator:
                         scale='device'
                     )
                 
+                # 使用提供的html_content或缓存的模板
+                template_to_render = html_content if html_content is not None else self._template_cache['base']
+
                 # 替换模板变量
-                html_content = self._template_cache['base']
+                html_to_set = template_to_render
                 for key, value in template_data.items():
-                    html_content = html_content.replace(f"{{{{ {key} }}}}", str(value))
+                    html_to_set = html_to_set.replace(f"{{{{ {key} }}}}", str(value))
 
                 # 更新页面内容
-                await self._page.set_content(html_content)
-                self._last_content_hash = content_hash
-                
-                # 并行等待所有选择器
-                if wait_selectors:
-                    try:
-                        await asyncio.gather(*[
-                            self._page.wait_for_selector(selector, timeout=200)
-                            for selector in wait_selectors
-                        ])
-                    except TimeoutError as e:
-                        bot_logger.error(f"[ImageGenerator] 等待元素加载超时: {str(e)}")
-                        # 不中断执行，继续尝试生成图片
-                
-                # 等待资源加载
-                await self._wait_for_resources()
+                if self._page:
+                    await self._page.set_content(html_to_set)
+                    self._last_content_hash = self._compute_content_hash(template_data) # 重新计算哈希，因为模板可能变了
 
-                # 即使资源加载有错误也尝试截图
-                screenshot = await self._page.screenshot(
-                    full_page=True,
-                    type='jpeg',
-                    quality=image_quality,
-                    scale='device'
-                )
-                return screenshot
+                    # 并行等待所有选择器
+                    if wait_selectors:
+                        try:
+                            await asyncio.gather(*[
+                                self._page.wait_for_selector(selector, timeout=200)
+                                for selector in wait_selectors
+                            ])
+                        except TimeoutError as e:
+                            bot_logger.error(f"[ImageGenerator] 等待元素加载超时: {str(e)}")
+                            # 不中断执行，继续尝试生成图片
+                    
+                    # 等待资源加载
+                    await self._wait_for_resources()
+
+                    # 即使资源加载有错误也尝试截图
+                    screenshot = await self._page.screenshot(
+                        full_page=True,
+                        type='jpeg',
+                        quality=image_quality,
+                        scale='device'
+                    )
+                    return screenshot
+                else:
+                    bot_logger.error("[ImageGenerator] 页面未初始化，无法生成图片")
+                    return None
 
         except Exception as e:
             bot_logger.error(f"[ImageGenerator] 生成图片时出错: {str(e)}")
@@ -261,4 +269,4 @@ class ImageGenerator:
         self._preheated = False
         self._resources_loaded = False
         self._last_content_hash = None
-        bot_logger.info("[ImageGenerator] 已关闭") 
+        bot_logger.info("[ImageGenerator] 已关闭")
