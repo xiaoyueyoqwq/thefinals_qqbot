@@ -2,8 +2,7 @@
 import sys
 import asyncio
 import concurrent.futures
-from functools import partial
-from typing import Optional, Any, Dict
+from typing import Any, Dict
 from injectors import inject_all as inject_botpy
 import botpy
 import uvicorn
@@ -22,9 +21,6 @@ import time
 import signal
 import gc
 import weakref
-
-
-import faulthandler
 import signal
 import platform
 import traceback
@@ -35,7 +31,6 @@ from utils.image_manager import ImageManager
 from datetime import datetime
 import argparse
 from pathlib import Path
-from core.df_safescore_fetcher import SafeScoreFetcher
 
 # 全局变量，用于在信号处理函数中访问
 client = None
@@ -344,10 +339,6 @@ class MyBot(botpy.Client):
         register_resource(self)
         register_resource(self.thread_pool)
         
-        # 初始化安全保证分数抓取器
-        self.safe_score_fetcher = SafeScoreFetcher()
-        register_resource(self.safe_score_fetcher)
-
         # 优化内存管理
         self._setup_memory_management()
         
@@ -513,9 +504,6 @@ class MyBot(botpy.Client):
             
             # 初始化插件
             await self._init_plugins()
-
-            # 启动安全保证分数抓取器
-            await self.safe_score_fetcher.start()
 
             # 启动健康检查
             self.health_check_task = self.create_task(
@@ -810,14 +798,6 @@ class MyBot(botpy.Client):
                 except Exception as e:
                     bot_logger.error(f"最终资源清理时出错: {str(e)}")
                 
-                # 停止安全保证分数抓取器
-                if self.safe_score_fetcher:
-                    try:
-                        await self.safe_score_fetcher.stop()
-                        bot_logger.debug("安全保证分数抓取器已停止")
-                    except Exception as e:
-                        bot_logger.error(f"停止安全保证分数抓取器时出错: {str(e)}")
-
                 self._cleanup_done = True
                 bot_logger.info("资源清理完成")
                 

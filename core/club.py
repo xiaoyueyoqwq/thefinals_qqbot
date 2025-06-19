@@ -38,7 +38,7 @@ class ClubAPI(BaseAPI):
                 return None
                 
             # 在返回的数据中过滤匹配的俱乐部标签
-            filtered_data = [club for club in data if club.get("clubTag", "").lower() == clean_tag.lower()]
+            filtered_data = [club for club in data if isinstance(club, dict) and club.get("clubTag", "").lower() == clean_tag.lower()]
             return filtered_data
             
         except Exception as e:
@@ -112,7 +112,7 @@ class ClubQuery:
                 
         return "\n".join(result)
 
-    async def format_response(self, club_data: List[dict]) -> str:
+    async def format_response(self, club_data: Optional[List[dict]]) -> str:
         """格式化响应消息"""
         if not club_data:
             return (
@@ -126,20 +126,32 @@ class ClubQuery:
         
         # 异步获取成员信息
         members_info = await self._format_members_info(members)
-        
-        return (
-            f"\n🎮 战队信息 | THE FINALS\n"
-            f"{SEPARATOR}\n"
-            f"📋 标签: {club_tag}\n"
-            f"👥 成员列表 (共{len(members)}人):\n"
-            f"{members_info}\n"
-            f"{SEPARATOR}\n"
-            f"📊 战队排名:\n"
-            f"{self._format_leaderboard_info(leaderboards)}\n"
-            f"{SEPARATOR}"
-        )
 
-    async def process_club_command(self, club_tag: str = None) -> str:
+        # 处理战队排名区域
+        leaderboard_info = self._format_leaderboard_info(leaderboards)
+        show_leaderboard = bool(leaderboards) and leaderboard_info and leaderboard_info != "暂无排名数据"
+        if show_leaderboard:
+            return (
+                f"\n🎮 战队信息 | THE FINALS\n"
+                f"{SEPARATOR}\n"
+                f"📋 标签: {club_tag}\n"
+                f"👥 成员列表 (共{len(members)}人):\n"
+                f"{members_info}\n"
+                f"{SEPARATOR}\n"
+                f"📊 战队排名:\n{leaderboard_info}\n"
+                f"{SEPARATOR}"
+            )
+        else:
+            return (
+                f"\n🎮 战队信息 | THE FINALS\n"
+                f"{SEPARATOR}\n"
+                f"📋 标签: {club_tag}\n"
+                f"👥 成员列表 (共{len(members)}人):\n"
+                f"{members_info}\n"
+                f"{SEPARATOR}"
+            )
+
+    async def process_club_command(self, club_tag: Optional[str] = None) -> str:
         """处理俱乐部查询命令"""
         if not club_tag:
             return (
@@ -175,4 +187,4 @@ class ClubQuery:
             gc.collect()
             bot_logger.debug(f"手动GC执行完成 after /club {club_tag}")
             
-        return result 
+        return result

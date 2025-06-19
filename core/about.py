@@ -17,7 +17,7 @@ class AboutUs:
         if self._initialized:
             return
             
-        self.version = "v3.2.1"
+        self.version = "v4.3.0"
         self.github_url = "https://github.com/xiaoyueyoqwq"
         self.api_credit = settings.API_STANDARD_URL.replace("/v1", "")  # 移除版本号
         self._initialized = True
@@ -57,7 +57,8 @@ class AboutUs:
                 "📋 项目信息:\n"
                 f"• 版本: Release {self.version}\n"
                 "• 开发者: xiaoyueyoqwq\n"
-                "• UX/UI设计：SHIA_NANA\n"
+                "• UX/UI设计：Kuroko#0157\n"
+                "• s7赛季图作者：Null_Pointer_ERR#5119\n"
                 "• 技术支持：Shuakami\n\n"
                 "💡 问题反馈:\n"
                 "• 请联系xiaoyueyoqwq@gmail邮箱\n"

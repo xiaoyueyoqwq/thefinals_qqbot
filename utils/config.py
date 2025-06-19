@@ -59,10 +59,6 @@ class Settings:
     IMAGE_LIFETIME = _config.get("image", {}).get("storage", {}).get("lifetime", 24)
     IMAGE_CLEANUP_INTERVAL = _config.get("image", {}).get("storage", {}).get("cleanup_interval", 1)
     
-    # 安全保证分数抓取配置
-    SAFE_SCORE_ENABLED = _config.get("safe_score", {}).get("enabled", True)
-    SAFE_SCORE_UPDATE_INTERVAL = _config.get("safe_score", {}).get("update_interval", 5)
-
     @property
     def api_base_url(self) -> str:
         """返回当前使用的API基础URL"""
@@ -108,14 +104,6 @@ class Settings:
                 "lifetime": self.IMAGE_LIFETIME,
                 "cleanup_interval": self.IMAGE_CLEANUP_INTERVAL
             }
-        }
-    
-    @property
-    def safe_score(self) -> dict:
-        """返回安全保证分数抓取配置"""
-        return {
-            "enabled": self.SAFE_SCORE_ENABLED,
-            "update_interval": self.SAFE_SCORE_UPDATE_INTERVAL
         }
 
 settings = Settings()

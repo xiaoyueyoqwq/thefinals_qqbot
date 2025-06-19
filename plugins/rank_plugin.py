@@ -82,9 +82,11 @@ class RankPlugin(Plugin):
                 
             # 使用handler的send_image方法发送图片
             bot_logger.debug(f"[{self.name}] 使用base64发送图片")
-            if not await handler.send_image(image_data):
-                await self.reply(handler, "\n⚠️ 发送图片时发生错误")
-                    
+            if image_data is not None:
+                if not await handler.send_image(image_data):
+                    await self.reply(handler, "\n⚠️ 发送图片时发生错误")
+            else:
+                await self.reply(handler, "\n⚠️ 查询未返回图片数据")                    
         except TypeError as e:
             bot_logger.error(f"[{self.name}] 查询返回值格式错误: {str(e)}", exc_info=True)
             await self.reply(handler, "\n⚠️ 查询失败，请稍后重试")

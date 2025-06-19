@@ -4,7 +4,6 @@ from core.df import DFQuery
 from utils.logger import bot_logger
 import asyncio
 from utils.templates import SEPARATOR
-from core.df_safescore_fetcher import SafeScoreFetcher
 from utils.config import settings # Import settings to get current season
 from datetime import datetime, date, timedelta # Import datetime for current time and date for yesterday's data
 
@@ -15,7 +14,6 @@ class DFPlugin(Plugin):
         """初始化底分查询插件"""
         super().__init__()
         self.df_query = DFQuery()
-        self.safe_score_fetcher = SafeScoreFetcher() # 初始化 SafeScoreFetcher
         bot_logger.debug(f"[{self.name}] 初始化底分查询插件")
         
     def start_tasks(self):
@@ -30,13 +28,11 @@ class DFPlugin(Plugin):
         bot_logger.debug(f"[{self.name}] 开始加载底分查询插件")
         await super().on_load()  # 等待父类的 on_load 完成
         await self.df_query.start()  # 初始化DFQuery
-        await self.safe_score_fetcher.start() # 启动 SafeScoreFetcher
         bot_logger.info(f"[{self.name}] 底分查询插件已加载")
         
     async def on_unload(self):
         """插件卸载时的处理"""
         await self.df_query.stop()  # 停止所有任务
-        await self.safe_score_fetcher.stop() # 停止 SafeScoreFetcher
         await super().on_unload()
         bot_logger.info(f"[{self.name}] 底分查询插件已卸载")
         
@@ -46,7 +42,13 @@ class DFPlugin(Plugin):
         try:
             # 获取数据
             data = await self.df_query.get_bottom_scores()
-            safe_score = await self.safe_score_fetcher.get_safe_score() # 获取安全保证分数
+            
+            safe_score = None
+            safe_score_last_update = None
+            # 从 SafeScoreManagerPlugin 获取安全分
+            safe_score_plugin = self._plugin_manager.plugins.get("SafeScoreManagerPlugin")
+            if safe_score_plugin:
+                safe_score, safe_score_last_update = safe_score_plugin.get_safe_score()
 
             # 获取当前赛季和时间
             current_season = settings.CURRENT_SEASON
@@ -58,9 +60,15 @@ class DFPlugin(Plugin):
 
             # 添加安全保证分数
             if safe_score is not None:
-                response += f"🛡️当前安全分：{safe_score:,}\n"
+                response += f"🛡️当前安全分: {safe_score:,}"
+                if safe_score_last_update:
+                    # 格式化时间
+                    last_update_str = datetime.fromtimestamp(safe_score_last_update).strftime('%Y-%m-%d %H:%M:%S')
+                    response += f" (更新于: {last_update_str})\n"
+                else:
+                    response += "\n"
             else:
-                 response += f"🛡️当前安全分：暂无数据\n"
+                 response += f"🛡️当前安全分: 暂未设置\n"
 
             response += "\n"
 
@@ -114,16 +122,13 @@ class DFPlugin(Plugin):
 
             # 添加小贴士
             response += "\n💡 关于安全分:\n"
-            response += "本分数从thefinals,lol抓取\n"
+            response += "本分数由社区自行更新\n"
             response += "如达到此分数则一定能拿红宝石\n"
             response += "并且分数添加了500RS以做缓冲"
 
             await handler.send_text(response)
 
         except Exception as e:
-            error_msg = (
-                f"\n⚠️ 查询失败\n"
-                f"{SEPARATOR}\n"
-            )
-            bot_logger.error(f"[{self.name}] 处理底分查询失败: {str(e)}")
+            error_msg = f"查询失败: {e}"
+            bot_logger.error(f"[{self.name}] 处理底分查询失败: {str(e)}", exc_info=True)
             await handler.send_text(error_msg)

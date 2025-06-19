@@ -63,12 +63,13 @@ class SeasonConfig:
 class Season:
     """赛季数据管理"""
     
-    def __init__(self, season_id: str, display_name: str, api: BaseAPI, cache: CacheManager, rotation: int = 60):
+    def __init__(self, season_id: str, display_name: str, api: BaseAPI, cache: CacheManager, headers: Dict[str, str], rotation: int = 60):
         """初始化赛季实例"""
         self.season_id = season_id
         self.display_name = display_name
         self.api = api
         self.cache = cache
+        self.headers = headers # Store headers
         self.rotation = rotation
         self._update_task = None
         self._stop_event = asyncio.Event()
@@ -76,7 +77,12 @@ class Season:
         
         # 判断是否需要持久化
         self._is_current = SeasonConfig.is_current_season(season_id)
-        self._storage = cache if self._is_current else PersistenceManager()
+        
+        # 初始化 PersistenceManager 实例
+        self.persistence = PersistenceManager()
+        
+        # 根据是否为当前赛季设置存储方式
+        self._storage = self.cache if self._is_current else self.persistence
         
         # 添加缺失的属性
         self.api_prefix = SeasonConfig.API_PREFIX
@@ -93,9 +99,9 @@ class Season:
         try:
             # 注册存储
             if self._is_current:
-                await self._storage.register_database(self.cache_name)
+                await self.cache.register_database(self.cache_name)
             else:
-                await self._storage.register_database(
+                await self.persistence.register_database(
                     self.cache_name,
                     tables={
                         "player_data": {
@@ -152,7 +158,7 @@ class Season:
             
             # 1. 获取玩家列表
             api_url = SeasonConfig.get_api_url(self.season_id)
-            response = await self.api.get(api_url)
+            response = await self.api.get(api_url, headers=self.headers) # Pass headers
             players = []
             
             if response and response.status_code == 200:
@@ -171,8 +177,8 @@ class Season:
             if self._is_current:
                 # 使用缓存存储
                 # 优化: 生成新数据前先清理旧数据
-                if hasattr(self._storage, 'cleanup_expired'):
-                    await self._storage.cleanup_expired(self.cache_name)
+                if hasattr(self.cache, 'cleanup_expired'):
+                    await self.cache.cleanup_expired(self.cache_name)
                 
                 # 优化: 减少内存使用的批量更新
                 batch_size = 100  # 每批处理的玩家数
@@ -186,7 +192,7 @@ class Season:
                             cache_data[cache_key] = json.dumps(player)
                     
                     if cache_data:
-                        await self._storage.batch_set_cache(
+                        await self.cache.batch_set_cache(
                             self.cache_name,
                             cache_data,
                             expire_seconds=self.update_interval * 2
@@ -196,7 +202,7 @@ class Season:
                 
                 # 更新top_players缓存
                 top_players = [p["name"] for p in players[:5]]
-                await self._storage.set_cache(
+                await self.cache.set_cache(
                     self.cache_name,
                     "top_players",
                     json.dumps(top_players),
@@ -210,7 +216,7 @@ class Season:
                 # 使用持久化存储
                 # 删除旧数据
                 try:
-                    await self._storage.execute("DELETE FROM player_data WHERE updated_at < ?", 
+                    await self.persistence.execute(self.cache_name, "DELETE FROM player_data WHERE updated_at < ?",
                                                (int(datetime.now().timestamp()) - self.update_interval * 3,))
                 except Exception as e:
                     bot_logger.error(f"[Season] 清理过期数据失败: {str(e)}")
@@ -229,7 +235,7 @@ class Season:
                             ))
                     
                     if operations:
-                        await self._storage.execute_transaction(operations)
+                        await self.persistence.execute_transaction(self.cache_name, operations)
                         # 清理局部变量，帮助GC
                         del operations
             
@@ -247,24 +253,24 @@ class Season:
             if self._is_current:
                 # 从缓存获取数据
                 cache_key = f"player_{player_name}"
-                cached_data = await self._storage.get_cache(self.cache_name, cache_key)
+                cached_data = await self.cache.get_cache(self.cache_name, cache_key)
                 
                 if not cached_data:
                     # 尝试模糊匹配
-                    all_data = await self._storage.get_all_valid(self.cache_name)
+                    all_data = await self.cache.get_all_valid(self.cache_name)
                     matched_keys = [k for k in all_data.keys() if player_name in k.lower()]
                     if matched_keys:
                         cached_data = all_data[matched_keys[0]]
             else:
                 # 从持久化存储获取数据
                 sql = "SELECT data FROM player_data WHERE player_name = ?"
-                row = await self._storage.fetch_one(self.cache_name, sql, (player_name,))
+                row = await self.persistence.fetch_one(self.cache_name, sql, (player_name,))
                 if row:
                     cached_data = row['data']
                 else:
                     # 尝试模糊匹配
                     sql = "SELECT data FROM player_data WHERE player_name LIKE ?"
-                    rows = await self._storage.fetch_all(self.cache_name, sql, (f"%{player_name}%",))
+                    rows = await self.persistence.fetch_all(self.cache_name, sql, (f"%{player_name}%",))
                     if rows:
                         cached_data = rows[0]['data']
             
@@ -288,7 +294,7 @@ class Season:
         """获取排名前N的玩家"""
         try:
             # 只从缓存获取数据
-            cached_data = await self._storage.get_cache(self.cache_name, "top_players")
+            cached_data = await self.cache.get_cache(self.cache_name, "top_players")
             if cached_data:
                 try:
                     return json.loads(cached_data)[:limit]
@@ -318,7 +324,7 @@ class Season:
             bot_logger.info(f"[Season] 开始获取所有玩家数据 - {self.season_id}")
             
             # 从缓存获取所有有效数据
-            all_data = await self._storage.get_all_valid(self.cache_name)
+            all_data = await self.cache.get_all_valid(self.cache_name)
             if not all_data:
                 bot_logger.warning(f"[Season] 缓存中没有玩家数据 - {self.season_id}")
                 return []
@@ -346,11 +352,12 @@ class Season:
 class HistorySeason:
     """历史赛季数据管理"""
     
-    def __init__(self, season_id: str, display_name: str, api: BaseAPI, persistence: PersistenceManager):
+    def __init__(self, season_id: str, display_name: str, api: BaseAPI, persistence: PersistenceManager, headers: Dict[str, str]):
         self.season_id = season_id
         self.display_name = display_name
         self.api = api
         self.persistence = persistence
+        self.headers = headers # Store headers
         self._initialized = False
         
         # 添加数据库相关属性
@@ -400,22 +407,26 @@ class HistorySeason:
                 )
                 return
                 
+            bot_logger.info(f"[HistorySeason] 赛季 {self.season_id} 数据库无数据，开始从API获取...") # Added log
+
             # 3. 从API获取数据
             url = SeasonConfig.get_api_url(self.season_id)
-            response = await self.api.get(url)
+            response = await self.api.get(url, headers=self.headers)
             
             if not response or response.status_code != 200:
-                bot_logger.error(f"赛季 {self.season_id} API请求失败")
+                bot_logger.error(f"[HistorySeason] 赛季 {self.season_id} API请求失败或返回非200状态码: {response.status_code if response else 'No response'}") # Modified log
                 return
                 
             data = self.api.handle_response(response)
             if not isinstance(data, dict):
-                bot_logger.error(f"赛季 {self.season_id} API返回数据格式错误")
+                bot_logger.error(f"[HistorySeason] 赛季 {self.season_id} API返回数据格式错误") # Modified log
                 return
                 
             players = data.get("data", [])
+            bot_logger.info(f"[HistorySeason] 赛季 {self.season_id} 从API获取到 {len(players)} 条玩家数据") # Added log
+
             if not players:
-                bot_logger.warning(f"赛季 {self.season_id} 未获取到玩家数据")
+                bot_logger.warning(f"[HistorySeason] 赛季 {self.season_id} 未获取到玩家数据") # Modified log
                 return
                 
             # 4. 保存数据到数据库
@@ -439,12 +450,16 @@ class HistorySeason:
                     )
                 ))
             
+            bot_logger.info(f"[HistorySeason] 赛季 {self.season_id} 生成 {len(operations)} 条数据库插入操作") # Added log
+
             if operations:
                 await self._persistence.execute_transaction(self.db_name, operations)
-                bot_logger.info(f"赛季 {self.season_id} 已导入 {len(operations)} 条玩家数据")
-            
+                bot_logger.info(f"[HistorySeason] 赛季 {self.season_id} 已导入 {len(operations)} 条玩家数据到数据库") # Modified log
+            else:
+                bot_logger.warning(f"[HistorySeason] 赛季 {self.season_id} 没有生成有效的数据库插入操作") # Added log
+
         except Exception as e:
-            bot_logger.error(f"赛季 {self.season_id} 数据库初始化失败: {str(e)}")
+            bot_logger.error(f"[HistorySeason] 赛季 {self.season_id} 数据库初始化失败: {str(e)}") # Modified log
             raise
             
     async def get_player_data(self, player_name: str) -> Optional[dict]:
@@ -527,7 +542,9 @@ class SeasonManager:
             SeasonConfig.API_BASE_URL,
             timeout=SeasonConfig.API_TIMEOUT
         )
-        self.api.headers = {
+        
+        # API Headers
+        self.api_headers = {
             "Accept": "application/json",
             "User-Agent": "TheFinals-Bot/1.0"
         }
@@ -562,6 +579,7 @@ class SeasonManager:
                                     display_name,
                                     self.api,
                                     self.cache,
+                                    self.api_headers, # Pass headers
                                     SeasonConfig.UPDATE_INTERVAL
                                 )
                             else:
@@ -569,7 +587,8 @@ class SeasonManager:
                                     season_id,
                                     display_name,
                                     self.api,
-                                    self.persistence
+                                    self.persistence,
+                                    self.api_headers # Pass headers
                                 )
                                 
                             await season.initialize()
