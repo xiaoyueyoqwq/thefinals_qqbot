@@ -37,7 +37,8 @@ class SeasonConfig:
         "s3": "Season 3",
         "s4": "Season 4",
         "s5": "Season 5",
-        "s6": "Season 6"
+        "s6": "Season 6",
+        "s7": "Season 7"
     }
     
     @classmethod
