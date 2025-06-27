@@ -146,7 +146,7 @@ class LeaderboardPlugin(Plugin):
             except Exception as e:
                 # 所有异常都当作未找到玩家信息处理
                 self.logger.info(f"[{self.name}] 获取玩家信息失败，视为未找到玩家: {str(e)}")
-                await self.reply(handler, f"\n⚠️ 输入的玩家ID不完整（没带尾号ID）")
+                await self.reply(handler, f"\n⚠️ 输入的玩家ID不完整（没带尾号ID或无数据）")
                 return
             
             # 生成走势图
