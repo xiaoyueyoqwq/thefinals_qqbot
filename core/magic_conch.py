@@ -1,7 +1,6 @@
 import orjson as json
 import os
 import random
-from pathlib import Path
 from utils.logger import bot_logger
 
 class MagicConch:
@@ -9,21 +8,25 @@ class MagicConch:
     
     def __init__(self):
         """初始化神奇海螺"""
-        self.data_file = Path("data/magic_conch.json")
         self.answers = self._load_answers()
         
     def _load_answers(self) -> list:
-        """加载答案列表"""
-        if not self.data_file.exists():
-            # 如果文件不存在，返回一个默认的答案列表
-            return ["是的", "不是", "可能吧", "再问一次", "我不知道"]
+        """加载答案数据"""
         try:
-            with open(self.data_file, 'rb') as f:
+            config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "magic_conch.json")
+            bot_logger.debug("[MagicConch] 正在加载答案文件")
+            
+            # 确保data目录存在
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            
+            with open(config_path, 'rb') as f:
                 data = json.loads(f.read())
-                return data.get("answers", [])
-        except Exception:
-            # 文件损坏时也返回默认列表
-            return ["是的", "不是", "可能吧", "再问一次", "我不知道"]
+                answers = data.get("answers", [])
+                bot_logger.info(f"[MagicConch] 成功加载 {len(answers)} 条答案")
+                return answers
+        except Exception as e:
+            bot_logger.error(f"[MagicConch] 加载答案数据失败: {str(e)}")
+            return ["神奇海螺暂时无法回答"]
             
     def get_answer(self) -> str:
         """获取随机答案"""

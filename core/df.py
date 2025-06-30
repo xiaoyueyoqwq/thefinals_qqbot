@@ -1,7 +1,7 @@
 import aiohttp
 import asyncio
 from datetime import datetime, timedelta, date
-import orjson as json
+import json
 from pathlib import Path
 from utils.logger import bot_logger
 from utils.db import DatabaseManager, with_database, DatabaseError
@@ -205,6 +205,11 @@ class DFQuery:
             if not season:
                 raise Exception("无法获取当前赛季")
                 
+            # 获取所有玩家数据
+            all_data_generator = season.get_all_players()
+            if not all_data_generator:
+                raise Exception("未获取到玩家数据")
+                
             # 准备更新操作
             update_time = datetime.now()
             operations = []
@@ -212,7 +217,7 @@ class DFQuery:
             
             # 只保存第500名和第10000名的数据
             target_ranks = {500, 10000}
-            async for player_data in season.get_all_players():
+            async for player_data in all_data_generator:
                 rank = player_data.get('rank')
                 if rank in target_ranks:
                     # 准备数据库更新
@@ -232,6 +237,10 @@ class DFQuery:
                     }
             
             # 更新数据库
+            if not operations:
+                bot_logger.warning("[DFQuery] 未找到目标排名 (500, 10000) 的数据，未更新数据库。")
+                return
+
             await self.db.execute_transaction(operations)
             
             # 更新缓存
