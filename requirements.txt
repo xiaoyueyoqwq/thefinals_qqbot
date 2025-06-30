@@ -2,7 +2,7 @@
 websockets
 aiohttp
 httpx
-botpy
+qq-botpy
 requests
 beautifulsoup4
 playwright
