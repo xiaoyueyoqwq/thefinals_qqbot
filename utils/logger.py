@@ -26,6 +26,19 @@ LOG_ENCODING = "utf-8"
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _path_formatter(record):
+    """将日志记录中的绝对路径转换为相对于项目根目录的路径字符串。"""
+    # 确保 extra 字典存在
+    record["extra"].setdefault("file_path", record["file"].path)
+    try:
+        # 尝试生成相对路径
+        relative_path = Path(record["file"].path).relative_to(PROJECT_ROOT)
+        record["extra"]["file_path"] = str(relative_path)
+    except (ValueError, TypeError):
+        # 如果生成失败（例如，路径不在项目内），则使用原始路径
+        record["extra"]["file_path"] = record["file"].path
+
+
 class GZipRotator:
     """
     一个可靠的、在后台线程中执行压缩的旋转器。
@@ -100,24 +113,16 @@ def initialize_logging(log_level="INFO"):
     """
     配置loguru日志记录器。
     """
-    print_banner()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     
     # 移除所有默认处理器，以完全控制配置
     logger.remove()
 
-    def path_formatter(record):
-        record["extra"]["file_path"] = Path(record["file"].path).relative_to(PROJECT_ROOT)
-
-    logger.patch(path_formatter)
-
     # 配置控制台输出
     logger.add(
         sys.stdout,
         level=log_level,
-        format="<green>{time:MM-DD HH:mm:ss}</green> | "
-               "<level>{level: <5}</level> | "
-               "<cyan>{extra[file_path]}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        format="<green>{time:MM-DD HH:mm:ss}</green> | <level>{level.name}</level> | <cyan>{file.name}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
         colorize=True,
         enqueue=True,  # 在多进程或高并发环境下保证安全
         backtrace=True,
@@ -131,7 +136,7 @@ def initialize_logging(log_level="INFO"):
     logger.add(
         log_file_path,
         level="DEBUG",
-        format="{time:MM-DD HH:mm:ss} | {level: <5} | {extra[file_path]}:{line} - {message}",
+        format="{time:MM-DD HH:mm:ss} | {level.name} | {file.name}:{line} - {message}",
         rotation=LOG_ROTATION,
         retention=LOG_RETENTION,
         compression=rotator,  # 使用自定义的后台压缩器
@@ -146,7 +151,7 @@ def initialize_logging(log_level="INFO"):
     logger.add(
         error_log_path,
         level="ERROR",
-        format="{time:MM-DD HH:mm:ss} | {level: <5} | {extra[file_path]}:{line} - {message}",
+        format="{time:MM-DD HH:mm:ss} | {level.name} | {file.name}:{line} - {message}",
         rotation="10 MB",
         retention="30 days",
         compression="zip",
@@ -164,9 +169,6 @@ def close_logging():
     """
     logger.info("正在关闭日志系统...")
     logger.remove()
-
-# 在模块加载时自动初始化
-# initialize_logging()
-
+    
 # 导出 bot_logger 供其他模块使用
 __all__ = ["bot_logger", "initialize_logging", "close_logging"]
