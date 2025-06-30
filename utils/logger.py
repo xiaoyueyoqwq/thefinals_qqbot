@@ -23,6 +23,7 @@ LOG_ROTATION = time(0, 0, 0)  # 每天午夜轮转
 LOG_RETENTION = "7 days"       # 保留7天的日志
 LOG_COMPRESSION = "gz"       # 使用gzip压缩
 LOG_ENCODING = "utf-8"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class GZipRotator:
@@ -105,13 +106,18 @@ def initialize_logging(log_level="INFO"):
     # 移除所有默认处理器，以完全控制配置
     logger.remove()
 
+    def path_formatter(record):
+        record["extra"]["file_path"] = Path(record["file"].path).relative_to(PROJECT_ROOT)
+
+    logger.patch(path_formatter)
+
     # 配置控制台输出
     logger.add(
         sys.stdout,
         level=log_level,
         format="<green>{time:MM-DD HH:mm:ss}</green> | "
-               "<level>{level}</level> | "
-               "<cyan>{file.name}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+               "<level>{level: <5}</level> | "
+               "<cyan>{extra[file_path]}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
         colorize=True,
         enqueue=True,  # 在多进程或高并发环境下保证安全
         backtrace=True,
@@ -125,7 +131,7 @@ def initialize_logging(log_level="INFO"):
     logger.add(
         log_file_path,
         level="DEBUG",
-        format="{time:MM-DD HH:mm:ss} | {level} | {file.name}:{line} - {message}",
+        format="{time:MM-DD HH:mm:ss} | {level: <5} | {extra[file_path]}:{line} - {message}",
         rotation=LOG_ROTATION,
         retention=LOG_RETENTION,
         compression=rotator,  # 使用自定义的后台压缩器
@@ -140,7 +146,7 @@ def initialize_logging(log_level="INFO"):
     logger.add(
         error_log_path,
         level="ERROR",
-        format="{time:MM-DD HH:mm:ss} | {level} | {file.name}:{line} - {message}",
+        format="{time:MM-DD HH:mm:ss} | {level: <5} | {extra[file_path]}:{line} - {message}",
         rotation="10 MB",
         retention="30 days",
         compression="zip",

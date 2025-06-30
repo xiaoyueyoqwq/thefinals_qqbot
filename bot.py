@@ -10,7 +10,7 @@ import orjson as json
 import psutil
 from botpy.message import GroupMessage, Message
 from utils.config import settings
-from utils.logger import bot_logger
+from utils.logger import bot_logger, initialize_logging
 from utils.browser import browser_manager
 from utils.message_handler import MessageHandler
 from core.plugin import PluginManager
@@ -1211,76 +1211,73 @@ def start_command_tester():
         raise
 
 def main():
-    """主函数"""
+    """主函数，启动机器人"""
+    global client, loop
+
+    # 初始化日志系统
+    initialize_logging()
+    
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="TheFinals QQ Bot")
+    parser.add_argument("-local", "--local", action="store_true", help="启动本地命令测试工具")
+    args = parser.parse_args()
+
+    # 如果指定了 -local 参数，启动命令测试工具
+    if args.local:
+        start_command_tester()
+        return
+
+    FINAL_CLEANUP_TIMEOUT = 10  # 最终清理超时时间（秒）
+    
+    # 创建新的event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    # 设置更好的异常处理
+    loop.set_exception_handler(custom_exception_handler)
+    
+    # 运行异步主函数
+    main_task = loop.create_task(async_main())
+    
     try:
-        # 解析命令行参数
-        parser = argparse.ArgumentParser(description="THE FINALS QQ机器人")
-        parser.add_argument("-local", "--local", action="store_true", help="启动本地命令测试工具")
-        args = parser.parse_args()
-
-        # 如果指定了 -local 参数，启动命令测试工具
-        if args.local:
-            start_command_tester()
-            return
-
-        FINAL_CLEANUP_TIMEOUT = 10  # 最终清理超时时间（秒）
+        client = loop.run_until_complete(main_task)
         
-        # 使用全局变量
-        global client, loop
-        
-        # 创建新的event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # 设置更好的异常处理
-        loop.set_exception_handler(custom_exception_handler)
-        
-        # 运行异步主函数
-        main_task = loop.create_task(async_main())
-        
-        try:
-            client = loop.run_until_complete(main_task)
+        # 设置信号处理器（在客户端初始化完成后）
+        if client:
+            setup_signal_handlers(loop, client)
             
-            # 设置信号处理器（在客户端初始化完成后）
-            if client:
-                setup_signal_handlers(loop, client)
-                
-            # 运行事件循环直到收到停止信号
-            loop.run_forever()
-            
-        except KeyboardInterrupt:
-            print("\n接收到KeyboardInterrupt，正在安全退出...")
-        except Exception as e:
-            bot_logger.error(f"运行时发生错误: {str(e)}")
-            traceback.print_exc()
-        finally:
-            # 执行清理
-            try:
-                if not loop.is_closed():
-                    # 清理资源
-                    loop.run_until_complete(
-                        asyncio.wait_for(
-                            cleanup_resources(),
-                            timeout=FINAL_CLEANUP_TIMEOUT
-                        )
-                    )
-                    
-                    # 关闭事件循环
-                    loop.close()
-                
-                # 清理Playwright进程
-                cleanup_playwright_processes()
-                
-            except Exception as e:
-                bot_logger.error(f"最终清理时出错: {str(e)}")
-            
-            # 确保程序最终会退出
-            ensure_exit(10)  # 10秒后强制退出
-            
+        # 运行事件循环直到收到停止信号
+        loop.run_forever()
+        
+    except KeyboardInterrupt:
+        print("\n接收到KeyboardInterrupt，正在安全退出...")
     except Exception as e:
-        bot_logger.error(f"发生错误: {e}")
-        force_exit()
-
+        bot_logger.error(f"运行时发生错误: {str(e)}")
+        traceback.print_exc()
+    finally:
+        # 执行清理
+        try:
+            if not loop.is_closed():
+                # 清理资源
+                loop.run_until_complete(
+                    asyncio.wait_for(
+                        cleanup_resources(),
+                        timeout=FINAL_CLEANUP_TIMEOUT
+                    )
+                )
+                
+                # 关闭事件循环
+                loop.close()
+            
+            # 清理Playwright进程
+            cleanup_playwright_processes()
+            
+        except Exception as e:
+            bot_logger.error(f"最终清理时出错: {str(e)}")
+        
+        # 确保程序最终会退出
+        ensure_exit(10)  # 10秒后强制退出
+        
 def custom_exception_handler(loop, context):
     """自定义异常处理器"""
     exception = context.get('exception')
