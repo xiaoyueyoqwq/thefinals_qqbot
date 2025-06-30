@@ -1,10 +1,12 @@
 """Flappy Bird 游戏核心功能"""
 
-import json
+import time
+import random
+import orjson as json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from utils.logger import bot_logger
 from utils.db import DatabaseManager, with_database, DatabaseError
 
@@ -17,6 +19,8 @@ class FlappyBirdCore:
         self.db = DatabaseManager(self.db_path)
         self.config_dir = Path("config")
         self.api_key = self._load_api_key()
+        self.config_path = Path("config/flappy_bird.json")
+        self.config = self._load_config()
         
     def _validate_api_key(self, api_key: str) -> bool:
         """验证API key格式
@@ -66,8 +70,9 @@ class FlappyBirdCore:
                 bot_logger.error("[FlappyBirdCore] 无法读取配置文件：权限不足")
                 return ""
                 
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
+            with open(config_path, "rb") as f:
+                config_data = f.read()
+                config = json.loads(config_data)
                 api_key = config.get("flappy_bird_key", "").strip()
                 
                 # 验证API key
@@ -379,4 +384,22 @@ class FlappyBirdCore:
                 "last_score": None,
                 "checked_at": datetime.now().isoformat(),
                 "error": str(e)
-            } 
+            }
+
+    def _load_config(self) -> Dict[str, Any]:
+        """加载游戏配置"""
+        try:
+            with open(self.config_path, 'rb') as f:
+                return json.loads(f.read())
+        except (FileNotFoundError, Exception):
+            # 如果文件不存在或损坏，使用默认配置
+            return {
+                "initial_velocity": -4,
+                "gravity": 0.25,
+                "jump_strength": 4,
+                "pipe_gap": 150,
+                "pipe_distance": 400
+            }
+
+    async def start_game(self, user_id: str, channel_id: str) -> Optional[str]:
+        pass 

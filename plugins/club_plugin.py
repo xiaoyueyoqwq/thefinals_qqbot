@@ -1,5 +1,6 @@
 from core.plugin import Plugin, on_command
 from core.club import ClubQuery
+from core.deep_search import DeepSearch
 
 class ClubPlugin(Plugin):
     """俱乐部查询插件"""
@@ -11,7 +12,9 @@ class ClubPlugin(Plugin):
     
     def __init__(self):
         super().__init__()  # 调用父类初始化
-        self.club_query = ClubQuery()
+        # 同时初始化 DeepSearch，并将其注入 ClubQuery
+        self.deep_search = DeepSearch()
+        self.club_query = ClubQuery(deep_search_instance=self.deep_search)
 
     @on_command("club", "查询俱乐部信息")
     async def handle_club_command(self, handler, content: str):

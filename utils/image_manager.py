@@ -43,13 +43,18 @@ class ImageManager:
         """确保存储目录存在且安全"""
         try:
             # 确保目录存在
-            os.makedirs(self.image_dir, exist_ok=True)
-            # 设置目录权限为 755
-            os.chmod(self.image_dir, 0o755)
-            bot_logger.info(f"图片存储目录: {self.image_dir}")
+            if not os.path.exists(self.image_dir):
+                os.makedirs(self.image_dir, exist_ok=True)
+                bot_logger.info(f"创建临时图片目录: {self.image_dir}")
+            
+            try:
+                os.chmod(self.image_dir, 0o755)
+            except PermissionError:
+                bot_logger.warning(f"无法在WSL挂载的目录上设置权限，忽略此错误: {self.image_dir}")
+
         except Exception as e:
-            bot_logger.error(f"初始化存储目录失败: {str(e)}")
-            raise
+            bot_logger.error(f"初始化存储目录失败: {e}")
+            raise e
             
     def _validate_image(self, image_data: bytes) -> bool:
         """验证图片数据

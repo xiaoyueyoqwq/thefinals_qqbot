@@ -1,5 +1,5 @@
 from core.plugin import Plugin, on_command, on_keyword, on_regex, on_event, Event, EventType
-from utils.logger import log, bot_logger
+from utils.logger import bot_logger
 import aiofiles
 
 class TestHelloPlugin(Plugin):
@@ -135,9 +135,9 @@ class TestHelloPlugin(Plugin):
     async def on_load(self) -> None:
         """插件加载"""
         await super().on_load()
-        log.info(f"[{self.name}] 插件加载完成")
+        bot_logger.info(f"[{self.name}] 插件加载完成")
         
     async def on_unload(self) -> None:
         """插件卸载""" 
         await super().on_unload()
-        log.info(f"[{self.name}] 插件卸载完成") 
+        bot_logger.info(f"[{self.name}] 插件卸载完成") 

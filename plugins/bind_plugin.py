@@ -1,9 +1,13 @@
+import botpy
+from botpy.message import Message
+from botpy.ext.command_util import Commands
+import orjson as json
 from core.plugin import Plugin, on_command, on_keyword, Event, EventType
 from utils.message_handler import MessageHandler
 from core.bind import BindManager
 from utils.logger import bot_logger
 from utils.templates import SEPARATOR
-import json
+from utils.config import settings
 
 class BindPlugin(Plugin):
     """游戏ID绑定插件"""
@@ -106,6 +110,11 @@ class BindPlugin(Plugin):
             if bind_info:
                 bind_time = bind_info.get("bind_time", "未知")
                 last_updated = bind_info.get("last_updated", "未知")
+                # 去除T及其后面的内容，只保留日期部分
+                if isinstance(bind_time, str) and "T" in bind_time:
+                    bind_time = bind_time.split("T")[0]
+                if isinstance(last_updated, str) and "T" in last_updated:
+                    last_updated = last_updated.split("T")[0]
                 await self.reply(handler,
                     "\n📋 当前绑定信息\n"
                     f"{SEPARATOR}\n"

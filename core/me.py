@@ -63,65 +63,12 @@ class MeAPI:
                 if self._initialized:
                     return
                     
-                # 预热图片生成器
-                await self._preheat_image_generator()
-                
+                # 预热图片生成器的相关逻辑已在ImageGenerator重构中移除
                 self._initialized = True
                 bot_logger.info("[MeAPI] 初始化完成")
                 
         except Exception as e:
             bot_logger.error(f"[MeAPI] 初始化失败: {str(e)}")
-            raise
-            
-    async def _preheat_image_generator(self):
-        """预热图片生成器"""
-        if self._preheated:
-            return
-            
-        try:
-            # 添加必需的资源
-            required_resources = [
-                f"../images/seasons/{settings.CURRENT_SEASON}.jpg",  # 当前赛季背景
-                "../images/rank_icons/bronze-4.png",  # 默认段位图标
-            ]
-            
-            # 注册必需资源
-            await self.image_generator.add_required_resources(required_resources)
-            
-            # 准备预热数据 (使用默认的直线路径进行预热)
-            preload_data = {
-                "player_name": "PlayerName",
-                "club_tag": "TAG",
-                "league_icon_url": "../images/rank_icons/bronze-4.png",
-                "league_name": "BRONZE IV",
-                "grade_class": "grade s",
-                "grade_text": "S",
-                "league_score": "1000",
-                "league_rank": "100",
-                "chart_path": "M0,80 L100,80", # Default straight line for preheating
-                "chart_dot_left": "50",
-                "chart_dot_bottom": "80",
-                "chart_label_text": "1000",
-                "chart_label_left": "50",
-                "chart_label_bottom": "80",
-                "global_rank": "100",
-                "global_group_rank": "10",
-                "world_tour_earnings": "10000",
-                "wt_group_rank": "10",
-                "season_number": "6"
-            }
-            
-            # 预热图片生成器
-            await self.image_generator.preheat(
-                self.html_template_path,
-                preload_data
-            )
-            
-            self._preheated = True
-            bot_logger.info("[MeAPI] 图片生成器预热完成")
-            
-        except Exception as e:
-            bot_logger.error(f"[MeAPI] 预热图片生成器失败: {str(e)}")
             raise
             
     async def get_player_data(self, player_name: str, season: str = None) -> Optional[Dict]:
@@ -391,27 +338,22 @@ class MeQuery:
             return
             
         self.api = MeAPI()
-        self.season_manager = SeasonManager()
-        self._lock = asyncio.Lock()
         self._initialized = True
-        
-        bot_logger.info("[MeQuery] 单例初始化完成")
+        bot_logger.info("[MeQuery] 初始化完成")
         
     async def initialize(self):
-        """初始化查询功能"""
+        """初始化MeQuery"""
         if self._preheated:
             return
             
         try:
-            async with self._lock:
-                if self._preheated:
-                    return
-                    
-                # 初始化API
-                await self.api.initialize()
-                
-                self._preheated = True
-                bot_logger.info("[MeQuery] 初始化完成")
+            # 锁已被移除，因为不再需要预热逻辑
+            if self._preheated:
+                return
+            
+            await self.api.initialize()
+            self._preheated = True
+            bot_logger.info("[MeQuery] 初始化完成")
                 
         except Exception as e:
             bot_logger.error(f"[MeQuery] 初始化失败: {str(e)}")

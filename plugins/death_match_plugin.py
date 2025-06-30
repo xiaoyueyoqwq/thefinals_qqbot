@@ -5,10 +5,13 @@ from utils.config import settings
 from typing import Optional
 import random
 import os
-import json
+import orjson as json
 from core.season import SeasonConfig
 from core.bind import BindManager
 from utils.templates import SEPARATOR
+import botpy
+from botpy.message import Message
+from botpy.ext.command_util import Commands
 
 class DeathMatchPlugin(Plugin):
     """死亡竞赛查询插件"""

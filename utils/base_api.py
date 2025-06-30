@@ -8,6 +8,7 @@ from functools import wraps
 from contextlib import asynccontextmanager
 from datetime import datetime
 import os
+from utils.db import QueryCache
 
 def async_retry(max_retries: int = 3, delay: float = 1.0):
     """异步重试装饰器"""
@@ -37,17 +38,14 @@ class BaseAPI:
     _client_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
     _pool_semaphore: ClassVar[asyncio.Semaphore] = asyncio.Semaphore(_pool_size)
     
-    # 全局缓存
-    _cache: ClassVar[Dict[str, Tuple[float, Any]]] = {}
-    _cache_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
-    _cache_ttl: ClassVar[int] = 60  # 默认缓存60秒
-    _max_cache_size: ClassVar[int] = 1000  # 最大缓存条目数
-    
     # 请求限制
     _request_semaphore: ClassVar[asyncio.Semaphore] = asyncio.Semaphore(50)  # 最大并发请求数
     _rate_limit: ClassVar[float] = 0.1  # 请求间隔(秒)
     _last_request_time: ClassVar[float] = 0
     _rate_limit_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    
+    # 使用来自db.py的、更优的QueryCache
+    _query_cache: ClassVar[QueryCache] = QueryCache(max_size=1000, expire_seconds=60)
     
     def __init__(self, base_url: str = "", timeout: int = 30):
         self.base_url = base_url.rstrip('/')
@@ -131,39 +129,6 @@ class BaseAPI:
                 await asyncio.sleep(cls._rate_limit - time_since_last)
             cls._last_request_time = time.time()
     
-    @classmethod
-    async def get_cached_data(cls, key: str) -> Optional[Any]:
-        """获取缓存数据"""
-        async with cls._cache_lock:
-            if key in cls._cache:
-                timestamp, data = cls._cache[key]
-                if time.time() - timestamp < cls._cache_ttl:
-                    return data
-                del cls._cache[key]
-        return None
-    
-    @classmethod
-    async def set_cache_data(cls, key: str, data: Any):
-        """设置缓存数据"""
-        async with cls._cache_lock:
-            # 如果缓存已满，删除最旧的条目
-            if len(cls._cache) >= cls._max_cache_size:
-                oldest_key = min(cls._cache.keys(), key=lambda k: cls._cache[k][0])
-                del cls._cache[oldest_key]
-            cls._cache[key] = (time.time(), data)
-    
-    @classmethod
-    async def clear_expired_cache(cls):
-        """清理过期缓存"""
-        async with cls._cache_lock:
-            current_time = time.time()
-            expired_keys = [
-                key for key, (timestamp, _) in cls._cache.items()
-                if current_time - timestamp >= cls._cache_ttl
-            ]
-            for key in expired_keys:
-                del cls._cache[key]
-    
     @async_retry(max_retries=3)
     async def _request(
         self,
@@ -174,17 +139,19 @@ class BaseAPI:
         json: Optional[Dict] = None,
         headers: Optional[Dict] = None,
         use_cache: bool = True,
+        cache_ttl: Optional[int] = None,  # 新增参数，支持指定缓存时间
         _is_backup: bool = False,  # 新增参数，标记是否为备用请求
         **kwargs
     ) -> httpx.Response:
-        """发送HTTP请求，支持主备切换"""
+        """发送HTTP请求，支持主备切换和高效缓存"""
         url = self._build_url(endpoint)
         bot_logger.debug(f"[BaseAPI] 发起请求: {method} {url}")
         
         # 对GET请求使用缓存（仅主请求）
         if use_cache and method.upper() == "GET" and not _is_backup:
             cache_key = self.get_cache_key(endpoint, params)
-            cached_data = await self.get_cached_data(cache_key)
+            # 使用新的QueryCache
+            cached_data = await self._query_cache.get(cache_key)
             if cached_data is not None:
                 bot_logger.debug("[BaseAPI] 使用缓存数据")
                 return cached_data
@@ -212,7 +179,8 @@ class BaseAPI:
                     # 缓存成功的GET请求结果（仅主请求）
                     if use_cache and method.upper() == "GET" and not _is_backup:
                         cache_key = self.get_cache_key(endpoint, params)
-                        await self.set_cache_data(cache_key, response)
+                        # 使用新的QueryCache
+                        await self._query_cache.set(cache_key, response, expire_seconds=cache_ttl)
                         bot_logger.debug("[BaseAPI] 响应已缓存")
                     
                     return response
@@ -264,6 +232,7 @@ class BaseAPI:
         endpoint: str,
         params: Optional[Dict] = None,
         use_cache: bool = True,
+        cache_ttl: Optional[int] = None,
         **kwargs
     ) -> httpx.Response:
         """发送GET请求"""
@@ -272,6 +241,7 @@ class BaseAPI:
             endpoint,
             params=params,
             use_cache=use_cache,
+            cache_ttl=cache_ttl,
             **kwargs
         )
     

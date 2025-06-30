@@ -116,3 +116,4 @@ changes.txt
 botpy.log.*
 
 config/whitelist.yaml
+config/api_key.json

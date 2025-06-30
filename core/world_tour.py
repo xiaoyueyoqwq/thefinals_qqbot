@@ -1,6 +1,6 @@
 from typing import Optional, Dict, List, Tuple
 import asyncio
-import json
+import orjson as json
 from utils.logger import bot_logger
 from utils.config import settings
 from utils.base_api import BaseAPI
@@ -8,7 +8,7 @@ from core.season import SeasonManager, SeasonConfig
 from utils.templates import SEPARATOR
 from utils.cache_manager import CacheManager
 from utils.persistence import PersistenceManager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class WorldTourAPI(BaseAPI):
     """世界巡回赛API封装"""

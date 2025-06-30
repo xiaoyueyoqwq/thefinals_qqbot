@@ -1,12 +1,10 @@
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import logging
-import json
-import random
-import os
-from typing import List, Dict, Any, Tuple
+import asyncio
+from typing import List, Dict, Any, Tuple, Optional
 from matplotlib.font_manager import FontProperties
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
@@ -14,6 +12,9 @@ from matplotlib.patheffects import withStroke
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 import matplotlib.style as mplstyle
+import orjson as json
+from utils.config import settings
+import os
 
 class LeaderboardCore(BaseAPI):
     """排位分数走势图核心类"""

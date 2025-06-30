@@ -1,15 +1,15 @@
 from typing import Optional, Dict, List
 import asyncio
 import os
-import json
+import orjson as json
 import random
-import gc # Import gc module
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
 from core.rank import RankQuery  # 添加 RankQuery 导入
 from utils.translator import translator
 from utils.templates import SEPARATOR
+from core.deep_search import DeepSearch
 
 class ClubAPI(BaseAPI):
     """俱乐部API封装"""
@@ -29,7 +29,7 @@ class ClubAPI(BaseAPI):
             clean_tag = club_tag.strip().strip('[]')  # 移除空格和中括号
             url = f"{self.api_prefix}/clubs?exactClubTag={str(exact_match).lower()}"
             
-            response = await self.get(url, headers=self.headers)
+            response = await self.get(url, headers=self.headers, cache_ttl=3600)  # 设置缓存时间为1小时
             if not response or response.status_code != 200:
                 return None
                 
@@ -48,9 +48,10 @@ class ClubAPI(BaseAPI):
 class ClubQuery:
     """俱乐部查询功能"""
     
-    def __init__(self):
+    def __init__(self, deep_search_instance: Optional[DeepSearch] = None):
         self.api = ClubAPI()
         self.rank_query = RankQuery()  # 创建 RankQuery 实例
+        self.deep_search = deep_search_instance
 
     def _format_leaderboard_info(self, leaderboards: List[dict]) -> str:
         """格式化排行榜信息"""
@@ -79,11 +80,18 @@ class ClubQuery:
         name = member.get('name', '未知')
         score = 0  # 默认分数或未上榜为 0
         try:
-            player_data = await self.rank_query.api.get_player_stats(name)
-            if player_data and player_data.get('rankScore', 0) > 0:
-                score = player_data.get('rankScore', 0)
+            # 直接从 search_indexer 的缓存数据中查找。
+            sm = self.rank_query.api.season_manager
+            if hasattr(sm, 'search_indexer') and name in sm.search_indexer._player_data:
+                player_data = sm.search_indexer._player_data[name]
+                score = player_data.get('score', 0)
+                bot_logger.debug(f"从索引器缓存找到玩家 {name} 分数: {score}")
+            else:
+                # 如果玩家不在索引器的_player_data中，意味着他们不在排行榜上。
+                bot_logger.debug(f"玩家 {name} 不在索引器缓存中，判定为未上榜。")
+                score = 0
         except Exception as e:
-            bot_logger.debug(f"获取玩家 {name} 分数时出错: {str(e)}")
+            bot_logger.error(f"获取玩家 {name} 分数时发生意外错误: {str(e)}", exc_info=True)
         return name, score
 
     async def _format_members_info(self, members: List[dict]) -> str:
@@ -178,13 +186,16 @@ class ClubQuery:
             
             # 格式化结果
             result = await self.format_response(data)
+
+            # 缓存俱乐部成员
+            if data and self.deep_search:
+                club_data = data[0]
+                members = club_data.get("members", [])
+                tag = club_data.get("clubTag", club_tag)
+                await self.deep_search.add_club_members(tag, members)
             
         except Exception as e:
             bot_logger.error(f"处理俱乐部查询命令时出错: {str(e)}", exc_info=True) # Log exception with traceback
             result = "\n⚠️ 查询过程中发生错误，请稍后重试" 
-        finally:
-            # 在处理完成后执行垃圾回收
-            gc.collect()
-            bot_logger.debug(f"手动GC执行完成 after /club {club_tag}")
             
         return result

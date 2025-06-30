@@ -5,10 +5,12 @@ from utils.config import settings
 from typing import Optional
 import random
 import os
-import json
 from core.season import SeasonConfig
 from core.bind import BindManager
 from utils.templates import SEPARATOR
+import botpy
+from botpy.message import Message
+from botpy.ext.command_util import Commands
 
 class QuickCashPlugin(Plugin):
     """快速提现查询插件"""

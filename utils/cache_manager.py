@@ -1,11 +1,11 @@
 import os
-import json
 import asyncio
 import pickle
 from typing import Dict, Optional, Any, List, Set
 from pathlib import Path
 from datetime import datetime
 from utils.logger import bot_logger
+import aiofiles
 
 class FastCache:
     """高性能缓存实现
@@ -160,8 +160,9 @@ class CacheManager:
             return
         
         try:
-            with open(cache_file, 'rb') as f:
-                data = pickle.load(f)
+            async with aiofiles.open(cache_file, 'rb') as f:
+                content = await f.read()
+                data = pickle.loads(content)
             
             cache = self._caches[name]
             # 加载时将全部数据一次性set到内存中
@@ -188,8 +189,9 @@ class CacheManager:
             cache_file = self._get_cache_file(name)
             temp_file = cache_file.with_suffix('.tmp')
             
-            with open(temp_file, 'wb') as f:
-                pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            async with aiofiles.open(temp_file, 'wb') as f:
+                content = pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
+                await f.write(content)
                 
             # 原子性替换文件
             temp_file.replace(cache_file)

@@ -1,8 +1,10 @@
-import json
+import orjson as json
 import os
 import re
 from typing import Dict, Optional, Any, List
 from utils.config import settings
+from utils.logger import bot_logger
+from pathlib import Path
 
 class Translator:
     """通用翻译工具类，用于处理不同类型的翻译需求"""
@@ -30,11 +32,24 @@ class Translator:
         self.translation_file = translation_file or settings.TRANSLATION_FILE
         self.auto_reload = auto_reload
         self.translations = {}
-        self.enabled = settings.TRANSLATION_ENABLED  # 从系统配置读取翻译功能启用状态
-        self.load_translations()
+        self.enabled = settings.TRANSLATION_ENABLED
+
+        if not self.enabled:
+            return
+
+        try:
+            with open(self.translation_file, 'rb') as f:
+                self.translations = json.loads(f.read())
+        except FileNotFoundError:
+            bot_logger.warning(f"翻译文件未找到: {self.translation_file}")
+            self.translations = {}
+        except Exception as e:
+            bot_logger.error(f"加载翻译文件失败: {e}")
+            self.translations = {}
+            self.enabled = False
+        
         self._initialized = True
         
-        from utils.logger import bot_logger
         bot_logger.info(f"翻译模块已{'启用' if self.enabled else '禁用'}, 配置文件: {self.translation_file}")
     
     def load_translations(self) -> None:
@@ -44,10 +59,10 @@ class Translator:
                 self.translations = {}
                 return
                 
-            with open(self.translation_file, 'r', encoding='utf-8') as f:
-                self.translations = json.load(f)
+            with open(self.translation_file, 'rb') as f:
+                self.translations = json.loads(f.read())
         except Exception as e:
-            print(f"加载翻译文件时出错: {str(e)}")
+            bot_logger.error(f"重新加载翻译文件时出错: {str(e)}")
             self.translations = {}
     
     def enable(self) -> None:
@@ -151,7 +166,6 @@ class Translator:
             翻译后的排行榜类型
         """
         return self.get_translation(leaderboard_type, "leaderboard_types", force=force)
-
 
 # 创建一个全局翻译器实例供直接导入使用
 translator = Translator() 

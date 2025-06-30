@@ -336,12 +336,17 @@
 
         .clickable-command {
             color: var(--primary-color);
+            background-color: rgba(0, 112, 243, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
             cursor: pointer;
-            text-decoration: underline;
+            text-decoration: none;
             transition: var(--transition);
+            display: inline-block;
         }
 
         .clickable-command:hover {
+            background-color: rgba(0, 112, 243, 0.2);
             color: var(--primary-hover);
         }
 
@@ -427,6 +432,68 @@
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
+        }
+
+        #autocomplete-container {
+            position: absolute;
+            bottom: calc(100% - 1.25rem);
+            left: 1.25rem;
+            right: 1.25rem;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 10;
+            box-shadow: var(--shadow-md);
+            transform-origin: bottom center;
+            transform: translateY(5px) scale(0.99);
+            opacity: 0;
+            transition: opacity 0.1s ease-out, transform 0.1s ease-out, visibility 0.1s;
+            visibility: hidden;
+        }
+
+        #autocomplete-container.visible {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .autocomplete-item {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover {
+            background-color: var(--hover-color);
+        }
+
+        .autocomplete-item.selected {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .autocomplete-item .cmd-name {
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .autocomplete-item .cmd-desc {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            margin-left: 0.5em;
+        }
+
+        .autocomplete-item.selected .cmd-name,
+        .autocomplete-item.selected .cmd-desc {
+            color: white;
         }
 
         .input-wrapper {
@@ -905,7 +972,7 @@
     <div class="container">
         <header>
             <h1>CommandLine</h1>
-            <p class="subtitle">v0.0.1 Build 202503060109</p>
+            <p class="subtitle">v0.0.2 Build 202406300001</p>
         </header>
         <div class="content">
             <div class="chat-container">
@@ -923,6 +990,7 @@
                     </div>
                 </div>
                 <div class="input-container">
+                    <div id="autocomplete-container"></div>
                     <div class="input-wrapper">
                         <textarea class="command-input" id="commandInput" placeholder="输入命令，例如: /ds Dizzy" rows="2"></textarea>
                         <button class="send-button" id="sendButton">
@@ -940,6 +1008,7 @@
                 <div class="panel">
                     <div class="panel-header">可用命令</div>
                     <div class="panel-body">
+                        <input type="text" id="commandSearch" placeholder="搜索命令..." style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background-color: var(--bg-color); color: var(--text-color); margin-bottom: 1rem;">
                         <div class="command-list-wrapper">
                             <div class="command-list" id="commandList">
                                 <!-- 命令列表将通过JS动态加载 -->
@@ -1015,8 +1084,11 @@
             const darkMode = document.getElementById('darkMode');
             const clearButton = document.getElementById('clearButton');
             const charCount = document.getElementById('charCount');
+            const commandSearch = document.getElementById('commandSearch');
+            const autocompleteContainer = document.getElementById('autocomplete-container');
             
             let isWaitingForResponse = false;
+            let selectedSuggestionIndex = -1;
 
             // 设置暗模式
             function setColorScheme() {
@@ -1090,22 +1162,16 @@
                 const messageContent = document.createElement('div');
                 messageContent.className = 'message-content';
 
-                // 如果是系统消息，处理可点击的命令
-                if (type === 'bot' && content && content.includes('/')) {
-                    const commandRegex = /\/[a-zA-Z]+\s+[^\s]+/g;
-                    let lastIndex = 0;
-                    let match;
-                    let processedContent = '';
+                if (content) {
+                    const commandRegex = /(\/[a-zA-Z0-9_]+(?:[\t ]+\S+)*)/g;
+                    
+                    let tempDiv = document.createElement('div');
+                    tempDiv.textContent = content;
 
-                    while ((match = commandRegex.exec(content)) !== null) {
-                        processedContent += content.slice(lastIndex, match.index);
-                        processedContent += `<span class="clickable-command" data-command="${match[0]}">${match[0]}</span>`;
-                        lastIndex = match.index + match[0].length;
-                    }
-                    processedContent += content.slice(lastIndex);
-                    messageContent.innerHTML = processedContent;
+                    messageContent.innerHTML = tempDiv.innerHTML.replace(commandRegex, (match) => {
+                        return `<span class="clickable-command" data-command="${match.replace(/"/g, '&quot;')}">${match}</span>`;
+                    });
 
-                    // 添加点击事件
                     messageContent.querySelectorAll('.clickable-command').forEach(cmd => {
                         cmd.addEventListener('click', () => {
                             const command = cmd.getAttribute('data-command');
@@ -1113,28 +1179,7 @@
                             sendCommand();
                         });
                     });
-                } else if (content) {
-                    messageContent.textContent = content;
-                }
-                
-                messageDiv.appendChild(header);
-                messageDiv.appendChild(messageContent);
-
-                // 添加执行时间显示（仅对机器人消息）
-                if (type === 'bot' && executionTime !== null) {
-                    const timeInfo = getExecutionTimeInfo(executionTime);
-                    const timeDiv = document.createElement('div');
-                    timeDiv.className = `execution-time ${timeInfo.class}`;
-                    timeDiv.innerHTML = `
-                        <svg><use href="#icon-${timeInfo.icon}"/></svg>
-                        <span>${executionTime}ms</span>
-                        <span class="execution-time-text">${timeInfo.text}</span>
-                    `;
-                    messageDiv.appendChild(timeDiv);
-                }
-
-                // 如果有图片数据,添加图片
-                if (imageData) {
+                } else if (imageData) { // Only add image if no text content
                     const imageContainer = document.createElement('div');
                     imageContainer.className = 'message-image';
                     imageContainer.style.cssText = 'margin-top: 10px; max-width: 100%; overflow: hidden; border-radius: 8px;';
@@ -1172,6 +1217,22 @@
                     
                     imageContainer.appendChild(image);
                     messageDiv.appendChild(imageContainer);
+                }
+
+                messageDiv.appendChild(header);
+                messageDiv.appendChild(messageContent);
+
+                // 添加执行时间显示（仅对机器人消息）
+                if (type === 'bot' && executionTime !== null) {
+                    const timeInfo = getExecutionTimeInfo(executionTime);
+                    const timeDiv = document.createElement('div');
+                    timeDiv.className = `execution-time ${timeInfo.class}`;
+                    timeDiv.innerHTML = `
+                        <svg><use href="#icon-${timeInfo.icon}"/></svg>
+                        <span>${executionTime}ms</span>
+                        <span class="execution-time-text">${timeInfo.text}</span>
+                    `;
+                    messageDiv.appendChild(timeDiv);
                 }
 
                 // 添加消息操作按钮
@@ -1452,11 +1513,43 @@
             
             // 输入框事件
             commandInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                const items = autocompleteContainer.querySelectorAll('.autocomplete-item');
+                let suggestionHandled = false;
+
+                if (autocompleteContainer.classList.contains('visible') && items.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        selectedSuggestionIndex = (selectedSuggestionIndex + 1) % items.length;
+                        updateSelection();
+                        suggestionHandled = true;
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        selectedSuggestionIndex = (selectedSuggestionIndex - 1 + items.length) % items.length;
+                        updateSelection();
+                        suggestionHandled = true;
+                    } else if (e.key === 'Tab' && items.length > 0) {
+                        e.preventDefault();
+                        const targetIndex = selectedSuggestionIndex > -1 ? selectedSuggestionIndex : 0;
+                        items[targetIndex].click();
+                        suggestionHandled = true;
+                    } else if (e.key === 'Enter' && selectedSuggestionIndex > -1) {
+                        e.preventDefault();
+                        items[selectedSuggestionIndex].click();
+                        suggestionHandled = true;
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        autocompleteContainer.classList.remove('visible');
+                        suggestionHandled = true;
+                    }
+                }
+
+                if (e.key === 'Enter' && !e.shiftKey && !suggestionHandled) {
                     e.preventDefault();
                     sendCommand();
                 }
             });
+            
+            commandInput.addEventListener('input', updateAutocomplete);
             
             // 清空聊天记录
             clearButton.addEventListener('click', function() {
@@ -1466,13 +1559,90 @@
                 chatMessages.appendChild(welcomeMessage);
             });
 
-            // 初始化欢迎消息中的可点击命令
-            document.querySelectorAll('.clickable-command').forEach(cmd => {
-                cmd.addEventListener('click', () => {
-                    const command = cmd.getAttribute('data-command');
-                    commandInput.value = command;
-                    sendCommand();
+            // 命令列表搜索
+            commandSearch.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const commandGroups = document.querySelectorAll('.command-group');
+                
+                commandGroups.forEach(group => {
+                    const commands = group.querySelectorAll('.command-item');
+                    let groupHasVisibleCommands = false;
+                    
+                    commands.forEach(cmdItem => {
+                        const commandName = cmdItem.querySelector('.command-title').textContent.toLowerCase();
+                        const commandDesc = cmdItem.querySelector('.command-description').textContent.toLowerCase();
+                        
+                        if (commandName.includes(searchTerm) || commandDesc.includes(searchTerm)) {
+                            cmdItem.style.display = 'block';
+                            groupHasVisibleCommands = true;
+                        } else {
+                            cmdItem.style.display = 'none';
+                        }
+                    });
+                    
+                    if (groupHasVisibleCommands) {
+                        group.style.display = 'block';
+                    } else {
+                        group.style.display = 'none';
+                    }
                 });
+            });
+
+            // 自动补全
+            function updateAutocomplete() {
+                const text = commandInput.value;
+                if (text.startsWith('/') && !text.includes(' ')) {
+                    const cmdPart = text.substring(1).toLowerCase();
+                    const suggestions = Object.keys(window.availableCommands || {})
+                        .filter(cmd => cmd.toLowerCase().startsWith(cmdPart) && !window.availableCommands[cmd].hidden);
+                    
+                    autocompleteContainer.innerHTML = '';
+                    if (suggestions.length > 0) {
+                        suggestions.slice(0, 10).forEach((suggestion, index) => { // Limit to 10 suggestions
+                            const item = document.createElement('div');
+                            item.className = 'autocomplete-item';
+                            
+                            const cmdInfo = window.availableCommands[suggestion];
+                            const desc = cmdInfo.description || '无描述';
+                            item.innerHTML = `<span class="cmd-name">/${suggestion}</span><span class="cmd-desc">${desc}</span>`;
+                            
+                            item.dataset.command = `/${suggestion}`;
+                            item.addEventListener('click', () => {
+                                commandInput.value = `/${suggestion} `;
+                                autocompleteContainer.classList.remove('visible');
+                                commandInput.focus();
+                                charCount.textContent = `${commandInput.value.length} 个字符`;
+                            });
+                            autocompleteContainer.appendChild(item);
+                        });
+                        autocompleteContainer.classList.add('visible');
+                        selectedSuggestionIndex = -1;
+                    } else {
+                        autocompleteContainer.classList.remove('visible');
+                    }
+                } else {
+                    autocompleteContainer.classList.remove('visible');
+                }
+            }
+
+            function updateSelection() {
+                const items = autocompleteContainer.querySelectorAll('.autocomplete-item');
+                items.forEach((item, index) => {
+                    if (index === selectedSuggestionIndex) {
+                        item.classList.add('selected');
+                        item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    } else {
+                        item.classList.remove('selected');
+                    }
+                });
+            }
+
+            // Hide autocomplete when clicking outside
+            document.addEventListener('click', (e) => {
+                const isClickInside = commandInput.contains(e.target) || autocompleteContainer.contains(e.target);
+                if (!isClickInside) {
+                    autocompleteContainer.classList.remove('visible');
+                }
             });
         });
     </script>

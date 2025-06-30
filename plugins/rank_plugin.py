@@ -6,10 +6,14 @@ from core.bind import BindManager
 from core.season import SeasonManager, SeasonConfig
 from utils.logger import bot_logger
 from utils.templates import SEPARATOR
-import json
 import os
 import random
 import traceback
+from botpy.message import Message
+from botpy.ext.command_util import Commands
+from core.rank import RankAPI
+from utils.config import settings
+from typing import Optional
 
 class RankPlugin(Plugin):
     """排名查询插件"""

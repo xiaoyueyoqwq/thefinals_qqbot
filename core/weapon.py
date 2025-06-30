@@ -1,8 +1,10 @@
-import json
+import orjson as json
 import os
 import re
 from typing import Dict, Any, Optional
 from utils.templates import SEPARATOR  # 导入分隔线模板
+from utils.logger import bot_logger
+from pathlib import Path
 
 class WeaponData:
     """
@@ -16,20 +18,16 @@ class WeaponData:
 
     def __init__(self):
         self.weapon_data: Dict[str, Any] = {}
-        self._load_weapon_data()
+        self.data_path = Path("data/weapon.json")
+        self.weapon_data = self._load_data()
 
-    def _load_weapon_data(self):
-        """
-        从 data/weapon.json 文件加载武器数据
-        """
-        file_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'weapon.json')
+    def _load_data(self) -> Dict:
+        """加载武器数据"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                self.weapon_data = json.load(f)
-        except FileNotFoundError:
-            print(f"Error: weapon.json not found at {file_path}")
-        except json.JSONDecodeError:
-            print(f"Error: Could not decode JSON from {file_path}")
+            with open(self.data_path, 'rb') as f:
+                return json.loads(f.read())
+        except (FileNotFoundError, Exception):
+            return {}
 
     def get_weapon_data(self, query: str) -> Optional[str]:
         """

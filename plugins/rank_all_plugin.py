@@ -3,11 +3,13 @@ from utils.message_handler import MessageHandler
 from core.bind import BindManager
 from core.rank_all import RankAll
 from utils.logger import bot_logger
-import json
 import os
 import random
 import re
 from utils.templates import SEPARATOR
+from botpy.message import Message
+from botpy.ext.command_util import Commands
+from utils.config import settings
 
 class RankAllPlugin(Plugin):
     """全赛季排名查询插件"""

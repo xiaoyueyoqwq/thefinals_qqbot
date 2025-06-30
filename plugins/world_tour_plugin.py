@@ -7,9 +7,13 @@ from utils.logger import bot_logger
 from utils.templates import SEPARATOR
 import re
 import os
-import json
 import random
 from utils.config import settings
+import botpy
+from botpy.message import Message
+from botpy.ext.command_util import Commands
+from core.world_tour import WorldTourAPI
+from typing import Optional
 
 class WorldTourPlugin(Plugin):
     """世界巡回赛查询插件"""

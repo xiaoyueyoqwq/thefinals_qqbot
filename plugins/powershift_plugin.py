@@ -3,10 +3,13 @@ from utils.message_handler import MessageHandler
 from core.powershift import PowerShiftQuery
 from core.bind import BindManager
 from utils.logger import bot_logger
-import json
+import orjson as json
 import os
 import random
 from utils.templates import SEPARATOR
+from botpy.message import Message
+from botpy.ext.command_util import Commands
+from utils.config import settings
 
 class PowerShiftPlugin(Plugin):
     """平台争霸查询插件"""

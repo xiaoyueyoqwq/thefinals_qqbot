@@ -44,7 +44,7 @@ class QueryCache:
             self.access_times[key] = now
             return self.cache[key]
             
-    async def set(self, key: str, value: Any):
+    async def set(self, key: str, value: Any, expire_seconds: Optional[int] = None):
         """缓存查询结果"""
         async with self._lock:
             now = time.time()
@@ -57,7 +57,8 @@ class QueryCache:
                 del self.access_times[oldest_key]
             
             self.cache[key] = value
-            self.expire_times[key] = now + self.expire_seconds
+            expire = expire_seconds if expire_seconds is not None else self.expire_seconds
+            self.expire_times[key] = now + expire
             self.access_times[key] = now
             
     async def clear(self):

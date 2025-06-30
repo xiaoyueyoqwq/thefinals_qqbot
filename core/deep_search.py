@@ -6,7 +6,7 @@ from utils.logger import bot_logger
 from utils.db import DatabaseManager, with_database
 from pathlib import Path
 import os
-import json
+import orjson as json
 import random
 from core.season import SeasonManager, SeasonConfig
 from difflib import SequenceMatcher
@@ -21,10 +21,10 @@ class DeepSearch:
         self.db_path = Path("data/deep_search.db")
         
         # 冷却时间（秒）
-        self.cooldown_seconds = 15
+        self.cooldown_seconds = 1
         
         # 最小查询字符长度
-        self.min_query_length = 3
+        self.min_query_length = 2
         
         # 用户冷却时间记录
         self.user_cooldowns: Dict[str, datetime] = {}
@@ -66,6 +66,14 @@ class DeepSearch:
                 query TEXT NOT NULL,
                 results TEXT NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''',
+            
+            # 俱乐部成员缓存表
+            '''CREATE TABLE IF NOT EXISTS club_members (
+                player_name TEXT PRIMARY KEY NOT NULL,
+                club_tag TEXT NOT NULL,
+                data TEXT,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )'''
         ]
         
@@ -118,149 +126,112 @@ class DeepSearch:
             query = query[3:].strip()
             bot_logger.debug(f"[DeepSearch] 去除/ds前缀后的查询: {query}")
         
-        # 检查长度
-        if len(query) < self.min_query_length:
-            bot_logger.debug(f"[DeepSearch] 查询长度不足: {len(query)}/{self.min_query_length}")
-            return False, f"查询ID至少需要{self.min_query_length}个字符"
-            
-        # 检查是否包含至少三个英文字母
-        letters = re.findall(r'[a-zA-Z0-9]', query)
-        if len(letters) < 3:
-            bot_logger.debug(f"[DeepSearch] 英文字母数量不足: {len(letters)}/3")
-            return False, "查询ID必须包含至少三个英文字母或数字"
-        
         bot_logger.debug(f"[DeepSearch] 查询验证通过: {query}")
         return True, ""
     
-    def _get_name_base(self, name: str) -> str:
-        """获取名称的基础部分（去除#后的部分）"""
-        return name.split("#")[0] if "#" in name else name
-    
-    def _calculate_similarity(self, name: str, query: str) -> float:
-        """使用difflib计算字符串相似度"""
-        name = name.lower()
-        query = query.lower()
-        
-        # 获取基础名称
-        name_base = self._get_name_base(name)
-        query_base = self._get_name_base(query)
-        
-        # 使用SequenceMatcher计算相似度
-        matcher = SequenceMatcher(None, name_base, query_base)
-        similarity = matcher.ratio()
-        
-        # 首字匹配加权
-        if name_base.startswith(query_base):
-            similarity = max(similarity, 0.8)  # 确保首字匹配至少有0.8的相似度
-            
-        return similarity
-    
     @with_database
-    async def search(self, query: str) -> List[Dict[str, Any]]:
-        """执行深度搜索
-        
-        Args:
-            query: 搜索查询
+    async def add_club_members(self, club_tag: str, members: List[Dict]):
+        """将俱乐部成员列表写入数据库进行缓存"""
+        if not members:
+            return
             
-        Returns:
-            List[Dict[str, Any]]: 搜索结果列表
-        """
-        results = []
-        first_char_matches = []  # 首字匹配结果
-        contains_matches = []    # 包含匹配结果
+        bot_logger.info(f"[DeepSearch] 正在缓存俱乐部 '{club_tag}' 的 {len(members)} 名成员。")
         
         try:
-            # 获取当前赛季实例
-            season = await self.season_manager.get_season(SeasonConfig.CURRENT_SEASON)
-            if not season:
-                return results
-                
-            # 获取所有玩家数据
-            all_players = await season.get_all_players()
-            if not all_players:
-                return results
-                
-            # 转换查询为小写
-            query_lower = query.lower()
-            query_base = self._get_name_base(query_lower)
+            operations = []
+            sql = "INSERT OR REPLACE INTO club_members (player_name, club_tag, data, last_seen) VALUES (?, ?, ?, ?)"
+            for member in members:
+                player_name = member.get("name")
+                if player_name:
+                    # 为 execute_transaction 准备 (sql, params) 元组
+                    operations.append((
+                        sql,
+                        (
+                            player_name,
+                            club_tag,
+                            json.dumps(member),
+                            datetime.now()
+                        )
+                    ))
             
-            # 处理每个玩家
-            for player_data in all_players:
-                try:
-                    player_name = player_data.get("name", "").lower()
-                    if not player_name:
-                        continue
-                        
-                    # 获取所有可能的名称
-                    names = [
-                        player_name,
-                        player_data.get("steamName", "").lower(),
-                        player_data.get("psnName", "").lower(),
-                        player_data.get("xboxName", "").lower()
-                    ]
-                    
-                    # 计算最佳匹配分数
-                    best_similarity = 0
-                    is_first_char_match = False
-                    
-                    for name in names:
-                        if not name:  # 跳过空名称
-                            continue
-                            
-                        # 检查是否是首字匹配
-                        name_base = self._get_name_base(name)
-                        if name_base.startswith(query_base):
-                            is_first_char_match = True
-                            
-                        similarity = self._calculate_similarity(name, query_lower)
-                        best_similarity = max(best_similarity, similarity)
-                    
-                    # 如果相似度太低，跳过
-                    if best_similarity < 0.3:
-                        continue
-                        
-                    # 创建结果对象
-                    player_result = {
-                        "id": player_data["name"],
-                        "rank": best_similarity,
-                        "season": SeasonConfig.CURRENT_SEASON.upper(),
-                        "game_rank": player_data.get("rank"),
-                        "score": player_data.get("rankScore", player_data.get("fame", 0)),
-                        "club_tag": player_data.get("clubTag", ""),  # 添加俱乐部标签
-                        "platforms": {
-                            "steam": player_data.get("steamName", ""),
-                            "psn": player_data.get("psnName", ""),
-                            "xbox": player_data.get("xboxName", "")
-                        }
-                    }
-                    
-                    # 根据匹配类型分类
-                    if is_first_char_match:
-                        first_char_matches.append(player_result)
+            if operations:
+                # 使用正确的事务方法来执行批量操作
+                await self.db.execute_transaction(operations)
+                bot_logger.info(f"[DeepSearch] 成功缓存 {len(operations)} 名成员。")
+        except Exception as e:
+            bot_logger.error(f"[DeepSearch] 缓存俱乐部成员时出错: {e}", exc_info=True)
+
+    async def search(self, query: str) -> List[Dict[str, Any]]:
+        """
+        使用高效的倒排索引和俱乐部成员缓存执行深度搜索。
+        """
+        bot_logger.info(f"[DeepSearch] 收到搜索请求: '{query}'")
+        
+        # 清理查询词
+        clean_query = query.lower().replace("/ds", "").strip()
+        if not clean_query or len(clean_query) < self.min_query_length:
+            return []
+        
+        try:
+            # 1. 从排行榜索引中搜索
+            leaderboard_results = self.season_manager.search_indexer.search(clean_query, limit=20)
+            bot_logger.info(f"[DeepSearch] 排行榜索引找到 {len(leaderboard_results)} 个结果。")
+
+            # 2. 从俱乐部成员数据库中搜索
+            db_results_raw = await self.db.fetch_all(
+                "SELECT player_name, club_tag FROM club_members WHERE player_name LIKE ? COLLATE NOCASE",
+                (f"%{clean_query}%",)
+            )
+            bot_logger.info(f"[DeepSearch] 俱乐部数据库找到 {len(db_results_raw)} 个结果。")
+
+            # 3. 合并、规范化与计算相似度
+            combined_results = {}
+            normalized_query = re.sub(r'[^a-z0-9]', '', clean_query.lower())
+
+            # 处理排行榜结果
+            for p in leaderboard_results:
+                normalized_p = p.copy()
+                normalized_p['club_tag'] = p.get('clubTag', '')
+                combined_results[p['name']] = normalized_p
+
+            # 处理俱乐部数据库结果
+            for row in db_results_raw:
+                player_name, club_tag = row
+                if player_name not in combined_results:
+                    # 计算相似度
+                    normalized_name = re.sub(r'[^a-z0-9]', '', player_name.lower())
+                    similarity = 0
+                    if normalized_name == normalized_query:
+                        similarity = 3  # 完全匹配
+                    elif normalized_name.startswith(normalized_query):
+                        similarity = 2  # 前缀匹配
+                    elif normalized_query in normalized_name:
+                        similarity = 1  # 子串匹配
                     else:
-                        contains_matches.append(player_result)
-                        
-                except Exception as e:
-                    bot_logger.warning(f"[DeepSearch] 处理玩家数据时出错: {str(e)}")
-                    continue
+                        similarity = SequenceMatcher(None, normalized_name, normalized_query).ratio()
                     
-            # 分别对两类结果按相似度排序
-            first_char_matches.sort(key=lambda x: (-x["rank"], x["id"].lower()))
-            contains_matches.sort(key=lambda x: (-x["rank"], x["id"].lower()))
-            
-            # 合并结果，首字匹配优先
-            results = first_char_matches + contains_matches
-            
-            # 限制结果数量
-            results = results[:10]
-            
-            # 记录搜索结果到数据库
-            await self._save_search_history(query, results)
+                    # 准备数据
+                    player_data = {
+                        'name': player_name,
+                        'score': 0,
+                        'club_tag': club_tag,
+                        'similarity': similarity
+                    }
+                    combined_results[player_name] = player_data
+
+            # 4. 最终排序
+            final_results = sorted(
+                list(combined_results.values()),
+                key=lambda p: p.get('similarity', 0),
+                reverse=True
+            )
+
+            bot_logger.info(f"[DeepSearch] 合并后共 {len(final_results)} 个独立结果。")
+            return final_results[:40] # 限制最终返回数量
             
         except Exception as e:
-            bot_logger.error(f"[DeepSearch] 搜索数据时出错: {str(e)}")
-            
-        return results
+            bot_logger.error(f"[DeepSearch] 搜索时发生错误: {e}", exc_info=True)
+            return []
     
     @with_database
     async def _save_search_history(self, query: str, results: List[Dict[str, Any]]) -> None:
@@ -271,7 +242,6 @@ class DeepSearch:
             results: 搜索结果
         """
         # 保存搜索结果
-        import json
         results_json = json.dumps(results)
         await self.db.execute_simple(
             "INSERT INTO search_results (query, results) VALUES (?, ?)",
@@ -301,11 +271,11 @@ class DeepSearch:
         Returns:
             str: 格式化后的消息
         """
-        message = f"\n🔎 深度搜索 | {query.replace('/ds', '').strip()}\n"
+        message = f"🔎 深度搜索 | {query.replace('/ds', '').strip()}\n"
         message += f"{SEPARATOR}\n"
         
         if not results:
-            message += "\n❌ 未查询到对应的玩家信息\n"
+            message += "❌ 未查询到对应的玩家信息\n"
             message += f"{SEPARATOR}\n"
             message += "💡 小贴士:\n"
             message += "1. 请检查ID是否正确\n"
@@ -316,13 +286,20 @@ class DeepSearch:
         
         message += "👀 所有结果:\n"
         
+        if results:
+            bot_logger.info(f"[DeepSearch] Formatting first result data structure: {results[0]}")
+
         for result in results:
-            player_id = result["id"]
+            player_id = result.get("name", "未知玩家")
             score = result.get("score", 0)
             club_tag = result.get("club_tag", "")
-            # 如果有俱乐部标签，则显示
+            
             player_display = f"[{club_tag}]{player_id}" if club_tag else player_id
-            message += f"▎{player_display} [{score}]\n"
+            
+            if score > 0:
+                message += f"▎{player_display} [{score:,}]\n"
+            else:
+                message += f"▎{player_display} [未上榜]\n"
         
         message += f"{SEPARATOR}"
         return message
