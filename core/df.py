@@ -206,8 +206,8 @@ class DFQuery:
                 raise Exception("无法获取当前赛季")
                 
             # 获取所有玩家数据
-            all_data = await season.get_all_players()
-            if not all_data:
+            all_data_generator = season.get_all_players()
+            if not all_data_generator:
                 raise Exception("未获取到玩家数据")
                 
             # 准备更新操作
@@ -217,7 +217,7 @@ class DFQuery:
             
             # 只保存第500名和第10000名的数据
             target_ranks = {500, 10000}
-            for player_data in all_data:
+            async for player_data in all_data_generator:
                 rank = player_data.get('rank')
                 if rank in target_ranks:
                     # 准备数据库更新
@@ -237,6 +237,10 @@ class DFQuery:
                     }
             
             # 更新数据库
+            if not operations:
+                bot_logger.warning("[DFQuery] 未找到目标排名 (500, 10000) 的数据，未更新数据库。")
+                return
+
             await self.db.execute_transaction(operations)
             
             # 更新缓存

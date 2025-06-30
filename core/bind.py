@@ -1,4 +1,4 @@
-import json
+import orjson as json
 import os
 import asyncio
 import shutil
@@ -97,12 +97,12 @@ class BindManager:
             
         try:
             # 最小化文件操作时间
-            data_to_save = json.dumps(self.bindings, ensure_ascii=False, indent=2)
+            data_to_save = json.dumps(self.bindings, option=json.OPT_INDENT_2)
             
             # 使用临时文件确保原子性
             temp_file = f"{self.bind_file}.tmp"
             try:
-                with open(temp_file, 'w', encoding='utf-8') as f:
+                with open(temp_file, 'wb') as f:
                     f.write(data_to_save)
                     f.flush()
                     os.fsync(f.fileno())  # 确保写入磁盘
@@ -129,15 +129,15 @@ class BindManager:
         """从文件加载绑定数据"""
         try:
             if os.path.exists(self.bind_file):
-                with open(self.bind_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+                with open(self.bind_file, 'rb') as f:
+                    data = json.loads(f.read())
                     # 数据迁移：将旧格式转换为新格式
                     self.bindings = self._migrate_data(data)
                 bot_logger.info(f"已加载 {len(self.bindings)} 个用户绑定")
             else:
                 self.bindings = {}
-                with open(self.bind_file, 'w', encoding='utf-8') as f:
-                    json.dump(self.bindings, f, ensure_ascii=False, indent=2)
+                with open(self.bind_file, 'wb') as f:
+                    f.write(json.dumps(self.bindings, option=json.OPT_INDENT_2))
                 bot_logger.info("创建新的绑定数据文件")
             
             # 初始化缓存
@@ -145,8 +145,8 @@ class BindManager:
         except json.JSONDecodeError as e:
             bot_logger.error(f"绑定数据文件格式错误: {str(e)}")
             self.bindings = {}
-            with open(self.bind_file, 'w', encoding='utf-8') as f:
-                json.dump(self.bindings, f, ensure_ascii=False, indent=2)
+            with open(self.bind_file, 'wb') as f:
+                f.write(json.dumps(self.bindings, option=json.OPT_INDENT_2))
         except Exception as e:
             bot_logger.error(f"加载绑定数据失败: {str(e)}")
             raise

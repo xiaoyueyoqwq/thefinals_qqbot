@@ -11,7 +11,9 @@ from datetime import datetime, timedelta
 from utils.templates import SEPARATOR
 from core.image_generator import ImageGenerator
 import uuid
-import json
+import orjson as json
+from utils.image_manager import ImageManager
+from typing import Dict, Any, Optional
 
 class RankAPI(BaseAPI):
     """排位系统API封装"""
@@ -187,7 +189,7 @@ class RankQuery:
         bot_logger.info("RankQuery单例初始化完成")
         
     async def initialize(self):
-        """初始化 RankQuery"""
+        """初始化 RankQuery，主要是等待API初始化完成"""
         if self._preheated:
             return
             
@@ -198,72 +200,15 @@ class RankQuery:
                     
                 bot_logger.info("[RankQuery] 开始初始化...")
                 await self.api.wait_for_init()
-                
-                # 预热图片生成器
-                await self._preheat_image_generator()
-                
+                # 预热图片生成器的相关逻辑已在ImageGenerator重构中移除
                 self._preheated = True
                 bot_logger.info("[RankQuery] 初始化完成")
         except Exception as e:
             bot_logger.error(f"[RankQuery] 初始化失败: {str(e)}")
             raise
             
-    async def _preheat_image_generator(self):
-        """预热图片生成器"""
-        try:
-            # 添加必需的资源
-            required_resources = []
-            
-            # 添加段位图标
-            for icon_name in self.rank_icon_map.values():
-                required_resources.append(f"../images/rank_icons/{icon_name}.png")
-                
-            # 添加所有赛季背景
-            for season_bg in self.season_backgrounds.values():
-                if season_bg not in required_resources:  # 避免重复添加
-                    required_resources.append(season_bg)
-                    
-            # 添加默认背景（使用当前赛季的背景）
-            current_season = SeasonConfig.CURRENT_SEASON
-            default_bg = self.season_backgrounds.get(current_season)
-            if default_bg and default_bg not in required_resources:
-                required_resources.append(default_bg)
-                
-            bot_logger.info(f"[RankQuery] 准备预加载 {len(required_resources)} 个资源文件")
-            
-            # 注册必需资源
-            await self.image_generator.add_required_resources(required_resources)
-            
-            # 准备预热数据
-            preload_data = {
-                "player_name": "PlayerName",
-                "player_tag": "0000",
-                "rank": "0",
-                "rank_icon": "../images/rank_icons/bronze-4.png",
-                "score": "0",
-                "rank_text": "Bronze 4",
-                "rank_trend": "=",
-                "rank_trend_color": "text-gray-500",
-                "rank_change": "",
-                "background": default_bg
-            }
-            
-            bot_logger.info("[RankQuery] 开始预热图片生成器")
-            
-            # 预热图片生成器
-            await self.image_generator.preheat(
-                self.html_template_path,
-                preload_data
-            )
-            
-            bot_logger.info("[RankQuery] 图片生成器预热完成")
-            
-        except Exception as e:
-            bot_logger.error(f"[RankQuery] 预热图片生成器失败: {str(e)}")
-            raise
-
     def _get_rank_icon_path(self, league: str) -> str:
-        """获取段位图标路径"""
+        """根据段位名称获取段位图标文件名"""
         if not league:
             return "../images/rank_icons/bronze-4.png"
             

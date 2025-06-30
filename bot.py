@@ -6,7 +6,7 @@ from typing import Any, Dict
 from injectors import inject_all as inject_botpy
 import botpy
 import uvicorn
-import json
+import orjson as json
 import psutil
 from botpy.message import GroupMessage, Message
 from utils.config import settings
@@ -219,9 +219,15 @@ PLUGIN_TIMEOUT = 30  # 插件处理超时时间（秒）
 INIT_TIMEOUT = 60    # 初始化超时时间（秒）
 CLEANUP_TIMEOUT = 10 # 清理超时时间（秒）
 
-# 加载uvicorn日志配置
-with open("uvicorn_log_config.json") as f:
-    UVICORN_LOG_CONFIG = json.load(f)
+# 加载Uvicorn日志配置
+UVICORN_LOG_CONFIG = None
+log_config_path = Path(__file__).parent / "uvicorn_log_config.json"
+if log_config_path.exists():
+    try:
+        with open(log_config_path, 'rb') as f: # 使用二进制模式读取
+            UVICORN_LOG_CONFIG = json.loads(f.read()) # 先读后解析
+    except Exception as e:
+        bot_logger.error(f"加载Uvicorn日志配置失败: {e}")
 
 # 定义消息类型枚举
 class MessageType(IntEnum):

@@ -1,4 +1,4 @@
-import json
+import orjson as json
 import os
 import re
 from typing import Dict, Optional, Any, List
@@ -44,8 +44,8 @@ class Translator:
                 self.translations = {}
                 return
                 
-            with open(self.translation_file, 'r', encoding='utf-8') as f:
-                self.translations = json.load(f)
+            with open(self.translation_file, 'rb') as f:
+                self.translations = json.loads(f.read())
         except Exception as e:
             print(f"加载翻译文件时出错: {str(e)}")
             self.translations = {}

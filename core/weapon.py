@@ -1,4 +1,4 @@
-import json
+import orjson as json
 import os
 import re
 from typing import Dict, Any, Optional
@@ -24,8 +24,8 @@ class WeaponData:
         """
         file_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'weapon.json')
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                self.weapon_data = json.load(f)
+            with open(file_path, 'rb') as f:
+                self.weapon_data = json.loads(f.read())
         except FileNotFoundError:
             print(f"Error: weapon.json not found at {file_path}")
         except json.JSONDecodeError:

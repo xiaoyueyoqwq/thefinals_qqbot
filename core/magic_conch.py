@@ -1,4 +1,4 @@
-import json
+import orjson as json
 import os
 import random
 from utils.logger import bot_logger
@@ -19,8 +19,8 @@ class MagicConch:
             # 确保data目录存在
             os.makedirs(os.path.dirname(config_path), exist_ok=True)
             
-            with open(config_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            with open(config_path, 'rb') as f:
+                data = json.loads(f.read())
                 answers = data.get("answers", [])
                 bot_logger.info(f"[MagicConch] 成功加载 {len(answers)} 条答案")
                 return answers
