@@ -17,6 +17,7 @@ class Settings:
     BOT_SANDBOX = _config["bot"]["sandbox"]
     
     # Debug 配置
+    DEBUG_ENABLED = _config["debug"]["enabled"]
     DEBUG_TEST_REPLY = _config["debug"]["test_reply"]
     
     # 线程配置

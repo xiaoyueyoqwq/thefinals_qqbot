@@ -1213,7 +1213,8 @@ def start_command_tester():
 def main():
     """主函数，启动机器人"""
     print_banner()
-    initialize_logging()
+    log_level = "DEBUG" if settings.DEBUG_ENABLED else "INFO"
+    initialize_logging(log_level=log_level)
 
     try:
         # 解析命令行参数
