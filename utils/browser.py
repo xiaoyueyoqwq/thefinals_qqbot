@@ -1,4 +1,6 @@
 import asyncio
+import platform
+import subprocess
 from typing import Optional
 from playwright.async_api import async_playwright, Browser, Page
 from utils.logger import bot_logger
@@ -97,45 +99,74 @@ class BrowserManager:
         return await self.acquire_page()
     
     async def cleanup(self):
-        """清理资源，包括页面池"""
+        """
+        清理浏览器资源。
+        采用带超时的优雅关闭和最终的强制进程查杀，确保可靠退出。
+        """
         if not self.initialized:
             return
         
         bot_logger.info("开始清理浏览器资源...")
+        
         async with self._lock:
-            # 步骤1: 清空并关闭页面池中的所有页面
-            if self.page_pool:
-                while not self.page_pool.empty():
-                    try:
-                        page = self.page_pool.get_nowait()
-                        if not page.is_closed():
-                            await page.close()
-                    except asyncio.QueueEmpty:
-                        break
-                    except Exception as e:
-                        bot_logger.error(f"关闭页面池中的页面时出错: {e}")
-                self.page_pool = None
-            
-            # 步骤2: 关闭浏览器
+            if not self.initialized:
+                return
+
+            self.initialized = False
+            cleanup_timeout = 5.0  # 优雅关闭的超时时间（秒）
+
+            # 1. 尝试带超时地关闭浏览器
             if self.browser:
                 try:
-                    await self.browser.close()
-                    bot_logger.info("浏览器实例已关闭")
+                    await asyncio.wait_for(self.browser.close(), timeout=cleanup_timeout)
+                    bot_logger.info("浏览器实例已成功关闭。")
+                except asyncio.TimeoutError:
+                    bot_logger.warning(f"关闭浏览器超时({cleanup_timeout}秒)。将强制终止相关进程。")
                 except Exception as e:
-                    bot_logger.error(f"关闭浏览器时出错: {e}")
+                    bot_logger.error(f"关闭浏览器实例时发生未知错误: {e}")
             
-            # 步骤3: 关闭playwright
-            if self.playwright:
+            # 2. 尝试带超时地停止 Playwright
+            if self.playwright and hasattr(self.playwright, 'stop'):
                 try:
-                    await self.playwright.stop()
-                    bot_logger.info("Playwright已停止")
+                    await asyncio.wait_for(self.playwright.stop(), timeout=cleanup_timeout)
+                    bot_logger.info("Playwright 实例已成功停止。")
+                except asyncio.TimeoutError:
+                    bot_logger.warning(f"停止 Playwright 超时({cleanup_timeout}秒)。")
                 except Exception as e:
-                    bot_logger.error(f"停止Playwright时出错: {e}")
+                    bot_logger.error(f"停止 Playwright 实例时出错: {e}")
 
+            # 3. 最后，无论如何都尝试强制杀死残留进程
+            bot_logger.info("正在执行最终检查，强制清理任何残留的浏览器进程...")
+            self._force_kill_browser_processes()
+
+            # 4. 清理内部引用
             self.browser = None
             self.playwright = None
-            self.initialized = False
-            bot_logger.info("浏览器资源清理完成")
+            self.page_pool = None
+            
+        bot_logger.info("浏览器资源清理完成。")
+
+    def _force_kill_browser_processes(self):
+        """
+        跨平台地强制终止所有与Playwright相关的Node.js和浏览器进程。
+        这是一个同步的、尽力而为的操作。
+        """
+        bot_logger.debug("开始强制查杀浏览器进程...")
+        try:
+            if platform.system() == "Windows":
+                # 在Windows上，强制杀死所有node.exe进程。这可能影响其他应用，但在关闭时是必要的最后手段。
+                cmd = 'taskkill /F /IM node.exe'
+                subprocess.run(cmd, shell=True, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                bot_logger.debug("已在Windows上尝试强制终止 'node.exe' 进程。")
+            else:  # 适用于 Linux 和 macOS
+                # 使用 pkill 精准查杀包含 'playwright' 字符串的进程
+                cmd = ["pkill", "-f", "playwright"]
+                subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                bot_logger.debug("已在类Unix系统上尝试使用 'pkill -f playwright' 终止进程。")
+        except FileNotFoundError:
+            bot_logger.warning("无法找到 'pkill' 命令，跳过强制进程查杀。")
+        except Exception as e:
+            bot_logger.error(f"强制终止浏览器进程时发生未知错误: {e}")
 
 # 全局实例
 browser_manager = BrowserManager() 
