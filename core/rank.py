@@ -189,23 +189,19 @@ class RankQuery:
         bot_logger.info("RankQuery单例初始化完成")
         
     async def initialize(self):
-        """初始化 RankQuery，主要是等待API初始化完成"""
+        """初始化 RankQuery，此方法现在仅用于标记，不再阻塞等待"""
         if self._preheated:
             return
-            
-        try:
-            async with self._lock:
-                if self._preheated:
-                    return
-                    
-                bot_logger.info("[RankQuery] 开始初始化...")
-                await self.api.wait_for_init()
-                # 预热图片生成器的相关逻辑已在ImageGenerator重构中移除
-                self._preheated = True
-                bot_logger.info("[RankQuery] 初始化完成")
-        except Exception as e:
-            bot_logger.error(f"[RankQuery] 初始化失败: {str(e)}")
-            raise
+
+        async with self._lock:
+            if self._preheated:
+                return
+
+            bot_logger.info("[RankQuery] 初始化流程启动 (非阻塞)")
+            # 关键修复: 移除阻塞等待。API的初始化在后台进行。
+            # await self.api.wait_for_init()
+            self._preheated = True
+            bot_logger.info("[RankQuery] 初始化标记完成")
             
     def _get_rank_icon_path(self, league: str) -> str:
         """根据段位名称获取段位图标文件名"""

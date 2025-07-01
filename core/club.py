@@ -82,13 +82,13 @@ class ClubQuery:
         try:
             # 直接从 search_indexer 的缓存数据中查找。
             sm = self.rank_query.api.season_manager
-            if hasattr(sm, 'search_indexer') and name in sm.search_indexer._player_data:
+            if hasattr(sm, 'search_indexer') and sm.search_indexer.is_ready() and name in sm.search_indexer._player_data:
                 player_data = sm.search_indexer._player_data[name]
                 score = player_data.get('score', 0)
                 bot_logger.debug(f"从索引器缓存找到玩家 {name} 分数: {score}")
             else:
-                # 如果玩家不在索引器的_player_data中，意味着他们不在排行榜上。
-                bot_logger.debug(f"玩家 {name} 不在索引器缓存中，判定为未上榜。")
+                # 如果玩家不在索引器的_player_data中，或者索引器未就绪
+                bot_logger.debug(f"玩家 {name} 不在索引器缓存中或索引器未就绪，判定为未上榜。")
                 score = 0
         except Exception as e:
             bot_logger.error(f"获取玩家 {name} 分数时发生意外错误: {str(e)}", exc_info=True)
@@ -99,10 +99,6 @@ class ClubQuery:
         if not members:
             return "暂无成员数据"
             
-        # 初始化 RankQuery (确保已初始化)
-        if not hasattr(self.rank_query, 'api') or not self.rank_query.api:
-             await self.rank_query.initialize()
-
         # 并发获取所有成员的分数
         tasks = [self._get_member_score(member) for member in members]
         member_scores = await asyncio.gather(*tasks)

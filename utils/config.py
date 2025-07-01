@@ -9,6 +9,20 @@ config_path = os.path.join(os.path.abspath(os.path.join(os.path.dirname(__file__
 with open(config_path, "r", encoding="utf-8") as f:
     _config = yaml.safe_load(f)
 
+class DotAccessibleDict(dict):
+    """一个允许通过点符号访问其键的字典类"""
+    def __getattr__(self, key):
+        try:
+            value = self[key]
+            if isinstance(value, dict):
+                return DotAccessibleDict(value)
+            return value
+        except KeyError:
+            raise AttributeError(f"'DotAccessibleDict' object has no attribute '{key}'")
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
 class Settings:
     # Bot 配置
     BOT_APPID = _config["bot"]["appid"]
@@ -60,6 +74,22 @@ class Settings:
     IMAGE_LIFETIME = _config.get("image", {}).get("storage", {}).get("lifetime", 24)
     IMAGE_CLEANUP_INTERVAL = _config.get("image", {}).get("storage", {}).get("cleanup_interval", 1)
     
+    @property
+    def api(self) -> DotAccessibleDict:
+        """返回API配置字典（可使用点访问）"""
+        return DotAccessibleDict({
+            "use_proxy": self.API_USE_PROXY,
+            "standard": {
+                "base_url": self.API_STANDARD_URL
+            },
+            "proxy": {
+                "base_url": self.API_PROXY_URL
+            },
+            "backup": {
+                "base_url": self.API_BACKUP_URL
+            }
+        })
+
     @property
     def api_base_url(self) -> str:
         """返回当前使用的API基础URL"""

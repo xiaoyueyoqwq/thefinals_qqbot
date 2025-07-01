@@ -47,8 +47,13 @@ class BaseAPI:
     # 使用来自db.py的、更优的QueryCache
     _query_cache: ClassVar[QueryCache] = QueryCache(max_size=1000, expire_seconds=60)
     
-    def __init__(self, base_url: str = "", timeout: int = 30):
-        self.base_url = base_url.rstrip('/')
+    def __init__(self, base_url: str = "", timeout: int = 5):
+        # 兼容旧的 base_url 参数，但优先使用配置文件中的设置
+        self.standard_url = (base_url or settings.api.standard.base_url).rstrip('/')
+        self.backup_url = settings.api.backup.base_url.rstrip('/')
+        
+        self.current_url = self.standard_url
+        self.is_using_backup = False
         self.timeout = timeout
     
     @staticmethod
@@ -139,18 +144,21 @@ class BaseAPI:
         json: Optional[Dict] = None,
         headers: Optional[Dict] = None,
         use_cache: bool = True,
-        cache_ttl: Optional[int] = None,  # 新增参数，支持指定缓存时间
-        _is_backup: bool = False,  # 新增参数，标记是否为备用请求
+        cache_ttl: Optional[int] = None,
         **kwargs
     ) -> httpx.Response:
         """发送HTTP请求，支持主备切换和高效缓存"""
+        # 使用当前URL构建请求地址
         url = self._build_url(endpoint)
-        bot_logger.debug(f"[BaseAPI] 发起请求: {method} {url}")
         
-        # 对GET请求使用缓存（仅主请求）
-        if use_cache and method.upper() == "GET" and not _is_backup:
+        bot_logger.debug(f"[BaseAPI] 发起请求: {method} {url}")
+
+        # 如果当前使用的是备用API，则不使用缓存，以获取最新数据
+        use_cache_effective = use_cache and not self.is_using_backup
+        
+        # 对GET请求使用缓存
+        if use_cache_effective and method.upper() == "GET":
             cache_key = self.get_cache_key(endpoint, params)
-            # 使用新的QueryCache
             cached_data = await self._query_cache.get(cache_key)
             if cached_data is not None:
                 bot_logger.debug("[BaseAPI] 使用缓存数据")
@@ -162,56 +170,46 @@ class BaseAPI:
             await self._enforce_rate_limit()
             
             try:
-                async with self.get_client() as client:
-                    bot_logger.debug(f"[BaseAPI] 发送请求: {method} {url}")
-                    response = await client.request(
-                        method=method,
-                        url=url,
-                        params=params,
-                        data=data,
-                        json=json,
-                        headers=headers,
-                        **kwargs
-                    )
-                    response.raise_for_status()
-                    bot_logger.debug(f"[BaseAPI] 请求成功: {response.status_code}")
+                # 使用 asyncio.timeout 施加一个硬性的总时间限制
+                async with asyncio.timeout(self.timeout):
+                    async with self.get_client() as client:
+                        bot_logger.debug(f"[BaseAPI] 发送请求: {method} {url}")
+                        
+                        # httpx本身的超时可以设得更宽松一些，因为外层有asyncio.timeout控制
+                        request_timeout = kwargs.pop('timeout', self.timeout + 5)
+
+                        response = await client.request(
+                            method=method,
+                            url=url,
+                            params=params,
+                            data=data,
+                            json=json,
+                            headers=headers,
+                            timeout=request_timeout,
+                            **kwargs
+                        )
+                        response.raise_for_status()
+                
+                bot_logger.debug(f"[BaseAPI] 请求成功: {response.status_code}")
+                
+                # 缓存成功的GET请求结果
+                if use_cache_effective and method.upper() == "GET":
+                    cache_key = self.get_cache_key(endpoint, params)
+                    await self._query_cache.set(cache_key, response, expire_seconds=cache_ttl)
+                    bot_logger.debug("[BaseAPI] 响应已缓存")
+                
+                return response
                     
-                    # 缓存成功的GET请求结果（仅主请求）
-                    if use_cache and method.upper() == "GET" and not _is_backup:
-                        cache_key = self.get_cache_key(endpoint, params)
-                        # 使用新的QueryCache
-                        await self._query_cache.set(cache_key, response, expire_seconds=cache_ttl)
-                        bot_logger.debug("[BaseAPI] 响应已缓存")
-                    
-                    return response
-                    
-            except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError, httpx.RemoteProtocolError, httpx.NetworkError) as e:
-                # 仅主请求、主域名、且未切换过时，才尝试主备切换
-                main_api_prefix = settings.API_STANDARD_URL.rstrip('/') + '/'
-                backup_api_prefix = settings.API_BACKUP_URL.rstrip('/') + '/'
-                if (not _is_backup and url.startswith(main_api_prefix)):
-                    backup_url = url.replace(
-                        main_api_prefix, backup_api_prefix, 1
-                    )
-                    bot_logger.warning(f"[BaseAPI] 主API请求失败（{type(e).__name__}: {e}），尝试备用API: {backup_url}")
-                    try:
-                        async with self.get_client() as client:
-                            response = await client.request(
-                                method=method,
-                                url=backup_url,
-                                params=params,
-                                data=data,
-                                json=json,
-                                headers=headers,
-                                **kwargs
-                            )
-                            response.raise_for_status()
-                            bot_logger.debug(f"[BaseAPI] 备用API请求成功: {response.status_code}")
-                            return response
-                    except Exception as be:
-                        bot_logger.error(f"[BaseAPI] 备用API请求也失败: {type(be).__name__}: {be}")
-                        raise be
-                bot_logger.error(f"[BaseAPI] 请求失败: {type(e).__name__}: {e}")
+            except (httpx.TimeoutException, httpx.ConnectError, asyncio.TimeoutError) as e:
+                bot_logger.error(f"[BaseAPI] 请求失败 ({self.current_url}): {type(e).__name__}")
+
+                # 如果当前未使用备用URL，并且备用URL已配置，则进行切换
+                if not self.is_using_backup and self.backup_url:
+                    self.current_url = self.backup_url
+                    self.is_using_backup = True
+                    bot_logger.warning(f"[BaseAPI] 主API请求失败，自动切换到备用API: {self.backup_url}")
+                
+                # 重新抛出异常，让重试装饰器处理
                 raise
             except httpx.RequestError as e:
                 # 其他RequestError
@@ -253,14 +251,7 @@ class BaseAPI:
         **kwargs
     ) -> httpx.Response:
         """发送POST请求"""
-        return await self._request(
-            "POST",
-            endpoint,
-            data=data,
-            json=json,
-            use_cache=False,
-            **kwargs
-        )
+        return await self._request("POST", endpoint, data=data, json=json, **kwargs)
     
     async def put(
         self,
@@ -270,14 +261,7 @@ class BaseAPI:
         **kwargs
     ) -> httpx.Response:
         """发送PUT请求"""
-        return await self._request(
-            "PUT",
-            endpoint,
-            data=data,
-            json=json,
-            use_cache=False,
-            **kwargs
-        )
+        return await self._request("PUT", endpoint, data=data, json=json, **kwargs)
     
     async def delete(
         self,
@@ -285,22 +269,16 @@ class BaseAPI:
         **kwargs
     ) -> httpx.Response:
         """发送DELETE请求"""
-        return await self._request(
-            "DELETE",
-            endpoint,
-            use_cache=False,
-            **kwargs
-        )
+        return await self._request("DELETE", endpoint, **kwargs)
     
     @staticmethod
     def handle_response(response: httpx.Response) -> Union[Dict, str]:
-        """处理API响应"""
+        """处理HTTP响应"""
         try:
             return response.json()
-        except ValueError:
+        except (ValueError, TypeError):
             return response.text
     
     def _build_url(self, endpoint: str) -> str:
-        """构建完整的API URL"""
-        endpoint = endpoint.lstrip('/')
-        return f"{self.base_url}/{endpoint}" if self.base_url else endpoint
+        """构建完整的请求URL"""
+        return f"{self.current_url}{endpoint}"

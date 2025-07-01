@@ -193,7 +193,7 @@ class Season:
                     # 如果它非常耗时，未来可以考虑 run_in_executor
                     self.manager.search_indexer.build_index(players)
                 except Exception as e:
-                    bot_logger.error(f"[Season] 构建搜索索引时出错: {e}")
+                    bot_logger.error(f"[Season] 构建搜索索引时发生严重错误: {e}", exc_info=True)
 
             # 3. 更新存储
             if self._is_current:

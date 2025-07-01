@@ -48,23 +48,14 @@ class GZipRotator:
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='GZipRotator')
         atexit.register(self.shutdown)
 
-    def __call__(self, source, dest):
+    def __call__(self, source):
         """
-        通过在后台线程池中运行来处理压缩，避免阻塞事件循环。
+        通过在后台线程池中运行来处理压缩，避免阻塞主线程。
+        这个方法现在只接收 'source' 参数，以兼容 Loguru 的 compression API。
         """
-        asyncio.create_task(self.compress_in_thread(source, dest))
-
-    async def compress_in_thread(self, source, dest):
-        """
-        在专用的线程中异步执行压缩。
-        """
-        try:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                self._executor, self._compress, str(source), str(dest)
-            )
-        except Exception as e:
-            print(f"Failed to schedule compression for {source}: {e}", file=sys.stderr)
+        dest = f"{source}.gz"
+        # 直接使用线程池执行器提交任务，不依赖于asyncio事件循环
+        self._executor.submit(self._compress, source, dest)
 
     def _compress(self, source, dest):
         """

@@ -27,7 +27,12 @@ class SearchIndexer:
         self._index: Dict[str, Set[str]] = defaultdict(set)
         self._player_data: Dict[str, Dict[str, Any]] = {}
         self._name_field = "name"
+        self._is_ready = False
         bot_logger.info("[SearchIndexer] 搜索索引器已初始化。")
+
+    def is_ready(self) -> bool:
+        """检查索引是否已构建并准备就绪。"""
+        return self._is_ready
 
     def build_index(self, players: List[Dict[str, Any]]):
         """
@@ -63,6 +68,10 @@ class SearchIndexer:
         # 原子性地替换旧索引
         self._index = new_index
         self._player_data = new_player_data
+        
+        if not self._is_ready:
+            self._is_ready = True
+        
         bot_logger.info(f"[SearchIndexer] 索引构建完成。索引词条数: {len(self._index)}")
 
     def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:

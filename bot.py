@@ -458,7 +458,7 @@ class MyBot(botpy.Client):
                         if await self.plugin_manager.handle_message(handler, content):
                             return
                 except asyncio.TimeoutError:
-                    bot_logger.error("回复消息处理超时")
+                    bot_logger.error("回复消息处理超时", exc_info=True)
                     await handler.send_text("⚠️ 处理超时，请稍后重试")
                     return
             
@@ -469,7 +469,7 @@ class MyBot(botpy.Client):
                         if await self.plugin_manager.handle_message(handler, content):
                             return
             except asyncio.TimeoutError:
-                bot_logger.error("消息处理超时")
+                bot_logger.error("消息处理超时", exc_info=True)
                 
                 await handler.send_text(
                     "⚠️ 处理超时\n"
