@@ -90,7 +90,7 @@ class MeAPI:
             
             # 并行获取各项数据
             rank_data, wt_data = await asyncio.gather(
-                self.season_manager.get_player_data(player_name, season),
+                self.season_manager.get_player_data(player_name, season, use_fuzzy_search=False),
                 self.world_tour_api.get_player_stats(player_name, season)
             )
             

@@ -94,7 +94,7 @@ class RankAPIPlugin(Plugin):
                 )
                 
             # 从赛季管理器获取数据
-            data = await self.season_manager.get_player_data(player_id, season)
+            data = await self.season_manager.get_player_data(player_id, season, use_fuzzy_search=False)
             if not data:
                 return PlayerStatsResponse(
                     name=player_id,

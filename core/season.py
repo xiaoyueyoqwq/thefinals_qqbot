@@ -278,7 +278,7 @@ class Season:
             self._is_updating = False
             bot_logger.info(f"[Season] 数据更新循环已停止 - {self.season_id}")
 
-    async def get_player_data(self, player_name: str) -> Optional[dict]:
+    async def get_player_data(self, player_name: str, use_fuzzy_search: bool = True) -> Optional[dict]:
         """获取玩家数据"""
         try:
             player_name_lower = player_name.lower()
@@ -297,8 +297,8 @@ class Season:
                         )
                         # 如果解析失败，则继续往下走，尝试搜索引擎
 
-                # 2. 如果缓存未命中，使用搜索引擎进行模糊搜索
-                if self.manager and hasattr(self.manager, "search_indexer"):
+                # 2. 如果缓存未命中，并且开启了模糊搜索，使用搜索引擎进行模糊搜索
+                if use_fuzzy_search and self.manager and hasattr(self.manager, "search_indexer"):
                     bot_logger.debug(
                         f"[Season] 缓存未命中, 使用索引器搜索: {player_name}"
                     )
@@ -328,21 +328,22 @@ class Season:
                         )
 
                 # 2. 模糊查询
-                sql_like = "SELECT data FROM player_data WHERE player_name LIKE ?"
-                rows_like = await self.persistence.fetch_all(
-                    self.cache_name, sql_like, (f"%{player_name_lower}%",)
+                if use_fuzzy_search:
+                    sql_like = "SELECT data FROM player_data WHERE player_name LIKE ?"
+                    rows_like = await self.persistence.fetch_all(
+                        self.cache_name, sql_like, (f"%{player_name_lower}%",)
                     )
-                if rows_like and rows_like[0].get("data"):
-                    try:
-                        return json.loads(rows_like[0]["data"])
-                    except json.JSONDecodeError:
-                        bot_logger.warning(
-                            f"[Season] 历史模糊搜索数据解析失败 for name: {player_name_lower}"
-                        )
+                    if rows_like and rows_like[0].get("data"):
+                        try:
+                            return json.loads(rows_like[0]["data"])
+                        except json.JSONDecodeError:
+                            bot_logger.warning(
+                                f"[Season] 历史模糊搜索数据解析失败 for name: {player_name_lower}"
+                            )
 
             # 如果所有方法都找不到
-                bot_logger.warning(f"[Season] 未找到玩家数据 - {player_name}")
-                return None
+            bot_logger.warning(f"[Season] 未找到玩家数据 - {player_name}")
+            return None
 
         except Exception as e:
             bot_logger.error(f"[Season] 获取玩家数据时发生严重错误: {str(e)}")
@@ -544,7 +545,7 @@ class HistorySeason:
             )  # Modified log
             raise
 
-    async def get_player_data(self, player_name: str) -> Optional[dict]:
+    async def get_player_data(self, player_name: str, use_fuzzy_search: bool = True) -> Optional[dict]:
         """获取玩家数据"""
         try:
             # 先尝试精确匹配
@@ -556,7 +557,7 @@ class HistorySeason:
             )
 
             # 如果精确匹配没找到，尝试模糊匹配
-            if not result:
+            if not result and use_fuzzy_search:
                 bot_logger.info(
                     f"[HistorySeason] 精确匹配未找到，尝试模糊匹配 - {player_name}"
                 )
@@ -747,7 +748,7 @@ class SeasonManager:
         except Exception as e:
             bot_logger.error(f"[SeasonManager] 停止赛季任务失败: {str(e)}")
 
-    async def get_player_data(self, player_name: str, season_id: str) -> Optional[dict]:
+    async def get_player_data(self, player_name: str, season_id: str, use_fuzzy_search: bool = True) -> Optional[dict]:
         """获取指定赛季的玩家数据"""
         bot_logger.info(
             f"[SeasonManager] 开始获取玩家数据 - 玩家: {player_name}, 赛季: {season_id}"
@@ -758,7 +759,7 @@ class SeasonManager:
             bot_logger.error(f"[SeasonManager] 未找到赛季: {season_id}")
             return None
 
-        return await season.get_player_data(player_name)
+        return await season.get_player_data(player_name, use_fuzzy_search=use_fuzzy_search)
 
     async def get_top_players(self, season_id: str, limit: int = 5) -> List[str]:
         """获取指定赛季排名前N的玩家"""

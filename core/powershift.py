@@ -138,7 +138,7 @@ class PowerShiftQuery:
 
         try:
             # 查询玩家数据
-            data = await self.api.get_player_stats(player_name)
+            data = await self.api.get_player_stats(player_name, use_fuzzy_search=False)
             
             # 格式化并返回结果
             return self.format_response(player_name, data)

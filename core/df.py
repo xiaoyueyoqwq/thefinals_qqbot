@@ -260,46 +260,72 @@ class DFQuery:
             
     @with_database
     async def get_bottom_scores(self) -> Dict[str, Any]:
-        """获取底分数据"""
+        """获取500名和10000名的底分"""
         try:
-            # 先尝试从缓存获取
+            # 1. 尝试从缓存获取
             cached_data = await self.cache_manager.get_cache("df", self._cache_key)
             if cached_data:
+                bot_logger.debug(f"[DFQuery] 从缓存获取数据: {cached_data}")
                 try:
+                    # 关键修复: 解析从缓存获取的JSON字符串
                     return json.loads(cached_data)
                 except json.JSONDecodeError:
-                    bot_logger.warning("[DFQuery] 缓存数据解析失败，将从数据库获取")
+                    bot_logger.error("[DFQuery] 缓存数据格式错误，无法解析JSON")
+                    # 如果缓存数据损坏，则从数据库重新获取
             
-            # 从数据库获取
-            results = await self.db.fetch_all(
-                '''SELECT rank, player_id, score, update_time 
-                   FROM leaderboard'''
-            )
+            # 2. 如果缓存不存在，从数据库查询
+            bot_logger.info("[DFQuery] 缓存未命中，从数据库查询底分数据")
+            sql = '''SELECT rank, player_id, score, update_time 
+                     FROM leaderboard 
+                     WHERE rank IN (500, 10000)'''
+            results = await self.db.fetch_all(sql)
             
-            scores = {}
+            if not results:
+                return {}
+            
+            # 格式化数据，同时准备用于缓存的序列化版本
+            data = {}
+            cache_to_set = {}
             for row in results:
-                rank, player_id, score, update_time = row
-                scores[str(rank)] = {
-                    "player_id": player_id,
-                    "score": score,
-                    "update_time": datetime.fromisoformat(update_time)
+                rank_str = str(row[0])
+                update_time_val = row[3]
+
+                # 确保 update_time 是 datetime 对象
+                update_time_obj = None
+                if isinstance(update_time_val, datetime):
+                    update_time_obj = update_time_val
+                elif isinstance(update_time_val, str):
+                    try:
+                        # fromisoformat 需要 'T' 作为日期和时间的分隔符
+                        update_time_obj = datetime.fromisoformat(update_time_val.replace(" ", "T"))
+                    except ValueError:
+                        # 如果格式不匹配，尝试其他格式
+                        try:
+                            update_time_obj = datetime.strptime(update_time_val, '%Y-%m-%d %H:%M:%S.%f')
+                        except (ValueError, TypeError):
+                            bot_logger.warning(f"无法解析数据库中的时间字符串: {update_time_val}")
+
+                data[rank_str] = {
+                    "player_id": row[1],
+                    "score": row[2],
+                    "update_time": update_time_obj
                 }
-                
+                # 为缓存创建可序列化的版本
+                cache_to_set[rank_str] = {
+                    "player_id": row[1],
+                    "score": row[2],
+                    "update_time": update_time_obj.isoformat() if isinstance(update_time_obj, datetime) else update_time_val
+                }
+
             # 更新缓存
-            if scores:
-                await self.cache_manager.set_cache(
-                    "df",
-                    self._cache_key,
-                    json.dumps(scores),
-                    expire_seconds=120
-                )
-                
-            return scores
+            await self.cache_manager.set_cache("df", self._cache_key, cache_to_set, self.cache_duration)
+            
+            return data
             
         except Exception as e:
             bot_logger.error(f"[DFQuery] 获取底分数据失败: {str(e)}")
-            raise
-            
+            return {}
+
     @with_database
     async def _check_last_save(self):
         """检查上次保存状态"""

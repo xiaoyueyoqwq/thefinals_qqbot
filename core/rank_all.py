@@ -36,7 +36,7 @@ class RankAll:
                 try:
                     season = await self.season_manager.get_season(season_id)
                     if season:
-                        data = await season.get_player_data(player_name)
+                        data = await season.get_player_data(player_name, use_fuzzy_search=False)
                         if data:
                             all_data[season_id] = data
                 except Exception as e:

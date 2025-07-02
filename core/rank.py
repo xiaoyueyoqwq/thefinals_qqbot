@@ -57,12 +57,13 @@ class RankAPI(BaseAPI):
         except Exception as e:
             bot_logger.error(f"[RankAPI] 停止任务失败: {str(e)}")
 
-    async def get_player_stats(self, player_name: str, season: str = None) -> Optional[dict]:
+    async def get_player_stats(self, player_name: str, season: str = None, use_fuzzy_search: bool = True) -> Optional[dict]:
         """查询玩家在指定赛季的数据
         
         Args:
             player_name: 玩家ID
             season: 赛季，默认为当前赛季
+            use_fuzzy_search: 是否使用模糊搜索
             
         Returns:
             dict: 玩家数据,如果获取失败则返回None
@@ -76,7 +77,7 @@ class RankAPI(BaseAPI):
             season = season or SeasonConfig.CURRENT_SEASON
             
             # 通过赛季管理器获取数据
-            data = await self.season_manager.get_player_data(player_name, season)
+            data = await self.season_manager.get_player_data(player_name, season, use_fuzzy_search=use_fuzzy_search)
             if data:
                 bot_logger.info(f"[RankAPI] 获取玩家数据成功: {player_name}")
                 return data
@@ -311,7 +312,7 @@ class RankQuery:
                 
             try:
                 # 查询玩家数据
-                season_data = {season: await self.api.get_player_stats(player_name, season)}
+                season_data = {season: await self.api.get_player_stats(player_name, season, use_fuzzy_search=False)}
                 
                 # 检查数据并格式化响应
                 if not any(season_data.values()):
