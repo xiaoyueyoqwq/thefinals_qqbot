@@ -210,6 +210,8 @@ class SeasonManager:
     """赛季管理器 (已重构为 Redis)"""
     _instance = None
     _initialized = False
+    _preheated = False
+    _init_lock = asyncio.Lock()
 
     def __new__(cls):
         if cls._instance is None:
@@ -223,20 +225,33 @@ class SeasonManager:
         self.api_headers = {"Accept": "application/json", "User-Agent": "TheFinals-Bot/1.0"}
         self.seasons_config = SeasonConfig.SEASONS
         self._seasons: Dict[str, Season] = {}
+        # 这个锁用于保护 _seasons 字典的并发访问
         self._lock = asyncio.Lock()
         self.search_indexer = SearchIndexer()
         self._initialized = True
         bot_logger.debug("赛季管理器(Redis)初始化完成")
 
     async def initialize(self) -> None:
-        """初始化所有赛季的数据"""
-        bot_logger.info("开始初始化所有赛季模块...")
-        tasks = [self.get_season(season_id) for season_id in self.seasons_config]
-        await asyncio.gather(*tasks)
-        bot_logger.info("所有赛季模块初始化完成。")
+        """
+        初始化所有赛季的数据。
+        此方法使用双重检查锁定模式确保只执行一次。
+        """
+        if SeasonManager._preheated:
+            return
+        
+        async with SeasonManager._init_lock:
+            if SeasonManager._preheated:
+                return
+            
+            bot_logger.info("开始初始化所有赛季模块...")
+            tasks = [self.get_season(season_id) for season_id in self.seasons_config]
+            await asyncio.gather(*tasks)
+            bot_logger.info("所有赛季模块初始化完成。")
+            SeasonManager._preheated = True
 
     async def get_season(self, season_id: str) -> Optional[Season]:
         """获取或创建赛季实例并初始化"""
+        # _lock 用于保护 self._seasons 字典的读写，防止并发问题
         async with self._lock:
             if season_id in self._seasons:
                 return self._seasons[season_id]

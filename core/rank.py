@@ -67,8 +67,6 @@ class RankAPI(BaseAPI):
         使用 SearchIndexer 查询玩家在指定赛季的数据。
         """
         try:
-            await self.initialize()
-            
             target_season = season or SeasonConfig.CURRENT_SEASON
             bot_logger.info(f"[RankAPI] 开始在赛季 {target_season} 中搜索玩家: '{player_name}'")
 
@@ -112,7 +110,6 @@ class RankAPI(BaseAPI):
             List[str]: 包含前5名玩家ID的列表
         """
         try:
-            await self.initialize()
             # 使用配置中的当前赛季
             return await self.season_manager.get_top_players(SeasonConfig.CURRENT_SEASON, limit=5)
             
@@ -290,8 +287,6 @@ class RankQuery:
     async def process_rank_command(self, player_name: str = None, season: str = None) -> Tuple[Optional[bytes], Optional[str], Optional[dict], Optional[dict]]:
         """处理排位查询命令"""
         try:
-            # 等待初始化完成
-            await self.initialize()
             bot_logger.info(f"[RankQuery] 开始处理排位查询命令: {player_name} {season}")
             
             if not player_name:
