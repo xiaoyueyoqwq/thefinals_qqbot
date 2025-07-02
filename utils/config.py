@@ -50,7 +50,7 @@ class Settings:
     API_PROXY_URL = _config.get("api", {}).get("proxy", {}).get("base_url", "https://thefinals-api.luoxiaohei.cn")
     API_BACKUP_URL = _config.get("api", {}).get("backup", {}).get("base_url", "https://99z.top/https://api.the-finals-leaderboard.com/v1")
     API_PREFIX = "/leaderboard"  # 移除重复的/v1前缀
-    API_TIMEOUT = 10  # API超时时间(秒)
+    API_TIMEOUT = _config.get("api", {}).get("timeout", 30)  # API超时时间(秒)
     API_MESSAGE = _config.get("api", {}).get("message", "欢迎使用 THE FINALS BOT API")
     API_TV_VER = _config.get("api", {}).get("tv_ver", "1.0.0")
     
@@ -74,6 +74,18 @@ class Settings:
     IMAGE_LIFETIME = _config.get("image", {}).get("storage", {}).get("lifetime", 24)
     IMAGE_CLEANUP_INTERVAL = _config.get("image", {}).get("storage", {}).get("cleanup_interval", 1)
     
+    # Redis 配置
+    REDIS_HOST = _config.get("redis", {}).get("host", "127.0.0.1")
+    REDIS_PORT = _config.get("redis", {}).get("port", 6379)
+    REDIS_DB = _config.get("redis", {}).get("db", 0)
+    REDIS_PASSWORD = _config.get("redis", {}).get("password", "")
+    REDIS_TIMEOUT = _config.get("redis", {}).get("timeout", 5)
+    
+    @property
+    def redis(self) -> DotAccessibleDict:
+        """返回Redis配置"""
+        return DotAccessibleDict(_config.get("redis", {}))
+
     @property
     def api(self) -> DotAccessibleDict:
         """返回API配置字典（可使用点访问）"""

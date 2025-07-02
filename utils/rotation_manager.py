@@ -2,7 +2,6 @@ import asyncio
 import time
 from typing import Dict, Optional, Any, List, Callable, Coroutine
 from utils.logger import bot_logger
-from utils.cache_manager import CacheManager
 
 class RotationStrategy:
     """轮换策略基类
@@ -64,7 +63,6 @@ class RotationManager:
     管理数据轮换策略和执行
     
     Attributes:
-        cache_manager (CacheManager): 缓存管理器实例
         strategies (Dict[str, RotationStrategy]): 存储各轮换任务对应的策略
         rotation_tasks (Dict[str, asyncio.Task]): 存储各轮换任务的异步任务对象
         handlers (Dict[str, Callable[[], Coroutine[Any, Any, None]]]): 存储各轮换任务对应的执行函数
@@ -82,8 +80,6 @@ class RotationManager:
         if self._initialized:
             return
             
-        self.cache_manager = CacheManager()
-        
         # 存放轮换策略、任务和处理器
         self.strategies: Dict[str, RotationStrategy] = {}
         self.rotation_tasks: Dict[str, asyncio.Task] = {}

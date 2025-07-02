@@ -6,9 +6,7 @@ import asyncio
 from typing import Optional, Dict
 from datetime import datetime
 from utils.logger import bot_logger
-from utils.cache_manager import CacheManager
 from utils.image_manager import ImageManager
-from utils.db import DatabaseManager
 
 class MemoryLogger:
     """内存监控日志管理器"""
@@ -144,25 +142,10 @@ class MemoryCleanupManager:
         """常规清理"""
         # 基础垃圾回收
         gc.collect()
-        # 清理过期缓存
-        cache_manager = CacheManager()
-        for db_name in cache_manager.get_registered_databases():
-            try:
-                await cache_manager.cleanup_expired(db_name)
-            except Exception as e:
-                bot_logger.error(f"清理缓存 {db_name} 失败: {str(e)}")
         
     async def _warning_cleanup(self):
         """警告级别清理"""
         await self._normal_cleanup()
-        # 清理非关键缓存
-        cache_manager = CacheManager()
-        for db_name in cache_manager.get_registered_databases():
-            if not db_name.startswith('critical_'):
-                try:
-                    await cache_manager.cleanup_cache(db_name)
-                except Exception as e:
-                    bot_logger.error(f"清理非关键缓存 {db_name} 失败: {str(e)}")
         
         # 清理图片缓存
         try:
@@ -174,18 +157,6 @@ class MemoryCleanupManager:
     async def _critical_cleanup(self):
         """严重级别清理"""
         await self._warning_cleanup()
-        # 重置数据库连接
-        try:
-            await DatabaseManager.close_all()
-        except Exception as e:
-            bot_logger.error(f"重置数据库连接失败: {str(e)}")
-        
-        # 强制清理所有缓存
-        cache_manager = CacheManager()
-        try:
-            await cache_manager.cleanup()
-        except Exception as e:
-            bot_logger.error(f"强制清理所有缓存失败: {str(e)}")
         
         # 二次垃圾回收
         gc.collect(2)

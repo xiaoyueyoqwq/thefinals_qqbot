@@ -23,8 +23,7 @@ class FlappyBirdPlugin(Plugin):
         """插件加载时初始化数据库"""
         await super().on_load()
         try:
-            bot_logger.debug(f"[{self.name}] 开始初始化数据库...")
-            await self.core.init_db()
+            bot_logger.debug(f"[{self.name}] Flappy Bird 插件正在加载...")
             self.is_initialized = True
             bot_logger.info(f"[{self.name}] 插件初始化成功")
         except Exception as e:
@@ -36,14 +35,14 @@ class FlappyBirdPlugin(Plugin):
         await super().on_unload()
         bot_logger.debug(f"[{self.name}] 插件正在卸载...")
         
-    async def check_db_status(self):
+    async def check_connection_status(self):
         """检查数据库状态"""
         try:
-            status = await self.core.get_db_status()
-            bot_logger.debug(f"[{self.name}] 数据库状态: {status}")
+            status = await self.core.check_redis_connection()
+            bot_logger.debug(f"[{self.name}] 连接状态: {status}")
             return status
         except Exception as e:
-            bot_logger.error(f"[{self.name}] 获取数据库状态失败: {str(e)}")
+            bot_logger.error(f"[{self.name}] 获取连接状态失败: {str(e)}")
             return None
             
     @on_command("bird", "查看 Flappy Bird 游戏排行榜")
@@ -61,7 +60,7 @@ class FlappyBirdPlugin(Plugin):
                     return
                     
             # 检查数据库状态
-            db_status = await self.check_db_status()
+            db_status = await self.check_connection_status()
             if not db_status or not db_status.get("connected"):
                 await handler.send_text("数据库连接异常，请稍后再试...")
                 return

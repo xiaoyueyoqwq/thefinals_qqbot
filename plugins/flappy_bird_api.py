@@ -65,31 +65,11 @@ class FlappyBirdAPI(Plugin):
         self.core = FlappyBirdCore()
         
     async def on_load(self):
-        """插件加载时的初始化"""
-        try:
-            # 调用父类的on_load
-            await super().on_load()
-            
-            # 初始化数据库
-            bot_logger.info("[FlappyBirdAPI] 正在初始化数据库...")
-            await self.core.init_db()
-            
-            # 验证API密钥
-            if not self.core.api_key:
-                raise ValueError("API密钥未配置")
-                
-            # 验证数据库状态    
-            db_status = await self.core.get_db_status()
-            if not db_status["connected"]:
-                raise ValueError("数据库连接失败")
-            if not db_status["table_exists"]:
-                raise ValueError("数据表初始化失败")
-                
-            bot_logger.info("[FlappyBirdAPI] 插件初始化成功")
-            
-        except Exception as e:
-            bot_logger.error(f"[FlappyBirdAPI] 插件初始化失败: {str(e)}")
-            raise
+        """插件加载时的处理"""
+        bot_logger.info(f"[{self.name}] FlappyBird API 插件已加载")
+
+    async def on_unload(self):
+        """插件卸载时的处理"""
         
     async def verify_api_key(self, api_key: str = Security(API_KEY_HEADER)) -> bool:
         """验证API密钥"""

@@ -69,10 +69,6 @@ class DeepSearchPlugin(Plugin):
             # 设置用户冷却
             await self.deep_search.set_cooldown(user_id)
             
-            # 记录搜索历史
-            await self.deep_search.add_search_history(user_id, query)
-            
-            
             # 执行搜索
             results = await self.deep_search.search(query)
             
@@ -85,5 +81,5 @@ class DeepSearchPlugin(Plugin):
                 f"\n💡 小贴士: 搜索失败\n"
                 f"{SEPARATOR}\n"
             )
-            bot_logger.error(f"[{self.name}] 处理深度搜索失败: {str(e)}")
+            bot_logger.error(f"[{self.name}] 处理深度搜索失败", exc_info=True)
             await handler.send_text(error_msg) 

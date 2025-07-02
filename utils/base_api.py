@@ -1,6 +1,7 @@
 import httpx
 import asyncio
 import time
+import pickle
 from typing import Any, AsyncGenerator, Dict, Optional, Union, Tuple, ClassVar, List
 from utils.logger import bot_logger
 from utils.config import settings
@@ -8,7 +9,7 @@ from functools import wraps
 from contextlib import asynccontextmanager
 from datetime import datetime
 import os
-from utils.db import QueryCache
+from utils.redis_manager import redis_manager
 
 def async_retry(max_retries: int = 3, delay: float = 1.0):
     """异步重试装饰器"""
@@ -23,7 +24,7 @@ def async_retry(max_retries: int = 3, delay: float = 1.0):
                     last_exception = e
                     if attempt < max_retries - 1:
                         wait_time = delay * (2 ** attempt)  # 指数退避
-                        bot_logger.warning(f"请求失败，{wait_time}秒后重试: {str(e)}")
+                        bot_logger.warning(f"请求失败，{wait_time}秒后重试: {str(e)}", exc_info=True)
                         await asyncio.sleep(wait_time)
             raise last_exception
         return wrapper
@@ -44,8 +45,8 @@ class BaseAPI:
     _last_request_time: ClassVar[float] = 0
     _rate_limit_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
     
-    # 使用来自db.py的、更优的QueryCache
-    _query_cache: ClassVar[QueryCache] = QueryCache(max_size=1000, expire_seconds=60)
+    # API 缓存的 TTL (秒)
+    _cache_ttl: ClassVar[int] = 60
     
     def __init__(self, base_url: str = "", timeout: int = 5):
         # 兼容旧的 base_url 参数，但优先使用配置文件中的设置
@@ -81,7 +82,8 @@ class BaseAPI:
                             max_connections=100,
                             keepalive_expiry=30
                         ),
-                        "verify": False  # 禁用SSL验证,避免代理证书问题
+                        "verify": False,  # 禁用SSL验证,避免代理证书问题
+                        "follow_redirects": True  # 启用重定向
                     }
                     
                     # 防御性处理代理配置
@@ -148,34 +150,38 @@ class BaseAPI:
         **kwargs
     ) -> httpx.Response:
         """发送HTTP请求，支持主备切换和高效缓存"""
-        # 使用当前URL构建请求地址
         url = self._build_url(endpoint)
-        
         bot_logger.debug(f"[BaseAPI] 发起请求: {method} {url}")
 
-        # 如果当前使用的是备用API，则不使用缓存，以获取最新数据
         use_cache_effective = use_cache and not self.is_using_backup
         
-        # 对GET请求使用缓存
         if use_cache_effective and method.upper() == "GET":
             cache_key = self.get_cache_key(endpoint, params)
-            cached_data = await self._query_cache.get(cache_key)
-            if cached_data is not None:
-                bot_logger.debug("[BaseAPI] 使用缓存数据")
-                return cached_data
+            cached_data = await redis_manager.get(cache_key)
+            if cached_data:
+                bot_logger.debug(f"[BaseAPI] 使用 Redis 缓存数据 for key: {cache_key}")
+                # 确保内容是 bytes 类型
+                if isinstance(cached_data, str):
+                    content_bytes = cached_data.encode('utf-8')
+                else:
+                    content_bytes = cached_data
+                
+                # 从缓存内容重建 Response 对象
+                response = httpx.Response(
+                    status_code=200,
+                    content=content_bytes,
+                    request=httpx.Request(method, url)
+                )
+                return response
         
-        # 限制并发请求数量
         async with self._request_semaphore:
-            # 强制请求频率限制
             await self._enforce_rate_limit()
             
             try:
-                # 使用 asyncio.timeout 施加一个硬性的总时间限制
                 async with asyncio.timeout(self.timeout):
                     async with self.get_client() as client:
                         bot_logger.debug(f"[BaseAPI] 发送请求: {method} {url}")
                         
-                        # httpx本身的超时可以设得更宽松一些，因为外层有asyncio.timeout控制
                         request_timeout = kwargs.pop('timeout', self.timeout + 5)
 
                         response = await client.request(
@@ -192,16 +198,16 @@ class BaseAPI:
                 
                 bot_logger.debug(f"[BaseAPI] 请求成功: {response.status_code}")
                 
-                # 缓存成功的GET请求结果
                 if use_cache_effective and method.upper() == "GET":
                     cache_key = self.get_cache_key(endpoint, params)
-                    await self._query_cache.set(cache_key, response, expire_seconds=cache_ttl)
-                    bot_logger.debug("[BaseAPI] 响应已缓存")
+                    ttl = cache_ttl if cache_ttl is not None else self._cache_ttl
+                    await redis_manager.set(cache_key, response.content, expire=ttl)
+                    bot_logger.debug(f"[BaseAPI] 响应已缓存到 Redis, key: {cache_key}, ttl: {ttl}s")
                 
                 return response
                     
             except (httpx.TimeoutException, httpx.ConnectError, asyncio.TimeoutError) as e:
-                bot_logger.error(f"[BaseAPI] 请求失败 ({self.current_url}): {type(e).__name__}")
+                bot_logger.error(f"[BaseAPI] 请求失败 ({self.current_url}): {type(e).__name__}", exc_info=True)
 
                 # 如果当前未使用备用URL，并且备用URL已配置，则进行切换
                 if not self.is_using_backup and self.backup_url:
@@ -213,13 +219,13 @@ class BaseAPI:
                 raise
             except httpx.RequestError as e:
                 # 其他RequestError
-                bot_logger.error(f"[BaseAPI] 请求失败: {type(e).__name__}: {e}")
+                bot_logger.error(f"[BaseAPI] 请求失败: {type(e).__name__}: {e}", exc_info=True)
                 raise
     
     @classmethod
     def get_cache_key(cls, endpoint: str, params: Optional[Dict] = None) -> str:
         """生成缓存键"""
-        key = endpoint
+        key = f"api_cache:{endpoint}"
         if params:
             sorted_params = sorted(params.items())
             key += ":" + ":".join(f"{k}={v}" for k, v in sorted_params)
@@ -273,12 +279,14 @@ class BaseAPI:
     
     @staticmethod
     def handle_response(response: httpx.Response) -> Union[Dict, str]:
-        """处理HTTP响应"""
+        """处理HTTP响应，返回JSON数据或原始文本"""
         try:
+            # bot_logger.debug(f"正在处理响应: 状态码={response.status_code}, 响应头={response.headers}")
             return response.json()
-        except (ValueError, TypeError):
+        except Exception:
+            bot_logger.debug(f"JSON解码失败，原始响应内容: {response.content}")
             return response.text
     
     def _build_url(self, endpoint: str) -> str:
         """构建完整的请求URL"""
-        return f"{self.current_url}{endpoint}"
+        return f"{self.current_url}/{endpoint.lstrip('/')}"

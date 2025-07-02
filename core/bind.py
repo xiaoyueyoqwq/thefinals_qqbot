@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Optional, Dict, List, Callable, Any
 from utils.logger import bot_logger
 from utils.templates import SEPARATOR
-from utils.db import DatabaseManager
 from pathlib import Path
 
 class BindManager:

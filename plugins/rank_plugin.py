@@ -107,12 +107,18 @@ class RankPlugin(Plugin):
     async def on_load(self) -> None:
         """插件加载时的处理"""
         try:
-            bot_logger.info(f"[{self.name}] 开始加载排名查询插件")
-            await self.rank_query.initialize()
+            bot_logger.info(f"[{self.name}] 开始加载排名查询插件，并等待其核心API初始化...")
+            await self.rank_query.api.initialize()
+            bot_logger.info(f"[{self.name}] 核心API初始化完成，排名查询插件已就绪。")
+            
+            # 通知主程序，关键服务已就绪
+            if self.client and hasattr(self.client, 'critical_init_event'):
+                self.client.critical_init_event.set()
+                bot_logger.info(f"[{self.name}] 已发送关键服务就绪信号。")
+                
             await super().on_load()
-            bot_logger.info(f"[{self.name}] 排名查询插件加载完成")
         except Exception as e:
-            bot_logger.error(f"[{self.name}] 插件加载失败: {str(e)}")
+            bot_logger.error(f"[{self.name}] 插件加载失败: {str(e)}", exc_info=True)
             raise
         
     async def on_unload(self) -> None:

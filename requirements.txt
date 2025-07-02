@@ -23,3 +23,4 @@ psutil
 py-spy
 websockets
 loguru
+redis

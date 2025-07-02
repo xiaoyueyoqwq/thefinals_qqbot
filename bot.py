@@ -15,6 +15,7 @@ from utils.browser import browser_manager
 from utils.message_handler import MessageHandler
 from core.plugin import PluginManager
 from core.api import get_app, set_image_manager
+from utils.redis_manager import redis_manager  # 导入 Redis 管理器
 from enum import IntEnum
 import threading
 import time
@@ -93,16 +94,6 @@ def cleanup_threads():
     """清理所有非主线程"""
     main_thread = threading.main_thread()
     current_thread = threading.current_thread()
-    
-    # 首先尝试关闭数据库连接
-    try:
-        from utils.db import DatabaseManager
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(DatabaseManager.close_all())
-        loop.close()
-    except Exception as e:
-        bot_logger.error(f"关闭数据库连接失败: {str(e)}")
     
     # 强制结束所有线程
     for thread in threading.enumerate():
@@ -314,6 +305,8 @@ class SafeThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
             self._tasks.clear()
             
 class MyBot(botpy.Client):
+    """自定义Bot客户端，集成启动和关闭逻辑"""
+
     def __init__(self, intents=None, **options):
         super().__init__(intents=intents, **options)
         
@@ -331,7 +324,7 @@ class MyBot(botpy.Client):
         self.image_manager = ImageManager()
         
         # 初始化插件管理器
-        self.plugin_manager = PluginManager()
+        self.plugin_manager = PluginManager(client=self)
         
         # 初始化浏览器管理器
         self.browser_manager = browser_manager
@@ -341,12 +334,16 @@ class MyBot(botpy.Client):
             settings.MAX_CONCURRENT if hasattr(settings, 'MAX_CONCURRENT') else 5
         )
         
+        # 用于关键服务初始化的事件
+        self.critical_init_event = asyncio.Event()
+        
         # 注册资源
         register_resource(self)
         register_resource(self.thread_pool)
         
         # 优化内存管理
         self._setup_memory_management()
+        self._command_tester_proc = None
         
     def _setup_memory_management(self):
         """设置内存管理"""
@@ -361,57 +358,75 @@ class MyBot(botpy.Client):
         register_resource(self)
         
     async def start(self):
-        """启动机器人"""
+        """启动Bot和相关服务"""
+        bot_logger.info("Bot 正在启动...")
         try:
-            # 初始化插件系统
-            self.plugin_manager = PluginManager()
-            register_resource(self.plugin_manager)
+            # 设置图片管理器到API
+            set_image_manager(self.image_manager)
             
-            # 初始化消息处理器
-            self.message_handler = MessageHandler
-            register_resource(self.message_handler)
+            # 初始化 Redis 管理器
+            bot_logger.info("开始初始化 Redis 管理器...")
+            await redis_manager.initialize()
+            bot_logger.info("Redis 管理器初始化完成。")
             
-            # 启动内存监控
-            if not self._memory_monitor or self._memory_monitor.done():
-                self._memory_monitor = asyncio.create_task(memory_monitor_task())
+            # 初始化浏览器
+            await self._init_browser()
+            bot_logger.info("浏览器初始化完成。")
+
+            bot_logger.info("开始初始化插件...")
+            await self._init_plugins()
+            bot_logger.info("插件初始化完成。等待关键服务就绪...")
             
-            # 启动机器人
-            await super().start(self.appid, self.secret)
-            
+            # 等待关键插件发出"就绪"信号
+            try:
+                await asyncio.wait_for(self.critical_init_event.wait(), timeout=INIT_TIMEOUT * 2)
+            except asyncio.TimeoutError:
+                bot_logger.critical("一个或多个关键服务在规定时间内未能就绪，机器人可能无法正常工作。")
+                # 即使超时，也继续运行，但功能可能受限
+
+            bot_logger.info("关键服务已就绪，机器人正在运行。")
+
+            # 启动API服务器
+            if settings.server.api.enabled:
+                self.api_server_task = self.create_task(self.run_api_server(), name="APIServer")
+
+            # 启动健康检查
+            self.health_check_task = self.create_task(self._health_check(), name="HealthCheck")
+
+            bot_logger.info("Bot 启动完成。")
         except Exception as e:
-            bot_logger.error(f"启动失败: {str(e)}")
+            bot_logger.error(f"Bot 启动过程中发生严重错误: {e}", exc_info=True)
+            await self.stop()
             raise
-            
+
     async def stop(self):
-        """停止机器人"""
-        try:
-            # 停止内存监控
-            if self._memory_monitor and not self._memory_monitor.done():
-                self._memory_monitor.cancel()
-                try:
-                    await self._memory_monitor
-                except asyncio.CancelledError:
-                    pass
-            
-            # 停止插件系统
-            if hasattr(self, 'plugin_manager'):
+        """停止Bot和所有相关服务"""
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+        bot_logger.info("Bot 正在关闭...")
+
+        # 关闭 Redis
+        await redis_manager.close()
+
+        # 停止所有插件
+        if self.plugin_manager:
+            try:
                 await self.plugin_manager.cleanup()
-            
-            # 停止消息处理器
-            if hasattr(self, 'message_handler'):
-                await self.message_handler.stop_image_manager()
-            
-            # 触发垃圾回收
-            gc.collect(2)
-            
-            # 调用父类的停止方法
-            await super().stop()
-            
-        except Exception as e:
-            bot_logger.error(f"停止失败: {str(e)}")
-            raise
-        finally:
-            self._healthy = False
+            except Exception as e:
+                bot_logger.error(f"停止插件系统时出错: {str(e)}")
+        
+        # 停止消息处理器
+        if hasattr(self, 'message_handler'):
+            await self.message_handler.stop_image_manager()
+        
+        # 触发垃圾回收
+        gc.collect(2)
+        
+        # 调用父类的停止方法
+        await super().stop()
+        
+        self._healthy = False
 
     def create_task(self, coro, name=None):
         """创建并跟踪异步任务"""
@@ -550,6 +565,11 @@ class MyBot(botpy.Client):
     async def _init_plugins(self):
         """初始化插件的异步方法"""
         try:
+            # 初始化 Redis 管理器
+            bot_logger.info("开始初始化 Redis 管理器...")
+            await redis_manager.initialize()
+            bot_logger.info("Redis 管理器初始化完成。")
+
             async with asyncio.timeout(INIT_TIMEOUT):
                 # 自动发现并注册插件
                 await self.plugin_manager.auto_discover_plugins(
@@ -674,32 +694,15 @@ class MyBot(botpy.Client):
                 except Exception as e:
                     bot_logger.error(f"停止Season任务时出错: {str(e)}")
 
-                # 第三阶段：清理缓存管理器
-                from utils.cache_manager import CacheManager
+                # 第三阶段：清理Redis连接
                 try:
                     async with asyncio.timeout(CACHE_CLEANUP_TIMEOUT):
-                        cache_manager = CacheManager()
-                        await cache_manager.cleanup()
-                        bot_logger.debug("缓存管理器已关闭")
+                        await redis_manager.close()
+                        bot_logger.debug("Redis 连接已关闭")
                 except asyncio.TimeoutError:
-                    bot_logger.warning("关闭缓存管理器超时")
+                    bot_logger.warning("关闭 Redis 连接超时")
                 except Exception as e:
-                    bot_logger.error(f"关闭缓存管理器时出错: {str(e)}")
-
-                # 第四阶段：清理持久化管理器
-                from utils.persistence import PersistenceManager
-                from utils.db import DatabaseManager
-                try:
-                    async with asyncio.timeout(PERSISTENCE_CLEANUP_TIMEOUT):
-                        persistence_manager = PersistenceManager()
-                        await persistence_manager.close_all()
-                        # 关闭所有数据库连接池
-                        await DatabaseManager.close_all()
-                        bot_logger.debug("持久化管理器和数据库连接已关闭")
-                except asyncio.TimeoutError:
-                    bot_logger.warning("关闭持久化管理器超时")
-                except Exception as e:
-                    bot_logger.error(f"关闭持久化管理器时出错: {str(e)}")
+                    bot_logger.error(f"关闭 Redis 连接时出错: {str(e)}")
                 
                 # 第五阶段：清理API连接池
                 from utils.base_api import BaseAPI
@@ -1153,13 +1156,6 @@ async def cleanup_resources(timeout=5):
         # 添加需要清理的资源
         if 'client' in globals() and client and hasattr(client, '_cleanup'):
             cleanup_tasks.append(client._cleanup())
-        
-        # 添加数据库清理
-        try:
-            from utils.db import DatabaseManager
-            cleanup_tasks.append(DatabaseManager.close_all())
-        except Exception:
-            pass
         
         # 等待所有清理任务完成或超时
         if cleanup_tasks:

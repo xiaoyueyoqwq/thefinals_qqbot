@@ -40,7 +40,7 @@ class LeaderboardCore(BaseAPI):
     }
     
     def __init__(self):
-        super().__init__(base_url="https://www.davg25.com/app/the-finals-leaderboard-tracker/api/vaiiya")
+        super().__init__(base_url="https://www.davg25.com/app/the-finals-leaderboard-tracker/api/vaiiya/")
         self.logger = logging.getLogger("LeaderboardCore")
         
         # 预加载字体

@@ -25,9 +25,10 @@ class PowerShiftAPI(BaseAPI):
             "User-Agent": "TheFinals-Bot/1.0"
         }
 
-    async def get_player_stats(self, player_name: str) -> Optional[dict]:
+    async def get_player_stats(self, player_name: str, **kwargs) -> Optional[dict]:
         """查询玩家数据（支持模糊搜索）"""
         try:
+            
             season = settings.CURRENT_SEASON
             url = f"/v1/leaderboard/{season}powershift/{self.platform}"
             params = {"name": player_name}
@@ -138,7 +139,7 @@ class PowerShiftQuery:
 
         try:
             # 查询玩家数据
-            data = await self.api.get_player_stats(player_name, use_fuzzy_search=False)
+            data = await self.api.get_player_stats(player_name)
             
             # 格式化并返回结果
             return self.format_response(player_name, data)

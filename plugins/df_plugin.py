@@ -16,13 +16,6 @@ class DFPlugin(Plugin):
         self.df_query = DFQuery()
         bot_logger.debug(f"[{self.name}] 初始化底分查询插件")
         
-    def start_tasks(self):
-        """返回需要启动的任务列表"""
-        bot_logger.debug(f"[{self.name}] 调用 start_tasks()")
-        tasks = self.df_query.start_tasks()
-        bot_logger.debug(f"[{self.name}] 从 DFQuery 获取到 {len(tasks)} 个任务")
-        return tasks
-        
     async def on_load(self):
         """插件加载时的处理"""
         bot_logger.debug(f"[{self.name}] 开始加载底分查询插件")
@@ -42,7 +35,12 @@ class DFPlugin(Plugin):
         try:
             # 获取数据
             data = await self.df_query.get_bottom_scores()
-            
+
+            if not isinstance(data, dict):
+                bot_logger.error(f"[{self.name}] 获取的底分数据格式不正确，期望是 dict，实际是 {type(data)}")
+                await handler.send_text("获取底分数据失败，请稍后再试。")
+                return
+
             safe_score = None
             safe_score_last_update = None
             # 从 SafeScoreManagerPlugin 获取安全分
@@ -84,40 +82,6 @@ class DFPlugin(Plugin):
                     response += f"▎🏆 第 {rank:,} 名\n"
                     response += f"▎👤 玩家 ID: {player_id}\n"
                     response += f"▎💯 当前分数: {current_score:,}\n"
-
-                    # 获取昨天的数据
-                    try:
-                        yesterday = date.today() - timedelta(days=1)
-                        sql = '''
-                            SELECT score
-                            FROM leaderboard_history
-                            WHERE date = ? AND rank = ?
-                        '''
-                        # Access the database directly from DFQuery instance
-                        yesterday_result = await self.df_query.db.fetch_one(sql, (yesterday.isoformat(), rank))
-
-                        if yesterday_result:
-                            yesterday_score = yesterday_result[0]
-                            change = current_score - yesterday_score
-
-                            if change > 0:
-                                change_text = f"+{change:,}"
-                                change_icon = "📈"
-                            elif change < 0:
-                                change_text = f"{change:,}"
-                                change_icon = "📉"
-                            else:
-                                change_text = "±0"
-                                change_icon = "➖"
-
-                            response += f"▎📅 昨日分数: {yesterday_score:,}\n"
-                            response += f"▎{change_icon} 分数变化: {change_text}\n"
-                        else:
-                            response += f"▎📅 昨日数据: 暂无\n"
-                    except Exception as e:
-                        bot_logger.error(f"[{self.name}] 获取昨日数据失败: {str(e)}")
-                        response += f"▎📅 昨日数据: 暂无\n"
-
                     response += f"▎————————————————\n"
 
             # 添加小贴士

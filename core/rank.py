@@ -31,12 +31,17 @@ class RankAPI(BaseAPI):
         # 初始化赛季管理器
         self.season_manager = SeasonManager()
         
+        # 从赛季管理器获取搜索索引器实例
+        self.search_indexer = self.season_manager.search_indexer
+        
         # 启动初始化
-        try:
-            self._init_task = asyncio.create_task(self._initialize())
-            bot_logger.info("[RankAPI] 初始化任务已启动")
-        except Exception as e:
-            bot_logger.error(f"[RankAPI] 启动初始化任务失败: {str(e)}")
+        self._init_task: Optional[asyncio.Task] = None
+
+    async def initialize(self):
+        """初始化赛季管理器"""
+        if self._init_task is None:
+             self._init_task = asyncio.create_task(self._initialize())
+        await self._init_task
 
     async def _initialize(self):
         """初始化赛季管理器"""
@@ -58,36 +63,46 @@ class RankAPI(BaseAPI):
             bot_logger.error(f"[RankAPI] 停止任务失败: {str(e)}")
 
     async def get_player_stats(self, player_name: str, season: str = None, use_fuzzy_search: bool = True) -> Optional[dict]:
-        """查询玩家在指定赛季的数据
-        
-        Args:
-            player_name: 玩家ID
-            season: 赛季，默认为当前赛季
-            use_fuzzy_search: 是否使用模糊搜索
-            
-        Returns:
-            dict: 玩家数据,如果获取失败则返回None
+        """
+        使用 SearchIndexer 查询玩家在指定赛季的数据。
         """
         try:
-            # 等待初始化完成
-            await self.wait_for_init()
-            bot_logger.info(f"[RankAPI] 开始查询玩家 {player_name} 在 {season or SeasonConfig.CURRENT_SEASON} 赛季的数据")
+            await self.initialize()
             
-            # 使用配置中的当前赛季
-            season = season or SeasonConfig.CURRENT_SEASON
+            target_season = season or SeasonConfig.CURRENT_SEASON
+            bot_logger.info(f"[RankAPI] 开始在赛季 {target_season} 中搜索玩家: '{player_name}'")
+
+            if not self.search_indexer.is_ready():
+                bot_logger.warning("[RankAPI] 搜索索引尚未准备就绪，尝试使用传统方法。")
+                return await self.season_manager.get_player_data(player_name, target_season, use_fuzzy_search=True)
+
+            # 1. 使用 SearchIndexer 进行深度搜索
+            search_results = self.search_indexer.search(player_name, limit=1)
             
-            # 通过赛季管理器获取数据
-            data = await self.season_manager.get_player_data(player_name, season, use_fuzzy_search=use_fuzzy_search)
-            if data:
-                bot_logger.info(f"[RankAPI] 获取玩家数据成功: {player_name}")
-                return data
-                
-            bot_logger.warning(f"[RankAPI] 未找到玩家数据: {player_name}")
-            return None
+            if not search_results:
+                bot_logger.warning(f"[RankAPI] 深度搜索未能找到玩家: '{player_name}'")
+                return None
             
+            # 2. 获取最匹配的玩家
+            best_match = search_results[0]
+            exact_player_id = best_match.get("name")
+            similarity = best_match.get("similarity_score", 0)
+            
+            bot_logger.info(f"[RankAPI] 深度搜索找到最匹配玩家: '{exact_player_id}' (相似度: {similarity:.2f})")
+
+            # 3. 使用精确ID获取最终的玩家数据
+            player_data = await self.season_manager.get_player_data(exact_player_id, target_season, use_fuzzy_search=False)
+            
+            if player_data:
+                bot_logger.info(f"[RankAPI] 成功获取到玩家 '{exact_player_id}' 的数据。")
+                return player_data
+            else:
+                # 这种情况很少见，但可能发生（例如，索引和Redis数据轻微不同步）
+                bot_logger.error(f"[RankAPI] 深度搜索找到了 '{exact_player_id}'，但无法从赛季数据中获取其实际信息。")
+                return None
+
         except Exception as e:
-            bot_logger.error(f"[RankAPI] 查询失败: {str(e)}")
-            bot_logger.exception(e)
+            bot_logger.error(f"[RankAPI] 查询玩家 '{player_name}' 数据时发生异常: {e}", exc_info=True)
             return None
 
     async def get_top_five(self) -> List[str]:
@@ -97,6 +112,7 @@ class RankAPI(BaseAPI):
             List[str]: 包含前5名玩家ID的列表
         """
         try:
+            await self.initialize()
             # 使用配置中的当前赛季
             return await self.season_manager.get_top_players(SeasonConfig.CURRENT_SEASON, limit=5)
             
@@ -106,13 +122,7 @@ class RankAPI(BaseAPI):
 
     async def wait_for_init(self):
         """等待初始化完成"""
-        try:
-            if hasattr(self, '_init_task'):
-                await self._init_task
-                bot_logger.info("[RankAPI] 等待初始化完成")
-        except Exception as e:
-            bot_logger.error(f"[RankAPI] 等待初始化失败: {str(e)}")
-            raise
+        await self.initialize()
 
 class RankQuery:
     """排位查询功能"""
@@ -199,8 +209,7 @@ class RankQuery:
                 return
 
             bot_logger.info("[RankQuery] 初始化流程启动 (非阻塞)")
-            # 关键修复: 移除阻塞等待。API的初始化在后台进行。
-            # await self.api.wait_for_init()
+            await self.api.initialize()
             self._preheated = True
             bot_logger.info("[RankQuery] 初始化标记完成")
             

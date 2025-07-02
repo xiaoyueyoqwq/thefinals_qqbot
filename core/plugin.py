@@ -23,7 +23,8 @@ import pytz
 from pathlib import Path
 import platform
 import os
-import aiosqlite
+import orjson as json
+from utils.redis_manager import redis_manager
 from .core_helper import CoreHelper, PluginValidationError
 
 # 预定义事件类型
@@ -140,180 +141,6 @@ def on_regex(pattern: str):
     return decorator
 
 
-class SQLiteManager:
-    """统一的 SQLite 管理器（单例）"""
-
-    _instance = None
-    _lock = Lock()
-
-    def __init__(self, db_path: str = "plugins_data.db"):
-        self._db_path = db_path
-        self._db_conn: Optional[aiosqlite.Connection] = None
-
-    @classmethod
-    async def get_instance(cls, db_path: str = "plugins_data.db"):
-        async with cls._lock:
-            if cls._instance is None:
-                instance = cls(db_path=db_path)
-                await instance._init_db()
-                cls._instance = instance
-            return cls._instance
-
-    async def _init_db(self):
-        if self._db_conn is None:
-            self._db_conn = await aiosqlite.connect(self._db_path)
-        create_data_table = """
-        CREATE TABLE IF NOT EXISTS plugin_data (
-            plugin_name TEXT NOT NULL,
-            data_key TEXT NOT NULL,
-            data_value TEXT,
-            UNIQUE(plugin_name, data_key)
-        )
-        """
-        create_config_table = """
-        CREATE TABLE IF NOT EXISTS plugin_config (
-            plugin_name TEXT NOT NULL,
-            config_key TEXT NOT NULL,
-            config_value TEXT,
-            UNIQUE(plugin_name, config_key)
-        )
-        """
-        await self._db_conn.execute(create_data_table)
-        await self._db_conn.execute(create_config_table)
-        await self._db_conn.commit()
-
-    async def close(self):
-        if self._db_conn:
-            await self._db_conn.close()
-            self._db_conn = None
-
-    async def set_data(self, plugin_name: str, key: str, value: str):
-        if not self._db_conn:
-            return
-        await self._db_conn.execute(
-            """
-            INSERT OR REPLACE INTO plugin_data (plugin_name, data_key, data_value)
-            VALUES (?, ?, ?)
-            """,
-            (plugin_name, key, value)
-        )
-        await self._db_conn.commit()
-
-    async def get_data(self, plugin_name: str, key: str) -> Optional[str]:
-        if not self._db_conn:
-            return None
-        cursor = await self._db_conn.execute(
-            """
-            SELECT data_value FROM plugin_data
-            WHERE plugin_name = ? AND data_key = ?
-            """,
-            (plugin_name, key)
-        )
-        row = await cursor.fetchone()
-        await cursor.close()
-        if row:
-            return row[0]
-        return None
-
-    async def delete_data(self, plugin_name: str, key: str):
-        if not self._db_conn:
-            return
-        await self._db_conn.execute(
-            """
-            DELETE FROM plugin_data WHERE plugin_name = ? AND data_key = ?
-            """,
-            (plugin_name, key)
-        )
-        await self._db_conn.commit()
-
-    async def get_all_data(self, plugin_name: str) -> Dict[str, str]:
-        if not self._db_conn:
-            return {}
-        cursor = await self._db_conn.execute(
-            """
-            SELECT data_key, data_value FROM plugin_data
-            WHERE plugin_name = ?
-            """,
-            (plugin_name,)
-        )
-        rows = await cursor.fetchall()
-        await cursor.close()
-        return {k: v for k, v in rows}
-
-    async def set_config(self, plugin_name: str, key: str, value: str):
-        if not self._db_conn:
-            return
-        await self._db_conn.execute(
-            """
-            INSERT OR REPLACE INTO plugin_config (plugin_name, config_key, config_value)
-            VALUES (?, ?, ?)
-            """,
-            (plugin_name, key, value)
-        )
-        await self._db_conn.commit()
-
-    async def get_config(self, plugin_name: str, key: str) -> Optional[str]:
-        if not self._db_conn:
-            return None
-        cursor = await self._db_conn.execute(
-            """
-            SELECT config_value FROM plugin_config
-            WHERE plugin_name = ? AND config_key = ?
-            """,
-            (plugin_name, key)
-        )
-        row = await cursor.fetchone()
-        await cursor.close()
-        if row:
-            return row[0]
-        return None
-
-    async def delete_config(self, plugin_name: str, key: str):
-        if not self._db_conn:
-            return
-        await self._db_conn.execute(
-            """
-            DELETE FROM plugin_config WHERE plugin_name = ? AND config_key = ?
-            """,
-            (plugin_name, key)
-        )
-        await self._db_conn.commit()
-
-    async def get_all_config(self, plugin_name: str) -> Dict[str, str]:
-        if not self._db_conn:
-            return {}
-        cursor = await self._db_conn.execute(
-            """
-            SELECT config_key, config_value FROM plugin_config
-            WHERE plugin_name = ?
-            """,
-            (plugin_name,)
-        )
-        rows = await cursor.fetchall()
-        await cursor.close()
-        return {k: v for k, v in rows}
-
-
-def async_retry(max_retries: int = 3, delay: float = 1.0):
-    """异步重试装饰器"""
-    def decorator(func):
-        @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
-            last_exception = None
-            for attempt in range(max_retries):
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-                    if attempt < max_retries - 1:
-                        wait_time = delay * (2 ** attempt)
-                        bot_logger.warning(f"请求失败，{wait_time}秒后重试: {str(e)}")
-                        await asyncio.sleep(wait_time)
-            raise last_exception
-        return wrapper
-    return decorator
-
-
 class Plugin(ABC):
     """插件基类"""
     
@@ -323,6 +150,12 @@ class Plugin(ABC):
     def __init__(self, **kwargs):
         try:
             CoreHelper.validate_plugin_class(self.__class__)
+            
+            self.client: Optional[Any] = None # 初始化 client 属性
+            
+            # 自动生成 Redis 键
+            self.redis_key_data = f"plugin:{self.name}:data"
+            self.redis_key_config = f"plugin:{self.name}:config"
             
             if not self.is_api_plugin:
                 self.commands: Dict[str, Dict[str, Any]] = {}
@@ -521,40 +354,42 @@ class Plugin(ABC):
 
     async def _write_json_file(self, file_path: Path, data: Dict) -> None:
         # 已弃用
-        return
+        pass
 
     async def save_data(self) -> None:
+        """将插件数据异步保存到 Redis Hash"""
+        if not self._data:
+            return
         try:
-            db = await SQLiteManager.get_instance()
-            for k, v in self._data.items():
-                await db.set_data(self.name, k, str(v))
+            # orjson 无法直接序列化所有类型，确保值为字符串
+            data_to_save = {k: json.dumps(v) for k, v in self._data.items()}
+            await redis_manager._get_client().hmset(self.redis_key_data, data_to_save)
+            bot_logger.debug(f"插件 [{self.name}] 数据已保存到 Redis。")
         except Exception as e:
-            await self._handle_task_error("save_data", e)
+            bot_logger.error(f"插件 [{self.name}] 保存数据到 Redis 失败: {e}", exc_info=True)
 
     async def load_data(self) -> None:
+        """从 Redis Hash 异步加载插件数据"""
         try:
-            db = await SQLiteManager.get_instance()
-            all_data = await db.get_all_data(self.name)
-            self._data = {}
-            for k, val_str in all_data.items():
-                self._data[k] = val_str
-            self._states = {}
-            for key, value in self._data.items():
-                if key.startswith("state_"):
-                    self._states[key[6:]] = value
+            data_from_redis = await redis_manager._get_client().hgetall(self.redis_key_data)
+            if data_from_redis:
+                # orjson 反序列化
+                self._data = {k: json.loads(v) for k, v in data_from_redis.items()}
+                bot_logger.debug(f"插件 [{self.name}] 从 Redis 加载了 {len(self._data)} 条数据。")
         except Exception as e:
-            await self._handle_task_error("load_data", e)
+            bot_logger.error(f"插件 [{self.name}] 从 Redis 加载数据失败: {e}", exc_info=True)
+            self._data = {}
 
     async def load_config(self) -> None:
+        """从 Redis Hash 异步加载插件配置"""
         try:
-            db = await SQLiteManager.get_instance()
-            all_config = await db.get_all_config(self.name)
-            self._config = {}
-            for k, val_str in all_config.items():
-                self._config[k] = val_str
-            self._load_custom_messages()
+            config_from_redis = await redis_manager._get_client().hgetall(self.redis_key_config)
+            if config_from_redis:
+                self._config = {k: json.loads(v) for k, v in config_from_redis.items()}
+                bot_logger.debug(f"插件 [{self.name}] 从 Redis 加载了 {len(self._config)} 条配置。")
         except Exception as e:
-            await self._handle_task_error("load_config", e)
+            bot_logger.error(f"插件 [{self.name}] 从 Redis 加载配置失败: {e}", exc_info=True)
+            self._config = {}
 
     def _load_custom_messages(self):
         default_messages = {
@@ -753,7 +588,7 @@ class Plugin(ABC):
 class PluginManager:
     """插件管理器"""
     
-    def __init__(self):
+    def __init__(self, client: Optional[Any] = None):
         self.plugins: Dict[str, Plugin] = {}
         self.commands: Dict[str, Plugin] = {}
         self._event_handlers: Dict[str, Set[Plugin]] = {}
@@ -764,6 +599,8 @@ class PluginManager:
         self._plugin_load_lock = Lock()
         self._cleanup_lock = Lock()
         self._cleanup_done = False
+        self.client = client
+        self._loaded_plugin_classes = set()
 
     async def register_plugin(self, plugin: Plugin) -> None:
         async with self._plugin_load_lock:
@@ -918,61 +755,23 @@ class PluginManager:
                 for item_name, item in inspect.getmembers(module):
                     if (inspect.isclass(item) and 
                         issubclass(item, Plugin) and 
-                        item != Plugin):
-                        try:
-                            plugin_instance = item(**plugin_kwargs)
-                            await self.register_plugin(plugin_instance)
-                            bot_logger.info(f"成功加载插件: {item_name}")
-                        except Exception as e:
-                            bot_logger.error(f"实例化插件 {item_name} 失败: {str(e)}")
+                        item is not Plugin and item_name not in [
+                            "Plugin", "ABC"]):
+                        # 确保只加载一次
+                        if item_name not in self._loaded_plugin_classes:
+                            self._loaded_plugin_classes.add(item_name)
+                            try:
+                                plugin_instance = item(**plugin_kwargs)
+                                plugin_instance.client = self.client
+                                await self.register_plugin(plugin_instance)
+                                bot_logger.info(f"成功加载插件: {item_name}")
+                            except Exception as e:
+                                bot_logger.error(f"实例化插件 {item_name} 失败: {e}", exc_info=True)
             except Exception as e:
                 bot_logger.error(f"加载插件模块 {module_name} 失败: {str(e)}")
         bot_logger.info(f"插件扫描完成,共加载 {len(self.plugins)} 个插件")
 
     async def cleanup(self):
-        CLEANUP_TIMEOUT = 5
-        async with self._cleanup_lock:
-            if self._cleanup_done:
-                return
-            try:
-                bot_logger.info("[PluginManager] 开始清理插件资源...")
-                for plugin_name, plugin in list(self.plugins.items()):
-                    try:
-                        cleanup_task = asyncio.create_task(plugin.on_unload(), name=f"cleanup_{plugin_name}")
-                        try:
-                            await asyncio.wait_for(cleanup_task, timeout=CLEANUP_TIMEOUT)
-                        except asyncio.TimeoutError:
-                            bot_logger.warning(f"[PluginManager] 插件 {plugin_name} 清理超时，强制结束")
-                            cleanup_task.cancel()
-                            try:
-                                await cleanup_task
-                            except asyncio.CancelledError:
-                                pass
-                    except Exception as e:
-                        bot_logger.error(f"[PluginManager] 清理插件 {plugin_name} 时出错: {str(e)}")
-                    finally:
-                        self.plugins.pop(plugin_name, None)
-                
-                try:
-                    self.commands.clear()
-                    self._event_handlers.clear()
-                    self._temp_handlers.clear()
-                except Exception as e:
-                    bot_logger.error(f"[PluginManager] 清理资源时出错: {str(e)}")
-             
-                self._cleanup_done = True
-                bot_logger.info("[PluginManager] 插件资源清理完成")
-            except Exception as e:
-                bot_logger.error(f"[PluginManager] 清理插件资源时发生错误: {str(e)}")
-            finally:
-                self._cleanup_done = True
-                self.plugins.clear()
-                self.commands.clear()
-                self._event_handlers.clear()
-                self._temp_handlers.clear()
-                try:
-                    db = await SQLiteManager.get_instance()
-                    await db.close()
-                    bot_logger.info("[PluginManager] SQLite 数据库连接已关闭")
-                except Exception as e:
-                    bot_logger.error(f"[PluginManager] 关闭 SQLite 连接时出错: {str(e)}")
+        """清理所有插件和任务"""
+        await self.unload_all()
+        bot_logger.info("所有插件已卸载。")

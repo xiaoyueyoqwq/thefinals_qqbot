@@ -29,6 +29,8 @@ if root_dir not in sys.path:
 
 from utils.browser import browser_manager
 from utils.logger import bot_logger
+from utils.redis_manager import redis_manager
+from utils.config import settings
 
 # 全局变量，用于在信号处理函数中访问
 tester = None
@@ -91,9 +93,8 @@ async def cleanup_resources():
                     except asyncio.CancelledError:
                         pass
         
-        # 3. 关闭数据库连接
-        from utils.db import DatabaseManager
-        await DatabaseManager.close_all()
+        # 3. 关闭 Redis 连接
+        await redis_manager.close()
         
         # 4. 清理浏览器资源
         await browser_manager.cleanup()
@@ -529,6 +530,16 @@ class CommandTester:
             return
             
         try:
+            bot_logger.info("命令测试工具启动中...")
+            
+            # 初始化 Redis 管理器
+            bot_logger.info("正在初始化 Redis 管理器...")
+            await redis_manager.initialize()
+            bot_logger.info("Redis 管理器初始化完成。")
+
+            bot_logger.info("正在初始化浏览器环境...")
+            await browser_manager.initialize()
+            
             bot_logger.info(f"开始初始化插件...")
             await self.plugin_manager.auto_discover_plugins()
             bot_logger.info(f"插件初始化完成，共加载 {len(self.plugin_manager.plugins)} 个插件")
@@ -581,14 +592,6 @@ async def main():
     
     try:
         bot_logger.info("命令测试工具启动中...")
-        
-        # 初始化浏览器
-        bot_logger.info("正在初始化浏览器环境...")
-        try:
-            await browser_manager.initialize()
-        except Exception as e:
-            bot_logger.error(f"浏览器初始化失败: {e}")
-            raise
         
         await tester.start()
         

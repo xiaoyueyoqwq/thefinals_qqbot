@@ -77,81 +77,87 @@ class SearchIndexer:
 
     def search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
-        使用倒排索引高效地搜索玩家。
+        使用倒排索引和优化的评分模型高效地搜索玩家。
         """
-        if not query or not self._index:
+        if not query or not self.is_ready():
             return []
 
-        bot_logger.debug(f"[SearchIndexer] Searching for query: '{query}'")
+        bot_logger.debug(f"[SearchIndexer] 开始搜索: '{query}'")
 
         # 1. 从查询中获取三元组
         query_trigrams = get_trigrams(query)
-        bot_logger.debug(f"[SearchIndexer] Query trigrams: {query_trigrams}")
         if not query_trigrams:
+            bot_logger.debug(f"[SearchIndexer] 查询 '{query}' 无法生成有效的三元组。")
             return []
 
-        # 2. 在索引中查找候选玩家
+        # 2. 在索引中查找候选玩家，并根据三元组匹配数量进行初步计分
         candidate_scores = defaultdict(int)
         for trigram in query_trigrams:
             if trigram in self._index:
                 for player_id in self._index[trigram]:
                     candidate_scores[player_id] += 1
         
-        bot_logger.debug(f"[SearchIndexer] Found {len(candidate_scores)} candidates with scores: {candidate_scores}")
-
         if not candidate_scores:
+            bot_logger.debug(f"[SearchIndexer] 未找到与 '{query}' 匹配的候选人。")
             return []
-
-        candidate_ids = set(candidate_scores.keys())
 
         # 3. 对候选人进行精确的相似度计算
         scored_candidates = []
         query_lower = query.lower()
-        query_normalized = re.sub(r'[^a-z0-9]+', '', query_lower)
+        
+        # 使用 nlargest 优化，只对初步分数最高的50个候选人进行精确计算
+        top_candidate_ids = heapq.nlargest(50, candidate_scores.items(), key=lambda item: item[1])
 
-        for player_id in candidate_ids:
+        for player_id, _ in top_candidate_ids:
             player = self._player_data.get(player_id)
             if not player:
                 continue
 
-            max_similarity = 0
-            # 检查主名和其他别名
+            max_similarity = 0.0
+            
+            # 检查主名和所有别名
             names_to_check = [player.get(self._name_field, "")] + [player.get(k, "") for k in ['steam', 'psn', 'xbox']]
             
             for name in filter(None, names_to_check):
-                # 只使用#号前的部分进行比较
-                main_name_part = name.split('#')[0]
-                name_lower = main_name_part.lower()
-                name_normalized = re.sub(r'[^a-z0-9]+', '', name_lower)
+                name_part = name.split('#')[0].lower() # 只取#号前的部分并转为小写
                 
-                similarity = 0
-                # 优先级1: 字面上的前缀匹配 (e.g., 'dy' matches 'dynamic')
-                # 现在这是真正的用户名的前缀匹配
-                if name_lower.startswith(query_lower):
-                    similarity = 2.0 + (len(query_lower) / len(name_lower))
-                # 优先级2: 规范化后的前缀匹配 (已合并到上方)
-                elif name_normalized.startswith(query_normalized):
-                    similarity = 1.0 + (len(query_normalized) / len(name_normalized))
-                # 优先级3: 模糊匹配
+                similarity = 0.0
+                if name_part == query_lower:
+                    # 优先级1: 精确匹配
+                    similarity = 3.0
+                elif name_part.startswith(query_lower):
+                    # 优先级2: 前缀匹配
+                    similarity = 2.0 + (len(query_lower) / len(name_part))
+                elif query_lower in name_part:
+                    # 优先级3: 包含匹配
+                    similarity = 1.0 + (len(query_lower) / len(name_part))
                 else:
-                    similarity = SequenceMatcher(None, query_normalized, name_normalized).ratio()
+                    # 优先级4: 模糊匹配 (基于三元组交集)
+                    name_trigrams = get_trigrams(name_part)
+                    if name_trigrams:
+                        intersection = len(query_trigrams.intersection(name_trigrams))
+                        union = len(query_trigrams.union(name_trigrams))
+                        if union > 0:
+                            similarity = intersection / union # Jaccard 相似度
                 
                 if similarity > max_similarity:
                     max_similarity = similarity
             
-            # 阈值调整为0.3以容忍更多模糊匹配
+            # 只有相似度大于 0.3 的才被认为是有效结果
             if max_similarity > 0.3:
-                scored_candidates.append((max_similarity, player))
+                # 最终分数结合三元组匹配分和相似度分
+                final_score = candidate_scores[player_id] + (max_similarity * 10)
+                scored_candidates.append((final_score, player))
 
         # 4. 使用 heapq.nlargest 高效获取 Top-N 结果
-        top_candidates = heapq.nlargest(limit, scored_candidates, key=lambda item: item[0])
-        bot_logger.debug(f"[SearchIndexer] Top {len(top_candidates)} candidates: {[(s, p['name']) for s, p in top_candidates]}")
+        top_results = heapq.nlargest(limit, scored_candidates, key=lambda item: item[0])
+        bot_logger.debug(f"[SearchIndexer] Top {len(top_results)} results: {[(s, p['name']) for s, p in top_results]}")
 
-        # 5. 返回排序后的结果,并附上相似度分数
+        # 5. 格式化并返回最终结果
         results = []
-        for score, player in top_candidates:
+        for score, player in top_results:
             player_with_score = player.copy()
-            player_with_score['similarity'] = score
+            player_with_score['similarity_score'] = score
             results.append(player_with_score)
         
         return results 

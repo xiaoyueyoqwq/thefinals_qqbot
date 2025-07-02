@@ -21,6 +21,7 @@ proxy:
 # API配置
 api:
   use_proxy: false  # 是否使用代理API
+  timeout: 30 # API请求超时时间(秒)
   # 标准API源
   standard:
     base_url: "https://api.the-finals-leaderboard.com"
@@ -53,3 +54,11 @@ season:
 translation:
   enabled: true  # 是否启用翻译
   file: "data/translations.json"  # 翻译文件路径
+
+# Redis 配置
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  db: 0
+  password: ""  # 如果没有密码，请留空
+  timeout: 5  # 连接超时时间(秒)
