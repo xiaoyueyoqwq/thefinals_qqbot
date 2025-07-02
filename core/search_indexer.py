@@ -55,8 +55,9 @@ class SearchIndexer:
             player_copy['score'] = player.get('rankScore', player.get('fame', 0))
             new_player_data[player_id] = player_copy
 
-            # 为玩家名字建立索引
-            for trigram in get_trigrams(name):
+            # 为玩家名字建立索引 (只索引#号前的部分)
+            name_to_index = name.split('#')[0]
+            for trigram in get_trigrams(name_to_index):
                 new_index[trigram].add(player_id)
             
             # (可选) 为其他字段建立索引，如 'steam', 'psn', 'xbox'
@@ -118,14 +119,17 @@ class SearchIndexer:
             names_to_check = [player.get(self._name_field, "")] + [player.get(k, "") for k in ['steam', 'psn', 'xbox']]
             
             for name in filter(None, names_to_check):
-                name_lower = name.lower()
+                # 只使用#号前的部分进行比较
+                main_name_part = name.split('#')[0]
+                name_lower = main_name_part.lower()
                 name_normalized = re.sub(r'[^a-z0-9]+', '', name_lower)
                 
                 similarity = 0
-                # 优先级1: 字面上的前缀匹配 (e.g., 'DY-' matches 'DY-TFtegong')
+                # 优先级1: 字面上的前缀匹配 (e.g., 'dy' matches 'dynamic')
+                # 现在这是真正的用户名的前缀匹配
                 if name_lower.startswith(query_lower):
                     similarity = 2.0 + (len(query_lower) / len(name_lower))
-                # 优先级2: 规范化后的前缀匹配 (e.g., 'dy' matches 'Dynamic')
+                # 优先级2: 规范化后的前缀匹配 (已合并到上方)
                 elif name_normalized.startswith(query_normalized):
                     similarity = 1.0 + (len(query_normalized) / len(name_normalized))
                 # 优先级3: 模糊匹配

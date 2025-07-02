@@ -71,7 +71,7 @@ class Season:
         api: BaseAPI,
         cache: CacheManager,
         headers: Dict[str, str],
-        rotation: int = 60,
+        update_interval: int,
         manager: "SeasonManager" = None,
     ):
         """初始化赛季实例"""
@@ -80,7 +80,7 @@ class Season:
         self.api = api
         self.cache = cache
         self.headers = headers  # Store headers
-        self.rotation = rotation
+        self.rotation = update_interval # 使用传入的更新间隔
         self.manager = manager
         self._update_task = None
         self._stop_event = asyncio.Event()
@@ -98,7 +98,7 @@ class Season:
         # 添加缺失的属性
         self.api_prefix = SeasonConfig.API_PREFIX
         self.cache_name = f"season_{season_id}"
-        self.update_interval = rotation
+        self.update_interval = update_interval # 确保此属性也被正确设置
 
         # 保留对赛季初始化的一条日志
         bot_logger.debug(
@@ -295,22 +295,38 @@ class Season:
                         bot_logger.warning(
                             f"[Season] 缓存数据解析失败 for key: {cache_key}"
                         )
-                        # 如果解析失败，则继续往下走，尝试搜索引擎
+                        # 如果解析失败，则继续往下走
 
-                # 2. 如果缓存未命中，并且开启了模糊搜索，使用搜索引擎进行模糊搜索
-                if use_fuzzy_search and self.manager and hasattr(self.manager, "search_indexer"):
+                # 2. 如果缓存未命中，并且开启了模糊搜索，使用搜索引擎
+                # 新增：模糊搜索条件检查
+                if use_fuzzy_search and len(player_name) >= 4 and self.manager and hasattr(self.manager, "search_indexer"):
                     bot_logger.debug(
                         f"[Season] 缓存未命中, 使用索引器搜索: {player_name}"
                     )
                     search_results = self.manager.search_indexer.search(
                         player_name, limit=1
                     )
+                    
+                    # 新增：检查搜索结果和匹配度
                     if search_results:
-                        player_data = search_results[0]
-                        bot_logger.debug(
-                            f"[Season] 索引器找到玩家: {player_data.get('name')}"
-                        )
-                        return player_data
+                        top_result = search_results[0]
+                        similarity = top_result.get('similarity', 0)
+                        
+                        # 要求相似度分数至少为1.0，这通常表示一个很好的前缀匹配
+                        if similarity >= 1.0:
+                            player_data = top_result
+                            bot_logger.info(
+                                f"[Season] 索引器找到高匹配度玩家: {player_data.get('name')} (分数: {similarity:.2f})"
+                            )
+                            return player_data
+                        else:
+                            bot_logger.warning(
+                                f"[Season] 索引器找到的玩家匹配度过低: "
+                                f"查询='{player_name}', "
+                                f"结果='{top_result.get('name')}', "
+                                f"分数={similarity:.2f}. 抛弃该结果."
+                            )
+                            # 匹配度太低，不返回结果，继续执行到末尾的"未找到"逻辑
 
             # 对于历史赛季，查询数据库
             else:
@@ -328,7 +344,7 @@ class Season:
                         )
 
                 # 2. 模糊查询
-                if use_fuzzy_search:
+                if use_fuzzy_search and len(player_name) >= 4:
                     sql_like = "SELECT data FROM player_data WHERE player_name LIKE ?"
                     rows_like = await self.persistence.fetch_all(
                         self.cache_name, sql_like, (f"%{player_name_lower}%",)
@@ -557,7 +573,7 @@ class HistorySeason:
             )
 
             # 如果精确匹配没找到，尝试模糊匹配
-            if not result and use_fuzzy_search:
+            if not result and use_fuzzy_search and len(player_name) >= 4:
                 bot_logger.info(
                     f"[HistorySeason] 精确匹配未找到，尝试模糊匹配 - {player_name}"
                 )
@@ -666,7 +682,7 @@ class SeasonManager:
                                     self.api,
                                     self.cache,
                                     self.api_headers,  # Pass headers
-                                    SeasonConfig.UPDATE_INTERVAL,
+                                    update_interval=SeasonConfig.UPDATE_INTERVAL,
                                     manager=self,
                                 )
                             else:

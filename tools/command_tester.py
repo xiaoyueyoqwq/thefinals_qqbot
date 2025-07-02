@@ -615,12 +615,22 @@ async def main():
         if loop and not loop.is_closed():
             loop.stop()
 
+        bot_logger.info("命令测试器主程序退出。")
+
 if __name__ == "__main__":
     try:
         asyncio.run(main())
+    except RuntimeError as e:
+        if "Event loop stopped before Future completed." in str(e):
+            # 这是在程序关闭时可能出现的良性报错，直接忽略
+            pass
+        else:
+            # 如果是其他RuntimeError，则重新引发
+            raise
     except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        bot_logger.critical(f"程序异常退出: {str(e)}")
-        traceback.print_exc()
-        force_exit() 
+        # 用户通过Ctrl+C退出，正常处理
+        bot_logger.info("通过 KeyboardInterrupt 正常退出。")
+    finally:
+        # 确保在退出前执行清理
+        cleanup_threads()
+        bot_logger.info("已执行最终清理。") 

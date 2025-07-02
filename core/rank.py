@@ -312,9 +312,9 @@ class RankQuery:
                 
             try:
                 # 查询玩家数据
-                season_data = {season: await self.api.get_player_stats(player_name, season, use_fuzzy_search=False)}
+                season_data = {season: await self.api.get_player_stats(player_name, season, use_fuzzy_search=True)}
                 
-                # 检查数据并格式化响应
+                # 如果没有找到任何数据
                 if not any(season_data.values()):
                     # 注意：这里直接调用 format_response，如果找不到数据，它会返回简洁错误
                     return self.format_response(player_name, season_data)

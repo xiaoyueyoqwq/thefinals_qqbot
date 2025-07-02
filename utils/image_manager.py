@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from utils.logger import bot_logger
-from utils.config import Settings
+from utils.config import settings
 import aiofiles
 
 log = bot_logger
@@ -24,11 +24,16 @@ class ImageManager:
     
     def __init__(self):
         """初始化图片管理器"""
-        self.image_dir = Path(os.path.dirname(os.path.dirname(__file__))) / "static" / "temp_images"
+        self.image_dir = Path(settings.IMAGE_STORAGE_PATH)
         os.makedirs(self.image_dir, exist_ok=True)
         bot_logger.info(f"资源就绪: 图片目录={self.image_dir}")
         self.image_info: Dict[str, Dict] = {}  # 图片信息缓存
         self.cleanup_task: Optional[asyncio.Task] = None
+        
+        # 从配置加载图片生命周期和清理间隔
+        self.image_lifetime_seconds = settings.IMAGE_LIFETIME * 3600  # 小时 -> 秒
+        self.cleanup_interval_seconds = settings.IMAGE_CLEANUP_INTERVAL * 3600  # 小时 -> 秒
+
         self._ensure_directory()
         
         # 安全统计
@@ -102,12 +107,11 @@ class ImageManager:
                 pass
         bot_logger.info("图片管理器已停止")
         
-    async def save_image(self, image_data: bytes, lifetime: int = 3600) -> str:
+    async def save_image(self, image_data: bytes) -> str:
         """保存图片数据
         
         Args:
             image_data: 图片二进制数据
-            lifetime: 图片生存时间（秒）
             
         Returns:
             str: 图片ID
@@ -128,10 +132,11 @@ class ImageManager:
                 await f.write(image_data)
             
             # 记录图片信息
+            now = datetime.now()
             self.image_info[image_id] = {
                 'path': str(file_path),
-                'created': time.time(),
-                'lifetime': lifetime
+                'created_at': now,
+                'expires_at': now + timedelta(seconds=self.image_lifetime_seconds)
             }
             
             # 更新统计
@@ -197,7 +202,7 @@ class ImageManager:
         """清理循环"""
         while True:
             try:
-                await asyncio.sleep(3600)  # 每小时检查一次
+                await asyncio.sleep(self.cleanup_interval_seconds)
                 await self._cleanup_expired()
             except asyncio.CancelledError:
                 break
