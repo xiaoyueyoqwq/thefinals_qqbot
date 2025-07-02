@@ -1,0 +1,88 @@
+diff --git a/bot.py b/bot.py
+index c635547..c3088ac 100644
+--- a/bot.py
++++ b/bot.py
+@@ -310,12 +310,16 @@ class MyBot(botpy.Client):
+     def __init__(self, intents=None, **options):
+         super().__init__(intents=intents, **options)
+         
++        self._shutting_down = False  # 初始化关闭标志
++        self.appid = settings.BOT_APPID
++        self.secret = settings.BOT_SECRET
++        self._healthy = True
++        
+         # 初始化属性
+         self._running_tasks = set()
+         self._last_message_time = 0
+         self._cleanup_lock = asyncio.Lock()
+         self._cleanup_done = False
+-        self._healthy = True
+         
+         # 初始化线程池
+         self.thread_pool = SafeThreadPoolExecutor(max_workers=4)
+@@ -387,7 +391,7 @@ class MyBot(botpy.Client):
+             bot_logger.info("关键服务已就绪，机器人正在运行。")
+ 
+             # 启动API服务器
+-            if settings.server.api.enabled:
++            if settings.server['api']['enabled']:
+                 self.api_server_task = self.create_task(self.run_api_server(), name="APIServer")
+ 
+             # 启动健康检查
+@@ -428,6 +432,22 @@ class MyBot(botpy.Client):
+         
+         self._healthy = False
+ 
++    async def run_api_server(self):
++        """运行API服务器"""
++        server_config = settings.server
++        if server_config["api"]["enabled"]:
++            bot_logger.info("正在启动API服务器...")
++            config = uvicorn.Config(
++                get_app(),
++                host=server_config["api"]["host"],
++                port=server_config["api"]["port"],
++                log_config=UVICORN_LOG_CONFIG,
++                reload=False
++            )
++            server = uvicorn.Server(config)
++            await server.serve()
++            bot_logger.info(f"API服务器已启动: http://{config.host}:{config.port}")
++
+     def create_task(self, coro, name=None):
+         """创建并跟踪异步任务"""
+         task = self.loop.create_task(coro, name=name)
+@@ -565,33 +585,12 @@ class MyBot(botpy.Client):
+     async def _init_plugins(self):
+         """初始化插件的异步方法"""
+         try:
+-            # 初始化 Redis 管理器
+-            bot_logger.info("开始初始化 Redis 管理器...")
+-            await redis_manager.initialize()
+-            bot_logger.info("Redis 管理器初始化完成。")
+-
+             async with asyncio.timeout(INIT_TIMEOUT):
+                 # 自动发现并注册插件
+                 await self.plugin_manager.auto_discover_plugins(
+                     plugins_dir="plugins"
+                 )
+                 
+-                # 如果启用了API服务器，则启动它
+-                server_config = settings.server
+-                if server_config["api"]["enabled"]:
+-                    bot_logger.info("正在启动API服务器...")
+-                    config = uvicorn.Config(
+-                        get_app(),
+-                        host=server_config["api"]["host"],
+-                        port=server_config["api"]["port"],
+-                        log_config=UVICORN_LOG_CONFIG,
+-                        reload=False
+-                    )
+-                    server = uvicorn.Server(config)
+-                    # 创建后台任务运行服务器
+-                    self.create_task(server.serve(), "api_server")
+-                    bot_logger.info(f"API服务器正在启动: http://{config.host}:{config.port}")
+-                
+         except asyncio.TimeoutError:
+             bot_logger.error("插件初始化超时")
+             raise

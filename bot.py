@@ -305,21 +305,17 @@ class SafeThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
             self._tasks.clear()
             
 class MyBot(botpy.Client):
-    """自定义Bot客户端，集成启动和关闭逻辑"""
+    """自定义机器人客户端，继承自 botpy.Client"""
 
     def __init__(self, intents=None, **options):
         super().__init__(intents=intents, **options)
-        
-        self._shutting_down = False  # 初始化关闭标志
-        self.appid = settings.BOT_APPID
-        self.secret = settings.BOT_SECRET
-        self._healthy = True
         
         # 初始化属性
         self._running_tasks = set()
         self._last_message_time = 0
         self._cleanup_lock = asyncio.Lock()
         self._cleanup_done = False
+        self._healthy = True
         
         # 初始化线程池
         self.thread_pool = SafeThreadPoolExecutor(max_workers=4)
@@ -328,7 +324,7 @@ class MyBot(botpy.Client):
         self.image_manager = ImageManager()
         
         # 初始化插件管理器
-        self.plugin_manager = PluginManager(client=self)
+        self.plugin_manager = PluginManager()
         
         # 初始化浏览器管理器
         self.browser_manager = browser_manager
@@ -338,16 +334,12 @@ class MyBot(botpy.Client):
             settings.MAX_CONCURRENT if hasattr(settings, 'MAX_CONCURRENT') else 5
         )
         
-        # 用于关键服务初始化的事件
-        self.critical_init_event = asyncio.Event()
-        
         # 注册资源
         register_resource(self)
         register_resource(self.thread_pool)
         
         # 优化内存管理
         self._setup_memory_management()
-        self._command_tester_proc = None
         
     def _setup_memory_management(self):
         """设置内存管理"""
@@ -362,91 +354,57 @@ class MyBot(botpy.Client):
         register_resource(self)
         
     async def start(self):
-        """启动Bot和相关服务"""
-        bot_logger.info("Bot 正在启动...")
+        """启动机器人"""
         try:
-            # 设置图片管理器到API
-            set_image_manager(self.image_manager)
+            # 初始化插件系统
+            self.plugin_manager = PluginManager()
+            register_resource(self.plugin_manager)
             
-            # 初始化 Redis 管理器
-            bot_logger.info("开始初始化 Redis 管理器...")
-            await redis_manager.initialize()
-            bot_logger.info("Redis 管理器初始化完成。")
+            # 初始化消息处理器
+            self.message_handler = MessageHandler
+            register_resource(self.message_handler)
             
-            # 初始化浏览器
-            await self._init_browser()
-            bot_logger.info("浏览器初始化完成。")
-
-            bot_logger.info("开始初始化插件...")
-            await self._init_plugins()
-            bot_logger.info("插件初始化完成。等待关键服务就绪...")
+            # 启动内存监控
+            if not hasattr(self, '_memory_monitor') or self._memory_monitor.done():
+                self._memory_monitor = asyncio.create_task(memory_monitor_task())
             
-            # 等待关键插件发出"就绪"信号
-            try:
-                await asyncio.wait_for(self.critical_init_event.wait(), timeout=INIT_TIMEOUT * 2)
-            except asyncio.TimeoutError:
-                bot_logger.critical("一个或多个关键服务在规定时间内未能就绪，机器人可能无法正常工作。")
-                # 即使超时，也继续运行，但功能可能受限
-
-            bot_logger.info("关键服务已就绪，机器人正在运行。")
-
-            # 启动API服务器
-            if settings.server['api']['enabled']:
-                self.api_server_task = self.create_task(self.run_api_server(), name="APIServer")
-
-            # 启动健康检查
-            self.health_check_task = self.create_task(self._health_check(), name="HealthCheck")
-
-            bot_logger.info("Bot 启动完成。")
+            # 启动机器人
+            await super().start(self.appid, self.secret)
+            
         except Exception as e:
-            bot_logger.error(f"Bot 启动过程中发生严重错误: {e}", exc_info=True)
-            await self.stop()
+            bot_logger.error(f"启动失败: {str(e)}")
             raise
-
+            
     async def stop(self):
-        """停止Bot和所有相关服务"""
-        if self._shutting_down:
-            return
-        self._shutting_down = True
-        bot_logger.info("Bot 正在关闭...")
-
-        # 关闭 Redis
-        await redis_manager.close()
-
-        # 停止所有插件
-        if self.plugin_manager:
-            try:
+        """停止机器人"""
+        try:
+            # 停止内存监控
+            if hasattr(self, '_memory_monitor') and self._memory_monitor and not self._memory_monitor.done():
+                self._memory_monitor.cancel()
+                try:
+                    await self._memory_monitor
+                except asyncio.CancelledError:
+                    pass
+            
+            # 停止插件系统
+            if hasattr(self, 'plugin_manager'):
                 await self.plugin_manager.cleanup()
-            except Exception as e:
-                bot_logger.error(f"停止插件系统时出错: {str(e)}")
-        
-        # 停止消息处理器
-        if hasattr(self, 'message_handler'):
-            await self.message_handler.stop_image_manager()
-        
-        # 触发垃圾回收
-        gc.collect(2)
-        
-        # 调用父类的停止方法
-        await super().stop()
-        
-        self._healthy = False
-
-    async def run_api_server(self):
-        """运行API服务器"""
-        server_config = settings.server
-        if server_config["api"]["enabled"]:
-            bot_logger.info("正在启动API服务器...")
-            config = uvicorn.Config(
-                get_app(),
-                host=server_config["api"]["host"],
-                port=server_config["api"]["port"],
-                log_config=UVICORN_LOG_CONFIG,
-                reload=False
-            )
-            server = uvicorn.Server(config)
-            await server.serve()
-            bot_logger.info(f"API服务器已启动: http://{config.host}:{config.port}")
+            
+            # 停止消息处理器
+            if hasattr(self, 'message_handler'):
+                await self.message_handler.stop_image_manager()
+            
+            # 触发垃圾回收
+            gc.collect(2)
+            
+            # 调用父类的停止方法
+            await super().stop()
+            
+        except Exception as e:
+            bot_logger.error(f"停止失败: {str(e)}")
+            raise
+        finally:
+            self._healthy = False
 
     def create_task(self, coro, name=None):
         """创建并跟踪异步任务"""
@@ -564,24 +522,14 @@ class MyBot(botpy.Client):
             raise
 
     async def _init_browser(self):
-        """初始化浏览器的异步方法"""
+        """初始化浏览器"""
         try:
-            # 检查浏览器状态
-            if not self.browser_manager.initialized:
-                bot_logger.warning("浏览器未初始化，尝试重新初始化...")
-                await asyncio.wait_for(
-                    self.browser_manager.initialize(),
-                    timeout=INIT_TIMEOUT
-                )
-            else:
-                bot_logger.debug("浏览器环境已就绪")
+            async with asyncio.timeout(INIT_TIMEOUT):
+                await browser_manager.initialize()
         except asyncio.TimeoutError:
             bot_logger.error("浏览器初始化超时")
             raise
-        except Exception as e:
-            bot_logger.error(f"浏览器初始化失败: {str(e)}")
-            raise
-    
+            
     async def _init_plugins(self):
         """初始化插件的异步方法"""
         try:
@@ -590,16 +538,13 @@ class MyBot(botpy.Client):
                 await self.plugin_manager.auto_discover_plugins(
                     plugins_dir="plugins"
                 )
-                
+
         except asyncio.TimeoutError:
             bot_logger.error("插件初始化超时")
             raise
-        except Exception as e:
-            bot_logger.error(f"插件初始化失败: {str(e)}")
-            raise
 
     async def _health_check(self):
-        """定期检查机器人健康状态"""
+        """健康检查任务"""
         while True:
             try:
                 # 检查最后消息处理时间
@@ -667,9 +612,7 @@ class MyBot(botpy.Client):
         BROWSER_CLEANUP_TIMEOUT = 5 # 浏览器清理超时
         PLUGIN_CLEANUP_TIMEOUT = 5  # 插件清理超时
         THREAD_POOL_TIMEOUT = 5    # 线程池关闭超时
-        CACHE_CLEANUP_TIMEOUT = 5   # 缓存清理超时
         API_CLEANUP_TIMEOUT = 5    # API连接池清理超时
-        PERSISTENCE_CLEANUP_TIMEOUT = 5  # 持久化管理器清理超时
         
         async with self._cleanup_lock:
             if self._cleanup_done:
@@ -695,7 +638,7 @@ class MyBot(botpy.Client):
 
                 # 第三阶段：清理Redis连接
                 try:
-                    async with asyncio.timeout(CACHE_CLEANUP_TIMEOUT):
+                    async with asyncio.timeout(API_CLEANUP_TIMEOUT): # Reuse timeout
                         await redis_manager.close()
                         bot_logger.debug("Redis 连接已关闭")
                 except asyncio.TimeoutError:
@@ -703,7 +646,7 @@ class MyBot(botpy.Client):
                 except Exception as e:
                     bot_logger.error(f"关闭 Redis 连接时出错: {str(e)}")
                 
-                # 第五阶段：清理API连接池
+                # 第四阶段：清理API连接池
                 from utils.base_api import BaseAPI
                 from core.rank import RankAPI
                 from core.df import DFQuery
@@ -737,7 +680,7 @@ class MyBot(botpy.Client):
                 except Exception as e:
                     bot_logger.error(f"清理API连接池时出错: {str(e)}")
                 
-                # 第六阶段：取消所有运行中的任务
+                # 第五阶段：取消所有运行中的任务
                 try:
                     async with asyncio.timeout(TASK_CANCEL_TIMEOUT):
                         # 使用列表复制避免迭代时修改集合
@@ -765,7 +708,7 @@ class MyBot(botpy.Client):
                 finally:
                     self._running_tasks.clear()
 
-                # 第七阶段：关闭浏览器实例
+                # 第六阶段：关闭浏览器实例
                 if self.browser_manager:
                     try:
                         async with asyncio.timeout(BROWSER_CLEANUP_TIMEOUT):
@@ -776,7 +719,7 @@ class MyBot(botpy.Client):
                     except Exception as e:
                         bot_logger.error(f"关闭浏览器时出错: {str(e)}")
                 
-                # 第八阶段：关闭插件管理器
+                # 第七阶段：关闭插件管理器
                 if self.plugin_manager:
                     try:
                         async with asyncio.timeout(PLUGIN_CLEANUP_TIMEOUT):
@@ -787,7 +730,7 @@ class MyBot(botpy.Client):
                     except Exception as e:
                         bot_logger.error(f"关闭插件管理器时出错: {str(e)}")
                 
-                # 第九阶段：关闭线程池
+                # 第八阶段：关闭线程池
                 if self.thread_pool:
                     try:
                         # 使用增强的shutdown方法
@@ -798,7 +741,7 @@ class MyBot(botpy.Client):
                     except Exception as e:
                         bot_logger.error(f"关闭线程池时出错: {str(e)}")
                 
-                # 第十阶段：最终资源清理
+                # 第九阶段：最终资源清理
                 try:
                     # 强制进行垃圾回收
                     gc.collect()
@@ -947,6 +890,15 @@ async def async_main():
         # 检查出口IP
         await check_ip()
         
+        # 初始化 Redis 管理器
+        bot_logger.info("开始初始化 Redis 管理器...")
+        try:
+            await redis_manager.initialize()
+            bot_logger.info("Redis 管理器初始化完成。")
+        except Exception as e:
+            bot_logger.error(f"Redis 初始化失败: {e}")
+            raise
+
         # 初始化浏览器
         bot_logger.info("正在初始化浏览器环境...")
         try:
@@ -959,15 +911,35 @@ async def async_main():
         client = MyBot(intents=intents)
         
         # 设置appid和secret
-        client.appid = settings.BOT_APPID
-        client.secret = settings.BOT_SECRET
+        client.appid = settings.bot.appid
+        client.secret = settings.bot.secret
         
         bot_logger.info("QQ服务: 正在连接服务器")
         
-        # 启动机器人
+        tasks = []
+        
+        # 1. 准备 Bot 任务
+        bot_task = asyncio.create_task(client.start(), name="bot_client")
+        tasks.append(bot_task)
+        
+        # 2. 如果启用了API服务器，则准备 API 服务器任务
+        if settings.server.api.enabled:
+            app = get_app()
+            uvicorn_config = uvicorn.Config(
+                app,
+                host=settings.server.api.host,
+                port=settings.server.api.port,
+                log_config=UVICORN_LOG_CONFIG
+            )
+            server = uvicorn.Server(uvicorn_config)
+            api_task = asyncio.create_task(server.serve(), name="api_server")
+            tasks.append(api_task)
+            bot_logger.info(f"API服务器将在 http://{settings.server.api.host}:{settings.server.api.port} 上启动")
+
+        # 3. 并发运行所有任务
         try:
-            await client.start()
-            return client
+            # 这里不再需要返回 client，因为 main 函数会通过全局变量访问它
+            await asyncio.gather(*tasks)
         except Exception as e:
             bot_logger.error(f"机器人运行时发生错误: {e}")
             if "invalid appid or secret" in str(e).lower():
@@ -975,6 +947,10 @@ async def async_main():
                 bot_logger.error("1. AppID 和 Secret 是否正确")
                 bot_logger.error("2. 是否已在 QQ 开放平台完成机器人配置")
                 bot_logger.error("3. Secret 是否已过期")
+            # 确保即使 gather 失败，其他任务也能被取消
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
             raise
             
     except Exception as e:

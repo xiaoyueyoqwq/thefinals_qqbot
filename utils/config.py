@@ -82,6 +82,11 @@ class Settings:
     REDIS_TIMEOUT = _config.get("redis", {}).get("timeout", 5)
     
     @property
+    def bot(self) -> DotAccessibleDict:
+        """返回机器人配置"""
+        return DotAccessibleDict(_config.get("bot", {}))
+
+    @property
     def redis(self) -> DotAccessibleDict:
         """返回Redis配置"""
         return DotAccessibleDict(_config.get("redis", {}))
@@ -108,45 +113,45 @@ class Settings:
         return self.API_PROXY_URL if self.API_USE_PROXY else self.API_STANDARD_URL
 
     @property
-    def proxy(self) -> dict:
+    def proxy(self) -> DotAccessibleDict:
         """返回代理配置字典"""
-        return {
+        return DotAccessibleDict({
             "enabled": self.PROXY_ENABLED,
             "host": self.PROXY_HOST,
             "port": self.PROXY_PORT,
             "type": self.PROXY_TYPE
-        }
+        })
         
     @property
-    def server(self) -> dict:
+    def server(self) -> DotAccessibleDict:
         """返回服务器配置"""
-        return {
+        return DotAccessibleDict({
             "api": {
                 "enabled": self.SERVER_API_ENABLED,
                 "host": self.SERVER_API_HOST,
                 "port": self.SERVER_API_PORT,
                 "external_url": self.SERVER_API_EXTERNAL_URL
             }
-        }
+        })
         
     @property
-    def season(self) -> dict:
+    def season(self) -> DotAccessibleDict:
         """返回赛季配置"""
-        return {
+        return DotAccessibleDict({
             "current": self.CURRENT_SEASON,
             "update_interval": self.UPDATE_INTERVAL
-        }
+        })
         
     @property
-    def image(self) -> dict:
+    def image(self) -> DotAccessibleDict:
         """返回图片配置"""
-        return {
+        return DotAccessibleDict({
             "send_method": self.IMAGE_SEND_METHOD,
             "storage": {
                 "path": self.IMAGE_STORAGE_PATH,
                 "lifetime": self.IMAGE_LIFETIME,
                 "cleanup_interval": self.IMAGE_CLEANUP_INTERVAL
             }
-        }
+        })
 
 settings = Settings()

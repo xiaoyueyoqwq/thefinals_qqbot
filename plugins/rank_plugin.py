@@ -85,7 +85,8 @@ class RankPlugin(Plugin):
                 return
                 
             # 使用handler的send_image方法发送图片
-            bot_logger.debug(f"[{self.name}] 使用base64发送图片")
+            send_method = settings.image.get("send_method", "base64")
+            bot_logger.debug(f"[{self.name}] 使用 {send_method} 方式发送图片")
             if image_data is not None:
                 if not await handler.send_image(image_data):
                     await self.reply(handler, "\n⚠️ 发送图片时发生错误")

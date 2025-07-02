@@ -115,7 +115,7 @@ class MessageHandler:
                     # 保存图片并获取ID
                     image_id = await self._image_manager.save_image(
                         image_data,
-                        lifetime=Settings().image["storage"]["lifetime"]
+                        lifetime_hours=Settings().image["storage"]["lifetime"]
                     )
                     
                     # 构建图片URL

@@ -143,7 +143,12 @@ class Season:
 
             # 5. 更新搜索索引 (如果需要)
             if self._is_current and hasattr(self.manager, "search_indexer"):
-                self.manager.search_indexer.build_index(players)
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    None,  # 使用默认的线程池执行器
+                    self.manager.search_indexer.build_index,
+                    players
+                )
 
         except Exception as e:
             bot_logger.error(f"更新赛季 {self.season_id} Redis 数据失败: {e}", exc_info=True)

@@ -107,11 +107,12 @@ class ImageManager:
                 pass
         bot_logger.info("图片管理器已停止")
         
-    async def save_image(self, image_data: bytes) -> str:
+    async def save_image(self, image_data: bytes, lifetime_hours: Optional[int] = None) -> str:
         """保存图片数据
         
         Args:
             image_data: 图片二进制数据
+            lifetime_hours: 图片生命周期（小时），如果为None则使用默认值
             
         Returns:
             str: 图片ID
@@ -133,10 +134,17 @@ class ImageManager:
             
             # 记录图片信息
             now = datetime.now()
+            
+            # 计算过期时间
+            if lifetime_hours is not None:
+                expires_at = now + timedelta(hours=lifetime_hours)
+            else:
+                expires_at = now + timedelta(seconds=self.image_lifetime_seconds)
+
             self.image_info[image_id] = {
                 'path': str(file_path),
                 'created_at': now,
-                'expires_at': now + timedelta(seconds=self.image_lifetime_seconds)
+                'expires_at': expires_at
             }
             
             # 更新统计
