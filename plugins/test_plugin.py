@@ -52,6 +52,17 @@ class TestPlugin(Plugin):
             bot_logger.error(f"[{self.name}] 生成测试日志失败: {str(e)}")
             await handler.send_text("\n⚠️ 测试日志生成失败，请查看错误日志")
             
+    @on_command("test_violation", "测试内容违规转图片")
+    async def handle_test_violation(self, handler: MessageHandler, content: str) -> None:
+        """处理test_violation命令"""
+        bot_logger.info("开始测试内容违规转图片功能...")
+        test_text = (
+            "__TRIGGER_VIOLATION__\n"
+            "这条消息将稳定触发'内容违规'错误，并被自动转换为图片发送。\n"
+            "This message will reliably trigger the 'content violation' error and be automatically converted to an image."
+        )
+        await handler.send_text(test_text)
+            
     async def on_load(self):
         """插件加载时的处理"""
         await super().on_load()

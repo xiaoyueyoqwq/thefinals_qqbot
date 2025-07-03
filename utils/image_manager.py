@@ -3,7 +3,8 @@ import time
 import uuid
 import shutil
 import asyncio
-from PIL import Image
+import base64
+from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -259,4 +260,67 @@ class ImageManager:
                 
         except Exception as e:
             bot_logger.error(f"获取图片失败: {str(e)}")
+            return None
+
+    async def text_to_image_base64(self, text: str) -> Optional[str]:
+        """将长文本转换为图片并返回Base64编码"""
+        try:
+            # 字体设置
+            font_path_str = "static/font/SourceHanSansSC-Medium.otf"
+            if not Path(font_path_str).exists():
+                font_path_str = "resources/fonts/google_font.woff2" # 备用字体
+            
+            font_size = 24
+            font = ImageFont.truetype(font_path_str, font_size)
+
+            # 图片边距和尺寸设置
+            padding = 20
+            max_width = 800
+            
+            # 文本自动换行
+            lines = []
+            current_line = ""
+            for char in text:
+                if char == '\n':
+                    lines.append(current_line)
+                    current_line = ""
+                    continue
+                
+                try:
+                    box = font.getbbox(current_line + char)
+                    line_width = box[2] - box[0]
+                except AttributeError:
+                    line_width, _ = font.getsize(current_line + char)
+
+                if line_width <= max_width - 2 * padding:
+                    current_line += char
+                else:
+                    lines.append(current_line)
+                    current_line = char
+            lines.append(current_line)
+
+            try:
+                box = font.getbbox("A")
+                line_height = box[3] - box[1]
+            except AttributeError:
+                 _, line_height = font.getsize("A")
+
+            img_height = (line_height + 5) * len(lines) + 2 * padding
+            img_width = max_width
+
+            image = Image.new('RGB', (img_width, img_height), color='white')
+            draw = ImageDraw.Draw(image)
+
+            y_text = padding
+            for line in lines:
+                draw.text((padding, y_text), line, font=font, fill='black')
+                y_text += line_height + 5
+
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")
+            
+            return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+        except Exception as e:
+            bot_logger.error(f"文本转图片失败: {e}", exc_info=True)
             return None 

@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from collections import deque
 from utils.logger import bot_logger
 from .url_check import obfuscate_urls
+from utils.config import settings
+from utils.image_manager import ImageManager
 
 # 消息类型枚举
 class MessageType(IntEnum):
@@ -413,7 +415,8 @@ class MessageAPI:
         image_base64: Optional[str] = None,
         image_url: Optional[str] = None,
         msg_seq: int = None,
-        media: Optional[dict] = None
+        media: Optional[dict] = None,
+        **kwargs
     ) -> bool:
         """发送群消息
         
@@ -430,7 +433,18 @@ class MessageAPI:
         Returns:
             bool: 是否发送成功
         """
+        # 内部标志，防止无限递归转图片
+        if kwargs.get("_is_image_retry", False):
+            bot_logger.warning("已作为图片重试，不再处理。")
+            return False
+
+        original_content = content  # 保存原始消息内容
         try:
+            # ---- 用于测试的违规触发器 ----
+            if content.startswith("__TRIGGER_VIOLATION__"):
+                bot_logger.info("检测到违规触发器，主动抛出异常...")
+                raise Exception("消息内容违规")
+            
             # 对消息内容进行 URL 混淆
             content = obfuscate_urls(content)
 
@@ -447,7 +461,7 @@ class MessageAPI:
                 "msg_id": msg_id,
                 "msg_seq": msg_seq
             }
-            
+
             if msg_type == MessageType.MEDIA:
                 if media:
                     # 如果提供了完整的media对象，直接使用
@@ -462,6 +476,7 @@ class MessageAPI:
                     )
                     
                     if not file_result:
+                        bot_logger.error("上传媒体文件失败，无法发送消息")
                         raise ValueError("Failed to upload media file")
                         
                     # 使用file_info构建media对象
@@ -471,22 +486,52 @@ class MessageAPI:
                     
             bot_logger.debug(f"发送群消息数据: {msg_data}")
             await self._api.post_group_message(group_openid=group_id, **msg_data)
+            bot_logger.info(f"消息发送成功 (ID: {msg_id})")
             return True
         except Exception as e:
-            bot_logger.error(f"发送群消息失败: {str(e)}")
+            error_str = str(e)
+            bot_logger.error(f"发送群消息失败: {error_str}", exc_info=True)
+
             # 如果是消息序号重复，尝试重新发送
-            if "消息被去重" in str(e) or "msgseq" in str(e).lower():
-                bot_logger.warning("检测到消息序号重复，尝试使用新序号重新发送")
+            if "消息被去重" in error_str or "msgseq" in error_str.lower():
+                bot_logger.warning("检测到消息序号重复，尝试使用新序号重新发送...")
                 return await self.send_to_group(
                     group_id=group_id,
-                    content=content,
+                    content=original_content,
                     msg_type=msg_type,
                     msg_id=msg_id,
                     image_base64=image_base64,
                     image_url=image_url,
-                    msg_seq=random.randint(100001, 200000),  # 使用不同范围的序号重试
+                    msg_seq=random.randint(100001, 200000),
                     media=media
                 )
+            
+            # 如果是内容违规，并且是纯文本消息，则尝试转为图片发送
+            elif "消息内容违规" in error_str and msg_type == MessageType.TEXT:
+                bot_logger.warning("检测到消息内容违规，尝试转为图片重新发送...")
+                image_manager = ImageManager()
+                
+                text_for_image = original_content.replace("__TRIGGER_VIOLATION__", "").strip()
+                if not text_for_image:
+                    text_for_image = "成功触发'内容违规转图片'测试！"
+
+                img_base64 = await image_manager.text_to_image_base64(text_for_image)
+
+                if img_base64:
+                    bot_logger.info("文本已成功转换为图片，正在尝试重新发送...")
+                    # 再次调用，但作为图片发送
+                    return await self.send_to_group(
+                        group_id=group_id,
+                        content="",  # 图片消息内容应为空
+                        msg_type=MessageType.MEDIA,
+                        msg_id=msg_id,
+                        image_base64=img_base64,
+                        msg_seq=msg_seq,
+                        _is_image_retry=True # 设置内部标志
+                    )
+                else:
+                    bot_logger.error("文本转图片失败，无法重新发送。")
+            
             return False
             
     async def recall_group_message(self, group_id: str, message_id: str) -> bool:
