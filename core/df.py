@@ -122,6 +122,82 @@ class DFQuery:
         await redis_manager.set(self.redis_key_last_save_date, today_str)
         bot_logger.info(f"[DFQuery] 已成功保存 {today_str} 的排行榜历史数据。")
 
+    async def get_historical_data(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+        """从 Redis 获取指定日期范围的历史数据"""
+        results = []
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            history_key = f"{self.redis_key_history_prefix}{date_str}"
+            
+            try:
+                data_json = await redis_manager.get(history_key)
+                if data_json:
+                    data = json.loads(data_json)
+                    for rank_str, score_data in data.items():
+                        results.append({
+                            "record_date": current_date,
+                            "rank": int(rank_str),
+                            "player_id": score_data.get("player_id"),
+                            "score": score_data.get("score"),
+                            "save_time": score_data.get("update_time") # 复用 update_time
+                        })
+            except (json.JSONDecodeError, TypeError) as e:
+                bot_logger.error(f"[DFQuery] 解析历史数据时出错 (日期: {date_str}): {e}")
+            except Exception as e:
+                bot_logger.error(f"[DFQuery] 获取历史数据时出错 (日期: {date_str}): {e}")
+
+            current_date += timedelta(days=1)
+        return results
+
+    async def get_stats_data(self, days: int = 7) -> List[Dict[str, Any]]:
+        """获取最近N天的统计数据"""
+        stats = []
+        today = datetime.now().date()
+        
+        for i in range(days):
+            current_date = today - timedelta(days=i)
+            date_str = current_date.strftime('%Y-%m-%d')
+            
+            # 获取当天数据
+            current_data = await self._get_daily_data_for_stats(date_str)
+            
+            # 获取前一天数据
+            previous_date_str = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
+            previous_data = await self._get_daily_data_for_stats(previous_date_str)
+
+            # 计算分数和变化
+            rank_500_score = current_data.get("500", {}).get("score")
+            rank_10000_score = current_data.get("10000", {}).get("score")
+            
+            prev_500_score = previous_data.get("500", {}).get("score")
+            prev_10000_score = previous_data.get("10000", {}).get("score")
+
+            daily_change_500 = rank_500_score - prev_500_score if rank_500_score is not None and prev_500_score is not None else None
+            daily_change_10000 = rank_10000_score - prev_10000_score if rank_10000_score is not None and prev_10000_score is not None else None
+
+            if rank_500_score is not None or rank_10000_score is not None:
+                stats.append({
+                    "record_date": current_date,
+                    "rank_500_score": rank_500_score,
+                    "rank_10000_score": rank_10000_score,
+                    "daily_change_500": daily_change_500,
+                    "daily_change_10000": daily_change_10000,
+                })
+        
+        return stats
+
+    async def _get_daily_data_for_stats(self, date_str: str) -> Dict[str, Any]:
+        """辅助方法，获取并解析某天的历史数据"""
+        history_key = f"{self.redis_key_history_prefix}{date_str}"
+        try:
+            data_json = await redis_manager.get(history_key)
+            if data_json:
+                return json.loads(data_json)
+        except (json.JSONDecodeError, TypeError) as e:
+            bot_logger.warning(f"[DFQuery] 解析统计用的历史数据失败 (日期: {date_str}): {e}")
+        return {}
+
     async def format_score_message(self, data: Dict[str, Any]) -> str:
         if not data:
             return "⚠️ 获取数据失败"

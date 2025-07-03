@@ -149,7 +149,7 @@ class FlappyBirdAPI(Plugin):
     async def health_check(self):
         """健康检查"""
         try:
-            db_status = await self.core.get_db_status()
+            db_status = await self.core.check_redis_connection()
             return {
                 "status": "healthy" if db_status["connected"] else "unhealthy",
                 "database": db_status,

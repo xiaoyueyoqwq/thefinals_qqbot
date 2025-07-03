@@ -199,7 +199,13 @@ class Season:
         limit = max(1, min(limit, 5)) # 最多获取前5
         top_5_json = await redis_manager.get(self.redis_key_top5)
         if top_5_json:
-            return top_5_json[:limit]
+            try:
+                # 首先要解析JSON字符串
+                top_players = json.loads(top_5_json)
+                return top_players[:limit]
+            except (json.JSONDecodeError, TypeError):
+                bot_logger.error(f"解析赛季 {self.season_id} 的 Top 5 玩家数据失败。")
+                return []
         return []
 
     async def force_stop(self) -> None:
@@ -316,7 +322,8 @@ class SeasonManager:
         return await season.get_player_data(player_name, use_fuzzy_search=use_fuzzy_search)
 
     async def get_top_players(self, season_id: str, limit: int = 5) -> List[str]:
+        """获取指定赛季的Top N玩家"""
         season = await self.get_season(season_id)
-        if not season:
-            return []
-        return await season.get_top_players(limit)
+        if season:
+            return await season.get_top_players(limit)
+        return []

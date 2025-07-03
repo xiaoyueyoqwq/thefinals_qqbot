@@ -52,7 +52,7 @@ class RankAPIPlugin(Plugin):
         bot_logger.info("[RankAPIPlugin] 排位查询API插件已卸载")
         
     @api_route(
-        "/api/rank/player/{player_id}/{season}",
+        "/api/rank/player/{player_id:path}/{season}",
         response_model=PlayerStatsResponse,
         methods=["GET"],
         summary="获取玩家排位数据",

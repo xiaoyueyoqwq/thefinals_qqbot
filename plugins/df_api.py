@@ -170,8 +170,10 @@ class DFAPIPlugin(Plugin):
             # 从数据库获取数据
             scores = await self.df_query.get_bottom_scores()
             
-            # 如果没有数据,返回空列表
-            if not scores:
+            # 增加对 scores 类型的严格检查
+            # 如果没有数据,或者返回了非预期的类型,都返回空列表
+            if not isinstance(scores, dict):
+                bot_logger.warning(f"[DFAPIPlugin] get_bottom_scores() 返回了非预期的类型: {type(scores)}")
                 return CurrentScoreResponse(
                     data=[],
                     update_time=datetime.now()
@@ -257,58 +259,35 @@ class DFAPIPlugin(Plugin):
         end_date: Optional[date] = None
     ) -> HistoricalScoreResponse:
         """获取历史底分数据"""
-        try:
-            # 参数处理
-            today = date.today()
-            if not end_date:
-                end_date = today - timedelta(days=1)
-            if not start_date:
-                start_date = end_date
-                
-            # 参数验证
-            if end_date > today:
-                raise ValueError("结束日期不能超过今天")
-            if start_date > end_date:
-                raise ValueError("开始日期不能晚于结束日期")
-                
-            # 限制查询范围
-            date_range = (end_date - start_date).days
-            if date_range > 30:
-                start_date = end_date - timedelta(days=29)
-                
-            # 获取历史数据
-            historical_data = await self.df_query.get_historical_data(start_date, end_date)
+        # 参数校验和处理
+        today = datetime.now().date()
+        if end_date is None:
+            end_date = today - timedelta(days=1)
+        if start_date is None:
+            start_date = end_date
+
+        if start_date > end_date:
+            raise HTTPException(status_code=400, detail="开始日期不能晚于结束日期")
+        if end_date > today:
+            end_date = today
+        if (end_date - start_date).days > 30:
+            start_date = end_date - timedelta(days=30)
             
-            # 转换为响应格式
-            data = [
-                HistoricalScoreData(
-                    record_date=entry["date"],
-                    rank=entry["rank"],
-                    player_id=entry["player_id"],
-                    score=entry["score"],
-                    save_time=entry["save_time"]
-                )
-                for entry in historical_data
-            ]
+        try:
+            # 调用 DFQuery 中新实现的方法
+            history_data = await self.df_query.get_historical_data(start_date, end_date)
+            
+            # 转换为响应模型
+            response_data = [HistoricalScoreData(**item) for item in history_data]
             
             return HistoricalScoreResponse(
-                data=data,
+                data=response_data,
                 start_date=start_date,
                 end_date=end_date
             )
-            
-        except ValueError as e:
-            bot_logger.error(f"[DFAPIPlugin] 参数错误: {str(e)}")
-            raise HTTPException(
-                status_code=400,
-                detail=str(e)
-            )
         except Exception as e:
-            bot_logger.error(f"[DFAPIPlugin] 获取历史底分数据失败: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"获取数据失败: {str(e)}"
-            )
+            bot_logger.error(f"获取历史底分数据失败: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"500: 获取数据失败: {e}")
             
     @api_route("/api/df/stats", methods=["GET"],
                response_model=StatsResponse,
@@ -350,40 +329,18 @@ class DFAPIPlugin(Plugin):
 }
 ```""")
     async def get_stats(self) -> StatsResponse:
-        """获取底分统计数据"""
+        """获取统计数据"""
         try:
-            # 获取统计数据
-            stats = await self.df_query.get_stats_data(days=7)
-            
-            # 如果没有数据,返回空列表
-            if not stats:
-                return StatsResponse(
-                    data=[],
-                    latest_update=datetime.now()
-                )
-            
-            # 转换为响应格式
-            data = []
-            for entry in stats:
-                if entry is None:
-                    continue  # 跳过无效数据
-                    
-                data.append(StatsData(
-                    record_date=entry.get("date", datetime.now().date()),
-                    rank_500_score=entry.get("rank_500_score", 0),
-                    rank_10000_score=entry.get("rank_10000_score", 0),
-                    daily_change_500=entry.get("daily_change_500", 0),
-                    daily_change_10000=entry.get("daily_change_10000", 0)
-                ))
+            # 调用 DFQuery 中新实现的方法
+            stats_data = await self.df_query.get_stats_data(days=7)
+
+            # 转换为响应模型
+            response_data = [StatsData(**item) for item in stats_data]
             
             return StatsResponse(
-                data=data,
+                data=response_data,
                 latest_update=datetime.now()
             )
-            
         except Exception as e:
-            bot_logger.error(f"[DFAPIPlugin] 获取统计数据失败: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"获取数据失败: {str(e)}"
-            ) 
+            bot_logger.error(f"获取底分统计数据失败: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"500: 获取数据失败: {e}") 
