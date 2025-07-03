@@ -52,15 +52,15 @@ class RankAPIPlugin(Plugin):
         bot_logger.info("[RankAPIPlugin] 排位查询API插件已卸载")
         
     @api_route(
-        "/api/rank/player/{player_id:path}/{season}",
+        "/api/rank/player/{season}",
         response_model=PlayerStatsResponse,
         methods=["GET"],
         summary="获取玩家排位数据",
         description="""获取指定玩家在指定赛季的排位数据。
 
 参数说明:
-- player_id: 玩家ID
-- season: 赛季(s1~s6)
+- season: 赛季, 例如: s7 (作为路径参数)
+- player_id: 玩家ID (作为查询参数, 例如: ?player_id=Player#1234)
 
 返回说明:
 1. 正常情况: 返回玩家的排位数据
@@ -78,7 +78,7 @@ class RankAPIPlugin(Plugin):
     "update_time": "2024-02-18T14:30:00"
 }
 ```""")
-    async def get_player_stats(self, player_id: str, season: str) -> PlayerStatsResponse:
+    async def get_player_stats(self, season: str, player_id: str) -> PlayerStatsResponse:
         """获取玩家排位数据"""
         try:
             # 检查赛季是否有效
