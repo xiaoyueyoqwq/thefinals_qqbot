@@ -80,10 +80,11 @@ class MyBot(botpy.Client):
     # =====================================================
     # 机器人生命周期
     # =====================================================
-    async def start(self) -> None:  # type: ignore[override]
+    async def start(self, skip_init: bool = False) -> None:  # type: ignore[override]
         try:
             # 初始化插件在 super().start 之前，避免错过事件
-            await self._init_plugins()
+            if not skip_init:
+                await self._init_plugins()
             # 启动 bot
             await super().start(self.appid, self.secret)
         except Exception:  # noqa: BLE001

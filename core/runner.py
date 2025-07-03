@@ -79,7 +79,12 @@ async def _async_main() -> MyBot:
     client.secret = settings.bot.secret
     register_resource(client)
 
-    tasks: List[asyncio.Task] = [asyncio.create_task(client.start(), name="client")]
+    # 提前加载插件，确保API路由注册
+    await client._init_plugins()
+    
+    tasks: List[asyncio.Task] = [
+        asyncio.create_task(client.start(skip_init=True), name="client")
+    ]
 
     if settings.server.api.enabled:
         uvconf = uvicorn.Config(
