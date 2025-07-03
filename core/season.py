@@ -1,6 +1,7 @@
 import orjson as json
 import asyncio
 from typing import Dict, List, Optional, Any, AsyncGenerator
+from datetime import datetime, timedelta
 
 from utils.logger import bot_logger
 from utils.redis_manager import redis_manager
@@ -52,6 +53,7 @@ class Season:
         self.redis_key_players = f"season:{self.season_id}:players"
         self.redis_key_top5 = f"season:{self.season_id}:top5"
         self.redis_key_playernames = f"season:{self.season_id}:playernames"
+        self.redis_key_last_update = f"season:{self.season_id}:last_update"
 
         bot_logger.debug(f"赛季 {season_id} 初始化完成，使用 Redis 进行数据管理")
 
@@ -87,9 +89,19 @@ class Season:
                 bot_logger.error(f"赛季 {self.season_id} 更新循环出错: {e}", exc_info=True)
                 await asyncio.sleep(60)
 
-    async def _update_data(self) -> None:
+    async def _update_data(self, force_update: bool = False) -> None:
         if self._is_updating:
             return
+
+        # 如果不是强制更新，并且是当前赛季，则检查更新间隔
+        if not force_update and self._is_current:
+            last_update_str = await redis_manager.get(self.redis_key_last_update)
+            if last_update_str:
+                last_update_time = datetime.fromisoformat(last_update_str)
+                if datetime.now() - last_update_time < timedelta(seconds=self.update_interval):
+                    bot_logger.debug(f"赛季 {self.season_id} 数据在更新间隔内，跳过本次更新。")
+                    return
+        
         self._is_updating = True
         try:
             bot_logger.info(f"开始更新赛季 {self.season_id} 数据到 Redis...")
@@ -130,6 +142,9 @@ class Season:
 
             top_5_players = [p.get("name") for p in players[:5] if p.get("name")]
             pipeline.set(self.redis_key_top5, json.dumps(top_5_players))
+            
+            # 更新上次更新时间戳
+            pipeline.set(self.redis_key_last_update, datetime.now().isoformat())
 
             # 4. 设置过期时间（仅限当前赛季）
             if self._is_current:
@@ -137,6 +152,7 @@ class Season:
                 pipeline.expire(self.redis_key_players, expire_time)
                 pipeline.expire(self.redis_key_top5, expire_time)
                 pipeline.expire(self.redis_key_playernames, expire_time)
+                pipeline.expire(self.redis_key_last_update, expire_time)
             
             await pipeline.execute()
             bot_logger.info(f"赛季 {self.season_id} 数据成功更新到 Redis，共 {len(players)} 条记录。")
@@ -235,6 +251,7 @@ class SeasonManager:
         """
         初始化所有赛季的数据。
         此方法使用双重检查锁定模式确保只执行一次。
+        对于当前赛季，会强制执行一次数据更新和索引构建。
         """
         if SeasonManager._preheated:
             return
@@ -246,6 +263,16 @@ class SeasonManager:
             bot_logger.info("开始初始化所有赛季模块...")
             tasks = [self.get_season(season_id) for season_id in self.seasons_config]
             await asyncio.gather(*tasks)
+            
+            # 强制为当前赛季执行一次数据更新和索引构建
+            try:
+                current_season = await self.get_season(SeasonConfig.CURRENT_SEASON)
+                if current_season:
+                    bot_logger.info(f"启动时为当前赛季 {SeasonConfig.CURRENT_SEASON} 强制执行数据更新和索引构建...")
+                    await current_season._update_data(force_update=True)
+            except Exception as e:
+                bot_logger.error(f"启动时强制更新当前赛季数据失败: {e}", exc_info=True)
+
             bot_logger.info("所有赛季模块初始化完成。")
             SeasonManager._preheated = True
 
