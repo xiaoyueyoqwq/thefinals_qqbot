@@ -138,7 +138,7 @@ class DeepSearch:
 
     async def format_search_results(self, query: str, results: List[Dict[str, Any]]) -> str:
         """格式化搜索结果消息 (保持原始格式)"""
-        message = f"🔎 深度搜索 | {query.replace('/ds', '').strip()}\n"
+        message = f"\n🔎 深度搜索 | {query.replace('/ds', '').strip()}\n"
         message += f"{SEPARATOR}\n"
         
         if not results:

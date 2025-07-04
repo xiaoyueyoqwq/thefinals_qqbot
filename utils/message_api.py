@@ -9,6 +9,7 @@ from utils.logger import bot_logger
 from .url_check import obfuscate_urls
 from utils.config import settings
 from utils.image_manager import ImageManager
+import base64
 
 # 消息类型枚举
 class MessageType(IntEnum):
@@ -433,11 +434,6 @@ class MessageAPI:
         Returns:
             bool: 是否发送成功
         """
-        # 内部标志，防止无限递归转图片
-        if kwargs.get("_is_image_retry", False):
-            bot_logger.warning("已作为图片重试，不再处理。")
-            return False
-
         original_content = content  # 保存原始消息内容
         try:
             # ---- 用于测试的违规触发器 ----
@@ -519,15 +515,26 @@ class MessageAPI:
 
                 if img_base64:
                     bot_logger.info("文本已成功转换为图片，正在尝试重新发送...")
+                    img_bytes = base64.b64decode(img_base64)
+                    
+                    # 保存图片并获取ID
+                    image_id = await image_manager.save_image(img_bytes)
+                    if not image_id:
+                        bot_logger.error("保存临时图片失败，无法重新发送。")
+                        return False
+
+                    # 构建图片URL
+                    image_url = f"{settings.SERVER_API_EXTERNAL_URL}/images/{image_id}"
+                    bot_logger.info(f"将通过URL重新发送图片: {image_url}")
+
                     # 再次调用，但作为图片发送
                     return await self.send_to_group(
                         group_id=group_id,
                         content="",  # 图片消息内容应为空
                         msg_type=MessageType.MEDIA,
                         msg_id=msg_id,
-                        image_base64=img_base64,
-                        msg_seq=msg_seq,
-                        _is_image_retry=True # 设置内部标志
+                        image_url=image_url,
+                        msg_seq=msg_seq
                     )
                 else:
                     bot_logger.error("文本转图片失败，无法重新发送。")

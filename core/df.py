@@ -21,6 +21,7 @@ class DFQuery:
         self.redis_key_live = "df:scores:live"
         self.redis_key_history_prefix = "df:scores:history:"
         self.redis_key_last_save_date = "df:scores:last_save_date"
+        self.last_fetched_data: Dict[str, Any] = {}
 
         self._update_task = None
         self._daily_save_task = None
@@ -86,7 +87,8 @@ class DFQuery:
                 bot_logger.warning("[DFQuery] 未找到目标排名 (500, 10000) 的数据。")
                 return
 
-            await redis_manager.set(self.redis_key_live, scores_to_cache, expire=self.update_interval + 60)
+            self.last_fetched_data = scores_to_cache
+            await redis_manager.set(self.redis_key_live, scores_to_cache, expire=600)
         except Exception as e:
             bot_logger.error(f"[DFQuery] 更新实时底分数据时发生错误: {e}", exc_info=True)
         finally:
@@ -114,6 +116,10 @@ class DFQuery:
         history_key = f"{self.redis_key_history_prefix}{today_str}"
         
         live_data = await self.get_bottom_scores()
+        if not live_data:
+            bot_logger.warning("[DFQuery] Redis中没有实时数据，将使用最后一次成功获取的数据。")
+            live_data = self.last_fetched_data
+
         if not live_data:
             bot_logger.warning("[DFQuery] 没有实时数据可供保存为历史快照。")
             return
@@ -293,22 +299,3 @@ class DFQuery:
         if self._daily_save_task and not self._daily_save_task.done():
             self._daily_save_task.cancel()
         bot_logger.info("[DFQuery] 所有任务已停止。")
-
-
-class DFApi:
-    """DF API的简单封装"""
-    def __init__(self):
-        self.df_query = DFQuery()
-
-    async def get_formatted_df_message(self) -> str:
-        """获取格式化后的底分消息"""
-        scores = await self.df_query.get_bottom_scores()
-        return await self.df_query.format_score_message(scores)
-
-    def start_tasks(self) -> list:
-        """返回需要启动的后台任务"""
-        return [self.df_query.start()]
-
-    async def stop_tasks(self):
-        """停止所有后台任务"""
-        await self.df_query.stop()
