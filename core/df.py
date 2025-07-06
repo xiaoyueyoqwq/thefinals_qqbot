@@ -211,7 +211,7 @@ class DFQuery:
         update_time = datetime.now()
         
         message = [
-            f"\n✨{settings.CURRENT_SEASON}底分查询 | THE FINALS",
+            f"\u200b\n✨{settings.CURRENT_SEASON}底分查询 | THE FINALS",
             f"📊 更新时间: {update_time.strftime('%H:%M:%S')}",
             ""
         ]

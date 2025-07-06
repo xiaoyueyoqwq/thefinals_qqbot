@@ -47,6 +47,7 @@ class BaseAPI:
     
     # API 缓存的 TTL (秒)
     _cache_ttl: ClassVar[int] = 60
+    _cache_ttl_long: ClassVar[int] = 86400 # 24 hours for conditional caching
     
     def __init__(self, base_url: str = "", timeout: int = 5):
         # 兼容旧的 base_url 参数，但优先使用配置文件中的设置
@@ -136,6 +137,15 @@ class BaseAPI:
                 await asyncio.sleep(cls._rate_limit - time_since_last)
             cls._last_request_time = time.time()
     
+    @classmethod
+    def get_last_modified_cache_key(cls, endpoint: str, params: Optional[Dict] = None) -> str:
+        """生成 Last-Modified 值的缓存键"""
+        key = f"api_cache_lm:{endpoint}"
+        if params:
+            sorted_params = sorted(params.items())
+            key += ":" + ":".join(f"{k}={v}" for k, v in sorted_params)
+        return key
+
     @async_retry(max_retries=3)
     async def _request(
         self,
@@ -147,78 +157,92 @@ class BaseAPI:
         headers: Optional[Dict] = None,
         use_cache: bool = True,
         cache_ttl: Optional[int] = None,
+        _is_retry_for_304: bool = False, # 内部参数，用于处理304后缓存丢失的情况
         **kwargs
     ) -> httpx.Response:
-        """发送HTTP请求，支持主备切换和高效缓存"""
+        """发送HTTP请求，支持主备切换、高效缓存和条件请求(If-Modified-Since)"""
         url = self._build_url(endpoint)
-        bot_logger.debug(f"[BaseAPI] 发起请求: {method} {url}")
+        bot_logger.debug(f"[BaseAPI] 准备请求: {method} {url}")
 
-        use_cache_effective = use_cache and not self.is_using_backup
+        use_cache_effective = use_cache and not self.is_using_backup and method.upper() == "GET"
         
-        if use_cache_effective and method.upper() == "GET":
-            cache_key = self.get_cache_key(endpoint, params)
-            cached_data = await redis_manager.get(cache_key)
-            if cached_data:
-                bot_logger.debug(f"[BaseAPI] 使用 Redis 缓存数据 for key: {cache_key}")
-                # 确保内容是 bytes 类型
-                if isinstance(cached_data, str):
-                    content_bytes = cached_data.encode('utf-8')
-                else:
-                    content_bytes = cached_data
-                
-                # 从缓存内容重建 Response 对象
-                response = httpx.Response(
-                    status_code=200,
-                    content=content_bytes,
-                    request=httpx.Request(method, url)
-                )
-                return response
-        
+        # 1. 如果支持缓存，则处理缓存逻辑
+        if use_cache_effective:
+            content_cache_key = self.get_cache_key(endpoint, params)
+            lm_cache_key = self.get_last_modified_cache_key(endpoint, params)
+
+            # 如果不是304重试，则尝试从缓存中获取数据
+            if not _is_retry_for_304:
+                cached_content = await redis_manager.get(content_cache_key)
+                if cached_content:
+                    bot_logger.debug(f"[BaseAPI] L1 缓存命中, key: {content_cache_key}")
+                    return httpx.Response(200, content=cached_content, request=httpx.Request(method, url))
+
+            # L1 缓存未命中，准备网络请求，并检查是否存在 Last-Modified 值 (L2 缓存)
+            request_headers = headers.copy() if headers else {}
+            last_modified = await redis_manager.get(lm_cache_key)
+            if last_modified and isinstance(last_modified, bytes):
+                request_headers['If-Modified-Since'] = last_modified.decode()
+                bot_logger.debug(f"[BaseAPI] L2 缓存发现 Last-Modified, key: {lm_cache_key}")
+        else:
+            request_headers = headers
+
+        # 2. 执行网络请求
         async with self._request_semaphore:
             await self._enforce_rate_limit()
-            
             try:
                 async with asyncio.timeout(self.timeout):
                     async with self.get_client() as client:
-                        bot_logger.debug(f"[BaseAPI] 发送请求: {method} {url}")
-                        
+                        bot_logger.debug(f"[BaseAPI] 发送网络请求: {method} {url}, Headers: {request_headers}")
                         request_timeout = kwargs.pop('timeout', self.timeout + 5)
-
                         response = await client.request(
-                            method=method,
-                            url=url,
-                            params=params,
-                            data=data,
-                            json=json,
-                            headers=headers,
-                            timeout=request_timeout,
-                            **kwargs
+                            method=method, url=url, params=params, data=data, json=json,
+                            headers=request_headers, timeout=request_timeout, **kwargs
                         )
+
+                        # 如果是304，特殊处理
+                        if response.status_code == 304:
+                            bot_logger.debug(f"[BaseAPI] 收到 304 Not Modified, key: {content_cache_key}")
+                            cached_content = await redis_manager.get(content_cache_key)
+                            if cached_content:
+                                # 刷新长周期缓存
+                                await redis_manager.redis.expire(content_cache_key, self._cache_ttl_long)
+                                await redis_manager.redis.expire(lm_cache_key, self._cache_ttl_long)
+                                return httpx.Response(200, content=cached_content, request=httpx.Request(method, url))
+                            else:
+                                # 缓存不一致，重新请求
+                                bot_logger.warning(f"[BaseAPI] 收到304但缓存丢失, key: {content_cache_key}, 将强制重新获取")
+                                return await self._request(method, endpoint, params, data, json, headers, use_cache, cache_ttl, _is_retry_for_304=True, **kwargs)
+
                         response.raise_for_status()
-                
+
+                # 3. 处理成功的响应 (2xx)
                 bot_logger.debug(f"[BaseAPI] 请求成功: {response.status_code}")
-                
-                if use_cache_effective and method.upper() == "GET":
-                    cache_key = self.get_cache_key(endpoint, params)
-                    ttl = cache_ttl if cache_ttl is not None else self._cache_ttl
-                    await redis_manager.set(cache_key, response.content, expire=ttl)
-                    bot_logger.debug(f"[BaseAPI] 响应已缓存到 Redis, key: {cache_key}, ttl: {ttl}s")
-                
+                if use_cache_effective:
+                    new_last_modified = response.headers.get('Last-Modified')
+                    if new_last_modified:
+                        # 使用长周期缓存
+                        ttl = self._cache_ttl_long
+                        await redis_manager.set(content_cache_key, response.content, expire=ttl)
+                        await redis_manager.set(lm_cache_key, new_last_modified, expire=ttl)
+                        bot_logger.debug(f"[BaseAPI] 响应已长周期缓存, key: {content_cache_key}, lm_key: {lm_cache_key}, ttl: {ttl}s")
+                    else:
+                        # 使用默认短周期缓存
+                        ttl = cache_ttl if cache_ttl is not None else self._cache_ttl
+                        await redis_manager.set(content_cache_key, response.content, expire=ttl)
+                        await redis_manager.delete(lm_cache_key) # 确保删除旧的lm值
+                        bot_logger.debug(f"[BaseAPI] 响应已短周期缓存, key: {content_cache_key}, ttl: {ttl}s")
+
                 return response
-                    
+
             except (httpx.TimeoutException, httpx.ConnectError, asyncio.TimeoutError) as e:
                 bot_logger.error(f"[BaseAPI] 请求失败 ({self.current_url}): {type(e).__name__}", exc_info=True)
-
-                # 如果当前未使用备用URL，并且备用URL已配置，则进行切换
                 if not self.is_using_backup and self.backup_url:
                     self.current_url = self.backup_url
                     self.is_using_backup = True
                     bot_logger.warning(f"[BaseAPI] 主API请求失败，自动切换到备用API: {self.backup_url}")
-                
-                # 重新抛出异常，让重试装饰器处理
                 raise
             except httpx.RequestError as e:
-                # 其他RequestError
                 bot_logger.error(f"[BaseAPI] 请求失败: {type(e).__name__}: {e}", exc_info=True)
                 raise
     
@@ -257,7 +281,7 @@ class BaseAPI:
         **kwargs
     ) -> httpx.Response:
         """发送POST请求"""
-        return await self._request("POST", endpoint, data=data, json=json, **kwargs)
+        return await self._request("POST", endpoint, data=data, json=json, use_cache=False, **kwargs)
     
     async def put(
         self,
@@ -267,7 +291,7 @@ class BaseAPI:
         **kwargs
     ) -> httpx.Response:
         """发送PUT请求"""
-        return await self._request("PUT", endpoint, data=data, json=json, **kwargs)
+        return await self._request("PUT", endpoint, data=data, json=json, use_cache=False, **kwargs)
     
     async def delete(
         self,
@@ -275,7 +299,7 @@ class BaseAPI:
         **kwargs
     ) -> httpx.Response:
         """发送DELETE请求"""
-        return await self._request("DELETE", endpoint, **kwargs)
+        return await self._request("DELETE", endpoint, use_cache=False, **kwargs)
     
     @staticmethod
     def handle_response(response: httpx.Response) -> Union[Dict, str]:
