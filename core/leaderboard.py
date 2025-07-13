@@ -15,6 +15,43 @@ import matplotlib.style as mplstyle
 import orjson as json
 from utils.config import settings
 import os
+import httpx
+from urllib.parse import quote
+import time
+from functools import lru_cache, wraps
+from core.rank import RankAPI
+
+# 为异步函数设计的简单的TTL缓存
+def async_ttl_cache(ttl: int = 60):
+    def decorator(func):
+        cache = {}
+        lock = asyncio.Lock()
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            key = str(args) + str(kwargs)
+            now = time.time()
+            
+            async with lock:
+                if key in cache:
+                    result, timestamp = cache[key]
+                    if now - timestamp < ttl:
+                        return result
+            
+            new_result = await func(*args, **kwargs)
+
+            async with lock:
+                # 限制缓存大小，防止内存泄漏
+                if len(cache) > 100:
+                    # 移除最旧的条目
+                    oldest_key = min(cache, key=lambda k: cache[k][1])
+                    cache.pop(oldest_key, None)
+                cache[key] = (new_result, now)
+                
+            return new_result
+        return wrapper
+    return decorator
+
 
 class LeaderboardCore(BaseAPI):
     """排位分数走势图核心类"""
@@ -39,9 +76,11 @@ class LeaderboardCore(BaseAPI):
         }
     }
     
-    def __init__(self):
-        super().__init__(base_url="https://www.davg25.com/app/the-finals-leaderboard-tracker/api/vaiiya/")
+    def __init__(self, rank_api: RankAPI):
         self.logger = logging.getLogger("LeaderboardCore")
+        self._client = httpx.AsyncClient(timeout=10)
+        self.base_url = "https://www.davg25.com/app/the-finals-leaderboard-tracker/api/vaiiya"
+        self.rank_api = rank_api
         
         # 预加载字体
         font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'font', 'SourceHanSansSC-Medium.otf')
@@ -213,9 +252,10 @@ class LeaderboardCore(BaseAPI):
             self.logger.error(f"生成走势图失败: {str(e)}")
             raise
 
+    @async_ttl_cache(ttl=60)
     async def fetch_player_history(self, player_id: str, time_range: int = 604800) -> List[Dict[str, Any]]:
         """
-        获取玩家历史数据
+        获取玩家历史数据 (使用带1分钟缓存的httpx直连)
         
         Args:
             player_id: 玩家ID
@@ -225,20 +265,41 @@ class LeaderboardCore(BaseAPI):
             List[Dict]: 历史数据列表
         """
         try:
-            params = {
-                "id": player_id,
-                "range": time_range
-            }
+            # 1. 使用模糊搜索找到精确的玩家ID
+            self.logger.debug(f"[LeaderboardCore] 模糊搜索玩家: {player_id}")
+            if not self.rank_api.search_indexer.is_ready():
+                await self.rank_api.initialize() # 确保索引已加载
+                
+            search_results = self.rank_api.search_indexer.search(player_id, limit=1)
+
+            if not search_results:
+                self.logger.warning(f"[LeaderboardCore] 模糊搜索未能找到玩家: {player_id}")
+                raise ValueError("玩家不存在")
             
-            response = await self.get("player-history", params=params)
+            exact_player_id = search_results[0].get("name")
+            self.logger.info(f"[LeaderboardCore] 模糊搜索将 '{player_id}' 映射到 '{exact_player_id}'")
+
+            # 2. 使用精确ID获取数据
+            encoded_player_id = quote(exact_player_id)
+            url = f"{self.base_url}/player-history?id={encoded_player_id}&range={time_range}"
+            
+            self.logger.debug(f"[LeaderboardCore] 发送明文请求: {url}")
+            response = await self._client.get(url)
             
             if response.status_code == 404:
+                self.logger.warning(f"玩家不存在: {exact_player_id}")
                 raise ValueError("玩家不存在")
-            elif response.status_code != 200:
-                raise RuntimeError(f"API请求失败: {response.status_code}")
-                
+            
+            response.raise_for_status()
+            
             return response.json()
                     
+        except httpx.HTTPStatusError as e:
+            self.logger.error(f"API请求失败: {e.response.status_code} - for player: {exact_player_id or player_id}")
+            raise RuntimeError(f"API请求失败: {e.response.status_code}")
+        except ValueError as e: # 明确捕获玩家不存在的错误
+            self.logger.info(f"[LeaderboardCore] {e}: {player_id}")
+            raise
         except Exception as e:
-            self.logger.error(f"获取玩家历史数据失败: {str(e)}")
+            self.logger.error(f"获取玩家历史数据时发生未知错误: {str(e)} - for player: {player_id}")
             raise

@@ -165,6 +165,8 @@ class BaseAPI:
         bot_logger.debug(f"[BaseAPI] 准备请求: {method} {url}")
 
         use_cache_effective = use_cache and not self.is_using_backup and method.upper() == "GET"
+        content_cache_key = None
+        lm_cache_key = None
         
         # 1. 如果支持缓存，则处理缓存逻辑
         if use_cache_effective:
@@ -235,15 +237,20 @@ class BaseAPI:
 
                 return response
 
-            except (httpx.TimeoutException, httpx.ConnectError, asyncio.TimeoutError) as e:
-                bot_logger.error(f"[BaseAPI] 请求失败 ({self.current_url}): {type(e).__name__}", exc_info=True)
+            except (httpx.TimeoutException, httpx.ConnectError, asyncio.TimeoutError, httpx.RequestError) as e:
+                bot_logger.error(f"[BaseAPI] 请求失败 ({self.current_url}): {type(e).__name__} - {e}", exc_info=True)
+
+                # 尝试从缓存中返回旧数据作为降级方案
+                if use_cache_effective and content_cache_key:
+                    cached_content = await redis_manager.get(content_cache_key)
+                    if cached_content:
+                        bot_logger.warning(f"[BaseAPI] API请求失败，返回缓存的旧数据, key: {content_cache_key}")
+                        return httpx.Response(200, content=cached_content, request=httpx.Request(method, url))
+
                 if not self.is_using_backup and self.backup_url:
                     self.current_url = self.backup_url
                     self.is_using_backup = True
                     bot_logger.warning(f"[BaseAPI] 主API请求失败，自动切换到备用API: {self.backup_url}")
-                raise
-            except httpx.RequestError as e:
-                bot_logger.error(f"[BaseAPI] 请求失败: {type(e).__name__}: {e}", exc_info=True)
                 raise
     
     @classmethod

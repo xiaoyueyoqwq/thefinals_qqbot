@@ -17,15 +17,16 @@ class LeaderboardPlugin(Plugin):
     
     def __init__(self):
         super().__init__()  # 调用父类初始化
-        self.core = LeaderboardCore()
+        self.rank_api = RankAPI()
+        self.core = LeaderboardCore(rank_api=self.rank_api)
         self.logger = bot_logger
         self.bind_manager = BindManager()
-        self.rank_api = RankAPI()
         self.logger.info(f"[{self.name}] 插件初始化完成")
         
     async def on_load(self):
         """插件加载时的回调函数"""
         await super().on_load()  # 调用父类的 on_load
+        await self.rank_api.initialize()
         self.logger.info(f"[{self.name}] 排位分数走势图插件已加载")
         
     async def on_unload(self):
@@ -143,8 +144,12 @@ class LeaderboardPlugin(Plugin):
                 if not history_data:
                     await self.reply(handler, f"\n⚠️ 未找到玩家历史数据")
                     return
+            except ValueError: # 捕获由Core层传来的“玩家不存在”的特定错误
+                self.logger.info(f"[{self.name}] 模糊搜索未能找到玩家: {player_id}")
+                await self.reply(handler, f"\n⚠️ 未在排行榜数据中找到玩家: {player_id}")
+                return
             except Exception as e:
-                # 所有异常都当作未找到玩家信息处理
+                # 其他所有异常都当作获取失败处理
                 self.logger.info(f"[{self.name}] 获取玩家信息失败，视为未找到玩家: {str(e)}")
                 await self.reply(handler, f"\n⚠️ 输入的玩家ID不完整（没带尾号ID或无数据）")
                 return
@@ -163,16 +168,19 @@ class LeaderboardPlugin(Plugin):
             
             # 获取玩家的club信息
             try:
-                player_stats = await self.rank_api.get_player_stats(player_id)
+                # 使用相同的player_id进行查询，因为此时它已经被验证过
+                player_stats = await self.rank_api.get_player_stats(player_id, use_fuzzy_search=True)
                 club_tag = player_stats.get("clubTag", "") if player_stats else ""
+                display_name = player_stats.get("name", player_id) if player_stats else player_id
             except Exception as e:
                 self.logger.error(f"[{self.name}] 获取玩家club信息失败: {str(e)}")
                 club_tag = ""
+                display_name = player_id
             
             status_text = (
                 f"\n📊 s6排位赛 | THE FINALS\n"
                 f"{SEPARATOR}\n"
-                f"▎玩家: {player_id}{' [' + club_tag + ']' if club_tag else ''}\n"
+                f"▎玩家: {display_name}{' [' + club_tag + ']' if club_tag else ''}\n"
                 f"▎当前排名: #{latest_data['rank']}\n"
                 f"▎段位: {latest_data['leagueName']}\n"
                 f"▎分数: {latest_data['points']}\n"

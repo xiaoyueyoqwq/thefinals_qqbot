@@ -15,7 +15,7 @@ class ClubAPI(BaseAPI):
     """俱乐部API封装"""
     
     def __init__(self):
-        super().__init__(settings.api_base_url, timeout=10)
+        super().__init__(settings.api_base_url, timeout=20)
         self.headers = {
             "Accept": "application/json",
             "User-Agent": "TheFinals-Bot/1.0"
