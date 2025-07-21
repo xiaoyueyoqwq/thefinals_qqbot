@@ -20,11 +20,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from fastapi import FastAPI
 from core.plugin import PluginManager
-from utils.image_manager import ImageManager
+from utils.image_manager import image_manager as global_image_manager
 
 # 全局变量来持有CoreApp实例
 _core_app_instance = None
-_image_manager_instance = None
 
 
 def get_app() -> FastAPI:
@@ -49,17 +48,6 @@ def set_core_app(app_instance):
     """由Runner在启动时注入CoreApp实例"""
     global _core_app_instance
     _core_app_instance = app_instance
-
-
-def set_image_manager(image_manager: ImageManager):
-    """由Runner在启动时注入ImageManager实例"""
-    global _image_manager_instance
-    _image_manager_instance = image_manager
-
-
-def get_image_manager() -> ImageManager:
-    """获取ImageManager实例"""
-    return _image_manager_instance
 
 
 # 请求计数器
@@ -145,13 +133,6 @@ _plugin_tags: Set[str] = set()
 # 存储插件实例
 _plugin_instances: Dict[str, Any] = {}
 
-# 图片管理器实例
-_image_manager = None
-
-def set_image_manager(manager):
-    """设置图片管理器实例"""
-    global _image_manager
-    _image_manager = manager
 
 @app.get("/images/{image_id}", include_in_schema=False)
 async def get_image(image_id: str, request: Request):
@@ -165,17 +146,17 @@ async def get_image(image_id: str, request: Request):
     if not re.match(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$', image_id, re.I):
         raise HTTPException(status_code=400, detail="Invalid image ID format")
     
-    if not _image_manager:
+    if not global_image_manager:
         raise HTTPException(status_code=500, detail="Image manager not initialized")
         
-    image_path = _image_manager.get_image_path(image_id)
+    image_path = global_image_manager.get_image_path(image_id)
     if not image_path:
         raise HTTPException(status_code=404, detail="Image not found")
         
     # 确保图片存在且在允许的目录中
     try:
         image_path = os.path.abspath(image_path)
-        base_dir = os.path.abspath(_image_manager.image_dir)
+        base_dir = os.path.abspath(global_image_manager.image_dir)
         if not image_path.startswith(base_dir):
             raise HTTPException(status_code=403, detail="Access denied")
             

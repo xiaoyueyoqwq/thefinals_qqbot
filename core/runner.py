@@ -20,6 +20,7 @@ from utils.config import settings
 from utils.browser import browser_manager
 from utils.redis_manager import redis_manager
 from utils.provider_manager import get_provider_manager
+from utils.image_manager import image_manager
 from core.api import get_app, set_core_app
 from core.constants import CLEANUP_TIMEOUT
 from core.signal_utils import ensure_exit, setup_signal_handlers
@@ -96,6 +97,15 @@ def _discover_platforms(core_app: CoreApp) -> List[BasePlatform]:
             
     return platforms
 
+async def start_platforms_sequentially(platforms: List[BasePlatform]) -> None:
+    """
+    按顺序启动所有平台。
+    如果任何一个平台启动失败，它会抛出异常，从而中断整个应用。
+    """
+    for p in platforms:
+        await p.start()
+    bot_logger.info("所有平台均已成功启动。")
+
 # ---------------------------------------------------------
 # async 主流程
 # ---------------------------------------------------------
@@ -114,6 +124,7 @@ async def _async_main() -> None:
         await _check_ip()
         await redis_manager.initialize()
         await browser_manager.initialize()
+        await image_manager.start()
 
         # 2. 初始化核心应用
         core_app = CoreApp()
@@ -121,30 +132,25 @@ async def _async_main() -> None:
         set_core_app(core_app)
         register_resource(core_app)
 
-        # 3. 发现并启动所有平台
+        # 3. 发现平台
         platforms = _discover_platforms(core_app)
         if not platforms:
             bot_logger.error("错误：没有找到任何平台适配器，程序无法启动。")
             return
 
-        # 逐个启动平台。如果任何一个平台启动失败，
-        # 它将抛出异常，整个应用会进入清理阶段并退出。
-        for p in platforms:
-            await p.start()
+        # 4. 并行运行所有服务
+        tasks = [
+            asyncio.create_task(start_platforms_sequentially(platforms), name="platforms_startup")
+        ]
         
-        bot_logger.info("所有平台均已成功启动。")
-        
-        # 4. 启动可选的 API 服务器或无限等待以保持应用运行
         if settings.server.api.enabled:
             uvconf = uvicorn.Config(
                 get_app(), host=settings.server.api.host, port=settings.server.api.port, log_level="info"
             )
             server = uvicorn.Server(uvconf)
-            await server.serve()
-        else:
-            bot_logger.info("所有服务已启动，等待中断信号 (Ctrl+C) 来停止...")
-            # 创建一个永不触发的事件，等待被信号处理器取消
-            await asyncio.Event().wait()
+            tasks.append(asyncio.create_task(server.serve(), name="api_server"))
+
+        await asyncio.gather(*tasks)
 
     finally:
         bot_logger.info("检测到服务停止，开始全局清理...")
@@ -152,6 +158,8 @@ async def _async_main() -> None:
             await asyncio.gather(*(p.stop() for p in platforms), return_exceptions=True)
         if core_app:
             await core_app.cleanup()
+        
+        await image_manager.stop()
 
 
 # ---------------------------------------------------------

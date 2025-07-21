@@ -22,6 +22,12 @@ log = bot_logger
 
 class ImageManager:
     """临时图片管理器"""
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
     
     # 允许的图片类型
     ALLOWED_TYPES = ['png', 'jpeg', 'jpg', 'gif']
@@ -30,6 +36,9 @@ class ImageManager:
     
     def __init__(self):
         """初始化图片管理器"""
+        if hasattr(self, '_initialized'):
+            return
+        
         self.image_dir = Path(settings.IMAGE_STORAGE_PATH)
         os.makedirs(self.image_dir, exist_ok=True)
         bot_logger.info(f"资源就绪: 图片目录={self.image_dir}")
@@ -55,6 +64,7 @@ class ImageManager:
             "last_cleanup": time.time(),
             "suspicious_requests": []
         }
+        self._initialized = True
         
     def _ensure_directory(self):
         """确保存储目录存在且安全"""
@@ -387,3 +397,5 @@ class ImageManager:
         except Exception as e:
             bot_logger.error(f"文本转图片失败: {e}", exc_info=True)
             return None 
+
+image_manager = ImageManager() 
