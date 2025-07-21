@@ -41,7 +41,7 @@ class PowerShiftPlugin(Plugin):
             bot_logger.debug(f"[{self.name}] 收到平台争霸查询命令: {content}")
             
             # 获取用户绑定的ID
-            bound_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
+            bound_id = self.bind_manager.get_game_id(handler.user_id)
             
             # 解析命令参数
             parts = content.split(maxsplit=1)

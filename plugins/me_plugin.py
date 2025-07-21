@@ -5,6 +5,7 @@ from core.bind import BindManager
 from core.season import SeasonManager, SeasonConfig
 from utils.logger import bot_logger
 from utils.templates import SEPARATOR
+from core.rank import RankAPI
 
 class MePlugin(Plugin):
     """玩家个人数据查询插件"""
@@ -12,7 +13,8 @@ class MePlugin(Plugin):
     def __init__(self):
         """初始化玩家个人数据查询插件"""
         super().__init__()
-        self.me_query = MeQuery()
+        self.rank_api = RankAPI()
+        self.me_query = MeQuery(rank_api=self.rank_api)
         self.bind_manager = BindManager()
         self.season_manager = SeasonManager()
         self._messages = {
@@ -32,25 +34,32 @@ class MePlugin(Plugin):
         }
         bot_logger.debug(f"[{self.name}] 初始化玩家个人数据查询插件")
         
-    @on_command("me", "查询玩家个人数据")
-    async def query_me(self, handler: MessageHandler, content: str) -> None:
-        """处理me命令查询玩家数据"""
+    @on_command("me", "查询个人信息")
+    async def handle_me_command(self, handler, content: str):
+        """处理个人信息查询命令"""
         try:
-            bot_logger.debug(f"[{self.name}] 收到me命令: {content}")
-            parts = content.split(maxsplit=1)
+            # 移除命令前缀并分割参数
+            args = content.replace("/me", "").strip()
             
-            # 获取用户绑定的ID
-            bound_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
+            # 确定要查询的玩家ID
+            if args:
+                player_name = args
+            else:
+                # 如果没有参数，则使用绑定的ID
+                bound_id = self.bind_manager.get_game_id(handler.user_id)
+                if not bound_id:
+                    await self.reply(handler, self._get_help_message())
+                    return
             
             # 解析命令参数
-            if len(parts) <= 1:  # 没有参数，使用绑定ID和默认赛季
+            if len(args) <= 1:  # 没有参数，使用绑定ID和默认赛季
                 if not bound_id:
                     await self.reply(handler, self._messages["not_found"])
                     return
                 player_name = bound_id
                 season = SeasonConfig.CURRENT_SEASON  # 默认赛季
             else:
-                args = parts[1].split()
+                args = args.split()
                 if len(args) == 1:  # 只有一个参数
                     if args[0].lower().startswith('s') and args[0].lower() in self.season_manager.get_all_seasons():
                         # 参数是赛季，使用绑定ID

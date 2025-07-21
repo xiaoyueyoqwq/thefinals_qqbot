@@ -20,6 +20,19 @@ class AboutPlugin(Plugin):
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理关于命令时发生错误: {str(e)}")
             await self.reply(handler, "⚠️ 处理关于命令时发生错误，请稍后重试")
+    
+    @on_command("kook-help", "查看Kook帮助信息", hidden=True)
+    async def show_kook_help(self, handler: MessageHandler, content: str) -> None:
+        """显示Kook平台的帮助信息"""
+        if not handler.is_platform("kook"):
+            return # 仅在Kook平台响应
+
+        try:
+            result = self.about_us.get_kook_help_text()
+            await self.reply(handler, result)
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 处理Kook帮助命令时发生错误: {str(e)}")
+            await self.reply(handler, "⚠️ 处理帮助命令时发生错误，请稍后重试")
             
     async def on_load(self) -> None:
         """插件加载时的处理"""

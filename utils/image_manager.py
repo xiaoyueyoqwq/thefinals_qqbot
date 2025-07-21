@@ -13,6 +13,11 @@ from utils.logger import bot_logger
 from utils.config import settings
 import aiofiles
 
+try:
+    from .doge_uploader import DogeUploader
+except ImportError:
+    DogeUploader = None
+
 log = bot_logger
 
 class ImageManager:
@@ -36,6 +41,12 @@ class ImageManager:
         self.cleanup_interval_seconds = settings.IMAGE_CLEANUP_INTERVAL * 3600  # 小时 -> 秒
 
         self._ensure_directory()
+
+        # 如果是本地模式，初始化DogeUploader
+        self.local_mode = settings.LOCAL_MODE
+        self.doge_uploader = None
+        if self.local_mode and DogeUploader:
+            self.doge_uploader = DogeUploader()
         
         # 安全统计
         self._stats = {
@@ -232,6 +243,32 @@ class ImageManager:
             
         if expired:
             bot_logger.info(f"已清理 {len(expired)} 个过期图片")
+
+    async def get_image_url(self, image_data: bytes) -> Optional[str]:
+        """根据模式（本地或生产）获取图片URL"""
+        try:
+            # 如果是本地模式，则上传到多吉云
+            if self.local_mode and self.doge_uploader:
+                filename = f"temp_{uuid.uuid4()}.png"
+                return await self.doge_uploader.upload_image(image_data, filename)
+
+            # --- 生产环境逻辑 ---
+            image_id = await self.save_image(image_data)
+            
+            # 从配置中获取外部URL
+            external_url = settings.SERVER_API_EXTERNAL_URL
+            if not external_url:
+                bot_logger.error("未配置外部服务器URL (SERVER_API_EXTERNAL_URL)")
+                return None
+            
+            # 拼接最终URL
+            if external_url.endswith('/'):
+                external_url = external_url[:-1]
+                
+            return f"{external_url}/images/{image_id}"
+        except Exception as e:
+            bot_logger.error(f"获取图片URL失败: {e}", exc_info=True)
+            return None
             
     async def get_image(self, image_id: str) -> Optional[bytes]:
         """获取图片数据
@@ -260,6 +297,32 @@ class ImageManager:
                 
         except Exception as e:
             bot_logger.error(f"获取图片失败: {str(e)}")
+            return None
+
+    async def get_image_path_from_data(self, image_data: bytes) -> Optional[str]:
+        """保存图片数据并返回其本地路径"""
+        try:
+            image_id = await self.save_image(image_data)
+            return self.get_image_path(image_id)
+        except Exception as e:
+            bot_logger.error(f"从数据保存并获取图片路径失败: {e}", exc_info=True)
+            return None
+
+    def get_image_size(self, image_data: bytes) -> Optional[tuple[int, int]]:
+        """
+        从图片二进制数据中获取图片的宽度和高度。
+
+        Args:
+            image_data: 图片的二进制数据。
+
+        Returns:
+            一个包含 (宽度, 高度) 的元组，如果无法解析则返回 None。
+        """
+        try:
+            with Image.open(BytesIO(image_data)) as img:
+                return img.size
+        except Exception as e:
+            bot_logger.error(f"无法从数据中解析图片尺寸: {e}", exc_info=True)
             return None
 
     async def text_to_image_base64(self, text: str) -> Optional[str]:

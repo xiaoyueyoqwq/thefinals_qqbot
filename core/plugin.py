@@ -27,6 +27,23 @@ import orjson as json
 from utils.redis_manager import redis_manager
 from .core_helper import CoreHelper, PluginValidationError
 
+# --- 插件开发辅助 ---
+
+def _log_rust_style_warning(title: str, advice: str, hint: str = None):
+    """
+    以类似 Rust 编译器的风格记录一条友好的警告信息。
+    """
+    separator = "─" * (len(title) + 4)
+    log_message = f"\n\n┌─ warning: {title} {'─' * (70 - len(title))}\n"
+    log_message += f"│\n"
+    log_message += f"│ advice: {advice}\n"
+    if hint:
+        log_message += f"│   hint: {hint}\n"
+    log_message += f"│\n"
+    log_message += f"└{'─' * 79}"
+    bot_logger.warning(log_message)
+
+
 # 预定义事件类型
 class EventType:
     """预定义事件类型"""
@@ -77,9 +94,11 @@ class MessageInfo:
 
     @classmethod
     def from_message(cls, message: Message) -> 'MessageInfo':
+        user_id = message.author.member_openid if hasattr(message.author, 'member_openid') else message.author.id
+        group_id = message.group_openid if hasattr(message, 'group_openid') else None
         return cls(
-            group_id=message.group_openid,
-            user_id=message.author.member_openid,
+            group_id=group_id,
+            user_id=user_id,
             content=message.content,
             raw_message=message
         )
@@ -96,6 +115,23 @@ def on_command(command: str = None, description: str = None, hidden: bool = Fals
             return await func(self, *args, **kwargs)
         cmd_name = command if command else func.__name__
         cmd_desc = description if description else func.__doc__ or ""
+        
+        plugin_name = func.__module__
+
+        if cmd_name.startswith('/'):
+            _log_rust_style_warning(
+                title="不规范的命令格式",
+                advice=f"在插件 '{plugin_name}' 中, 命令 '{cmd_name}' 以 '/' 开头。",
+                hint=f"这可能导致用户需要输入 '//{cmd_name.lstrip('/')}' 才能触发。请移除命令名前的 '/'。"
+            )
+
+        if ' ' in cmd_name:
+            _log_rust_style_warning(
+                title="不规范的命令格式",
+                advice=f"在插件 '{plugin_name}' 中, 命令 '{cmd_name}' 包含了空格。",
+                hint=f"指令应该是一个单独的词。机器人可能只会识别到第一个空格前的内容 ('{cmd_name.split()[0]}')。"
+            )
+
         setattr(wrapper, '_is_command', True)
         setattr(wrapper, '_command', cmd_name)
         setattr(wrapper, '_description', cmd_desc)
@@ -762,6 +798,16 @@ class PluginManager:
                             self._loaded_plugin_classes.add(item_name)
                             try:
                                 plugin_instance = item(**plugin_kwargs)
+                                
+                                # 检查 super().__init__() 是否被调用
+                                if not hasattr(plugin_instance, 'commands'):
+                                    _log_rust_style_warning(
+                                        title="插件初始化不完整",
+                                        advice=f"插件 '{item_name}' 可能覆盖了 __init__ 方法，但没有调用 super().__init__()。",
+                                        hint="请确保在你的 __init__ 方法中包含了对 super().__init__(**kwargs) 的调用，以完成插件的正确初始化。"
+                                    )
+                                    plugin_instance.commands = {}
+                                    
                                 plugin_instance.client = self.client
                                 await self.register_plugin(plugin_instance)
                                 bot_logger.info(f"成功加载插件: {item_name}")

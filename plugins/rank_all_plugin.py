@@ -60,24 +60,22 @@ class RankAllPlugin(Plugin):
         pattern = r'^[^#]+#\d+$'
         return bool(re.match(pattern, player_id))
 
-    @on_command("all", "查询全赛季排名信息")
-    async def query_all_seasons(self, handler: MessageHandler, content: str) -> None:
-        """查询全赛季排名信息"""
+    @on_command("all", "查询全赛季数据")
+    async def handle_rank_all_command(self, handler, content: str):
+        """处理全赛季数据查询命令"""
         try:
-            bot_logger.debug(f"[{self.name}] 收到全赛季排名查询命令: {content}")
+            # 移除命令前缀并分割参数
+            args = content.replace("/all", "").strip()
             
-            # 获取用户绑定的ID
-            bound_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
-            
-            # 解析命令参数
-            parts = content.split(maxsplit=1)
-            if len(parts) <= 1:  # 没有参数，使用绑定ID
-                if not bound_id:
-                    await self.reply(handler, self._messages["not_found"])
-                    return
-                player_name = bound_id
+            # 确定要查询的玩家ID
+            if args:
+                player_name = args
             else:
-                player_name = parts[1].strip()
+                # 如果没有参数，则使用绑定的ID
+                bound_id = self.bind_manager.get_game_id(handler.user_id)
+                if not bound_id:
+                    await self.reply(handler, self._get_help_message())
+                    return
             
             # 验证ID格式
             if not self._validate_embark_id(player_name):

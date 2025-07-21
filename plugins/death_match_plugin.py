@@ -12,6 +12,7 @@ from utils.templates import SEPARATOR
 import botpy
 from botpy.message import Message
 from botpy.ext.command_util import Commands
+from utils.message_handler import MessageHandler
 
 class DeathMatchPlugin(Plugin):
     """死亡竞赛查询插件"""
@@ -26,20 +27,17 @@ class DeathMatchPlugin(Plugin):
         self.api = DeathMatchAPI()
         self.bind_manager = BindManager()
         
-    @on_command("dm", "查询死亡竞赛数据")
-    async def handle_death_match_command(self, handler, content: str):
-        """处理死亡竞赛查询命令
-        
-        参数:
-            handler: 消息处理器
-            content: 命令内容
-            
-        返回:
-            None
-        """
+    @on_command("dm", "查询死亡竞赛信息")
+    async def query_death_match(self, handler: MessageHandler, content: str) -> None:
+        """查询死亡竞赛信息"""
         try:
-            # 移除命令前缀并分割参数
-            args = content.strip()
+            bot_logger.debug(f"[{self.name}] 收到死亡竞赛查询命令: {content}")
+            
+            # 获取用户绑定的ID
+            bound_id = self.bind_manager.get_game_id(handler.user_id)
+            
+            # 解析命令参数
+            parts = content.split(maxsplit=1)
             
             if not args:
                 # 如果没有参数，返回使用说明

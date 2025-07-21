@@ -37,7 +37,7 @@ class DeepSearchPlugin(Plugin):
         """
         try:
             # 获取用户ID
-            user_id = handler.message.author.member_openid
+            user_id = handler.user_id
             
             # 检查用户是否处于冷却状态
             on_cooldown, remaining = await self.deep_search.is_on_cooldown(user_id)

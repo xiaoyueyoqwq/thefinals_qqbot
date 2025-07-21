@@ -63,14 +63,14 @@ class TestHelloPlugin(Plugin):
             return await self.reply(handler, "好吧，不设置也行~")
         
         # 使用user_id作为状态key
-        key = f"mood_{handler.message.author.member_openid}"
+        key = f"mood_{handler.user_id}"
         await self.set_state(key, mood)
         await self.reply(handler, f"好的，我记住了你现在{mood}~")
 
     @on_command("getmood", "查看心情")
     async def get_mood(self, handler, content):
         """获取心情状态"""
-        key = f"mood_{handler.message.author.member_openid}"
+        key = f"mood_{handler.user_id}"
         mood = self.get_state(key)
         if mood:
             await self.reply(handler, f"你之前说你{mood}呢~")
@@ -80,7 +80,7 @@ class TestHelloPlugin(Plugin):
     @on_command("clearmood", "清除心情")
     async def clear_mood(self, handler, content):
         """清除心情状态"""
-        key = f"mood_{handler.message.author.member_openid}"
+        key = f"mood_{handler.user_id}"
         await self.clear_state(key)
         await self.reply(handler, "好的，已经清除了你的心情记录~")
 

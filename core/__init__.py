@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """
-core 包初始化。仅导出对外常用对象，方便上层引用。
+Core 模块，包含应用的核心逻辑。
+
+此 __init__.py 文件可以为空，或用于定义包级别的变量、导入子模块等。
 """
-from .client import MyBot          # noqa: F401
 from .runner import main as run    # noqa: F401

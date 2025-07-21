@@ -10,6 +10,9 @@ from core.image_generator import ImageGenerator
 import os
 import math # Import math for calculations if needed
 import random
+from utils.browser import browser_manager
+from core.rank import RankAPI
+from utils.translator import translate as _
 
 class Point:
     """Helper class for points"""
@@ -332,12 +335,16 @@ class MeQuery:
             cls._instance = super().__new__(cls)
         return cls._instance
         
-    def __init__(self):
+    def __init__(self, rank_api: RankAPI):
         """初始化MeQuery"""
         if self._initialized:
             return
             
-        self.api = MeAPI()
+        self.rank_api = rank_api
+        self.image_generator = ImageGenerator("me.html")
+        self.leaderboard_core = LeaderboardCore(rank_api=self.rank_api)
+        self.translator = _
+        self.browser_manager = browser_manager
         self._initialized = True
         bot_logger.info("[MeQuery] 初始化完成")
         

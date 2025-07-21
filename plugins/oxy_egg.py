@@ -19,7 +19,7 @@ class OxyEggPlugin(Plugin):
             bot_logger.debug(f"[{self.name}] 触发彩蛋命令: {content}")
             
             # 获取用户ID
-            user_id = handler.message.author.member_openid
+            user_id = handler.user_id
             
             # 获取用户触发次数
             count_key = f"trigger_count_{user_id}"

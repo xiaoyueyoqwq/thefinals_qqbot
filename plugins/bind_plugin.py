@@ -60,7 +60,7 @@ class BindPlugin(Plugin):
             
         try:
             success = await self.bind_manager.bind_user_async(
-                handler.message.author.member_openid,
+                handler.user_id,
                 args
             )
             
@@ -83,14 +83,11 @@ class BindPlugin(Plugin):
             bot_logger.error(f"[{self.name}] 绑定失败: {str(e)}")
             await self.reply(handler, "❌ 绑定失败，请稍后重试")
             
-    @on_command("unbind", "解除游戏ID绑定")
+    @on_command("unbind", "解绑游戏ID")
     async def unbind_game_id(self, handler: MessageHandler, content: str) -> None:
-        """解除游戏ID绑定"""
+        """解绑游戏ID"""
         try:
-            success = await self.bind_manager.unbind_user_async(
-                handler.message.author.member_openid
-            )
-            
+            success = await self.bind_manager.unbind_user_async(handler.user_id)
             if success:
                 await self.reply(handler, "\n✅ 已解除游戏ID绑定")
             else:
@@ -102,11 +99,11 @@ class BindPlugin(Plugin):
             bot_logger.error(f"[{self.name}] 解绑失败: {str(e)}")
             await self.reply(handler, "❌ 解绑失败，请稍后重试")
             
-    @on_command("status", "查看当前绑定的游戏ID")
-    async def check_bind_status(self, handler: MessageHandler, content: str) -> None:
-        """查看绑定状态"""
+    @on_command("status", "查看我的绑定信息")
+    async def get_my_info(self, handler: MessageHandler, content: str) -> None:
+        """获取当前用户的绑定信息"""
         try:
-            bind_info = self.bind_manager.get_bind_info(handler.message.author.member_openid)
+            bind_info = self.bind_manager.get_bind_info(handler.user_id)
             if bind_info:
                 bind_time = bind_info.get("bind_time", "未知")
                 last_updated = bind_info.get("last_updated", "未知")

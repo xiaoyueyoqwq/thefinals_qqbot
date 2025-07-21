@@ -33,6 +33,7 @@ class Settings:
     # Debug 配置
     DEBUG_ENABLED = _config["debug"]["enabled"]
     DEBUG_TEST_REPLY = _config["debug"]["test_reply"]
+    LOCAL_MODE = _config.get("debug", {}).get("local_mode", False)
     
     # 线程配置
     MAX_CONCURRENT = _config["max_concurrent"]  # 最大并发数
@@ -80,6 +81,14 @@ class Settings:
     REDIS_DB = _config.get("redis", {}).get("db", 0)
     REDIS_PASSWORD = _config.get("redis", {}).get("password", "")
     REDIS_TIMEOUT = _config.get("redis", {}).get("timeout", 5)
+
+    # Heybox 配置
+    HEYBOX_ENABLED = _config.get("heybox", {}).get("enabled", False)
+    HEYBOX_TOKEN = _config.get("heybox", {}).get("token", None)
+    
+    # KOOK 配置
+    KOOK_ENABLED = _config.get("kook", {}).get("enabled", False)
+    KOOK_TOKEN = _config.get("kook", {}).get("token", None)
     
     @property
     def bot(self) -> DotAccessibleDict:

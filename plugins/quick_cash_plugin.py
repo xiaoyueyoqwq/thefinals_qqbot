@@ -49,7 +49,7 @@ class QuickCashPlugin(Plugin):
             player_name = args.replace("/qc", "").strip()
             
             # 检查用户是否绑定了embark id
-            bound_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
+            bound_id = self.bind_manager.get_game_id(handler.user_id)
             
             if bound_id:
                 # 如果已绑定，使用绑定的embark id

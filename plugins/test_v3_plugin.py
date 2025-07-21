@@ -23,7 +23,7 @@ class TestV3Plugin(Plugin):
         bot_logger.info("测试状态管理功能")
         
         # 获取用户ID
-        user_id = handler.message.author.member_openid
+        user_id = handler.user_id
         
         # 获取当前计数
         count_key = f"count_{user_id}"

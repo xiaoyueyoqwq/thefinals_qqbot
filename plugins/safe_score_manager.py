@@ -54,7 +54,7 @@ class SafeScoreManagerPlugin(Plugin):
     @on_command("safe", "设置或查看安全分")
     async def handle_safe(self, handler: MessageHandler, content: str) -> None:
         """处理 safe 命令"""
-        user_id = handler.message.author.member_openid
+        user_id = handler.user_id
 
         if not content:
             # 查看当前安全分

@@ -18,6 +18,49 @@ import re
 import time
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from fastapi import FastAPI
+from core.plugin import PluginManager
+from utils.image_manager import ImageManager
+
+# 全局变量来持有CoreApp实例
+_core_app_instance = None
+_image_manager_instance = None
+
+
+def get_app() -> FastAPI:
+    """获取FastAPI应用实例，并动态注册插件的API路由"""
+    app = FastAPI(
+        title="The Finals Bot API",
+        version="1.0.0",
+        description="提供机器人核心功能的API接口"
+    )
+
+    if _core_app_instance:
+        plugin_manager = _core_app_instance.plugin_manager
+        # 注册插件的API路由
+        for plugin in plugin_manager.get_loaded_plugins():
+            if hasattr(plugin, "router"):
+                app.include_router(plugin.router, prefix=f"/api/{plugin.name.lower()}", tags=[plugin.name])
+    
+    return app
+
+
+def set_core_app(app_instance):
+    """由Runner在启动时注入CoreApp实例"""
+    global _core_app_instance
+    _core_app_instance = app_instance
+
+
+def set_image_manager(image_manager: ImageManager):
+    """由Runner在启动时注入ImageManager实例"""
+    global _image_manager_instance
+    _image_manager_instance = image_manager
+
+
+def get_image_manager() -> ImageManager:
+    """获取ImageManager实例"""
+    return _image_manager_instance
+
 
 # 请求计数器
 request_counts = {}

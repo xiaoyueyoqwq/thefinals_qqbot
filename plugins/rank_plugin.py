@@ -26,58 +26,26 @@ class RankPlugin(Plugin):
         self.season_manager = SeasonManager()
         bot_logger.debug(f"[{self.name}] 初始化排名查询插件")
         
-    @on_command("rank", "查询排名信息")
-    async def query_rank(self, handler: MessageHandler, content: str) -> None:
-        """处理rank命令查询排名"""
+    @on_command("rank", "查询排位信息")
+    async def handle_rank_command(self, handler, content: str):
+        """处理排位查询命令"""
         try:
-            bot_logger.debug(f"[{self.name}] 收到rank命令: {content}")
-            parts = content.split(maxsplit=1)
+            # 移除命令前缀并分割参数
+            args = content.strip().replace("/rank", "").strip()
             
-            # 获取用户绑定的ID
-            bound_id = self.bind_manager.get_game_id(handler.message.author.member_openid)
-            
-            # 解析命令参数
-            if len(parts) <= 1:  # 没有参数，使用绑定ID和默认赛季
+            # 确定要查询的玩家ID
+            if args:
+                player_name = args
+            else:
+                # 如果没有参数，则使用绑定的ID
+                bound_id = self.bind_manager.get_game_id(handler.user_id)
                 if not bound_id:
-                    await self.reply(handler, (
-                        f"\n❌ 未提供玩家ID\n"
-                        f"{SEPARATOR}\n"
-                        f"🎮 使用方法:\n"
-                        f"1. /rank 玩家ID\n"
-                        f"2. /rank 玩家ID 赛季\n"
-                        f"{SEPARATOR}\n"
-                        f"💡 小贴士:\n"
-                        f"1. 可以使用 /bind 绑定ID\n"
-                        f"2. 赛季可选: s1~s6\n"
-                        f"3. 需要输入完整ID"
-                    ))
+                    await self.reply(handler, self._get_help_message())
                     return
                 player_name = bound_id
-                season = SeasonConfig.CURRENT_SEASON  # 默认赛季
-            else:
-                args = parts[1].split()
-                if len(args) == 1:  # 只有一个参数
-                    if args[0].lower().startswith('s') and args[0].lower() in self.season_manager.get_all_seasons():
-                        # 参数是赛季，使用绑定ID
-                        if not bound_id:
-                            await self.reply(handler, "\n❌ 请先绑定游戏ID或提供玩家ID")
-                            return
-                        player_name = bound_id
-                        season = args[0].lower()
-                    else:
-                        # 参数是玩家ID，使用默认赛季
-                        player_name = args[0]
-                        season = SeasonConfig.CURRENT_SEASON
-                else:  # 有两个参数
-                    player_name = args[0]
-                    season = args[1].lower()
-            
-            bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
-            
-            # 查询排名并生成图片
-            image_data, error_msg, _, _ = await self.rank_query.process_rank_command(
-                f"{player_name} {season}"
-            )
+
+            # 调用核心查询功能
+            image_bytes, error_msg, _, _ = await self.rank_query.process_rank_command(player_name)
             
             if error_msg:
                 bot_logger.error(f"[{self.name}] 查询失败: {error_msg}")
@@ -87,8 +55,8 @@ class RankPlugin(Plugin):
             # 使用handler的send_image方法发送图片
             send_method = settings.image.get("send_method", "base64")
             bot_logger.debug(f"[{self.name}] 使用 {send_method} 方式发送图片")
-            if image_data is not None:
-                if not await handler.send_image(image_data):
+            if image_bytes is not None:
+                if not await handler.send_image(image_bytes):
                     await self.reply(handler, "\n⚠️ 发送图片时发生错误")
             else:
                 await self.reply(handler, "\n⚠️ 查询未返回图片数据")                    
@@ -99,11 +67,28 @@ class RankPlugin(Plugin):
             bot_logger.error(f"[{self.name}] 处理rank命令时发生错误: {str(e)}", exc_info=True)
             await self.reply(handler, "\n⚠️ 查询失败，请稍后重试")
             
-    @on_command("r", "查询排名信息（简写）")
-    async def query_rank_short(self, handler: MessageHandler, content: str) -> None:
-        """处理r命令查询排名（简写）"""
+    @on_command("r", "快速查询排位信息")
+    async def handle_r_command(self, handler: MessageHandler, content: str):
+        """处理快速排位查询命令"""
         bot_logger.debug(f"[{self.name}] 收到r命令，转发到rank处理")
-        await self.query_rank(handler, content)
+        # 直接调用handle_rank_command，并传递原始消息内容
+        await self.handle_rank_command(handler, content.replace("/r", "/rank", 1))
+
+    def _get_help_message(self) -> str:
+        """生成帮助信息"""
+        supported_seasons = ", ".join(self.season_manager.get_all_seasons())
+        return (
+            f"\n❌ 未提供玩家ID\n"
+            f"{SEPARATOR}\n"
+            f"🎮 使用方法:\n"
+            f"1. /rank 玩家ID\n"
+            f"2. /rank 玩家ID 赛季\n"
+            f"{SEPARATOR}\n"
+            f"💡 小贴士:\n"
+            f"1. 可以使用 /bind 绑定ID\n"
+            f"2. 赛季可选: {supported_seasons}\n"
+            f"3. 需要输入完整ID"
+        )
             
     async def on_load(self) -> None:
         """插件加载时的处理"""

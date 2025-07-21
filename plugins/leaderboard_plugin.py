@@ -65,7 +65,7 @@ class LeaderboardPlugin(Plugin):
             
             # 获取玩家绑定状态
             try:
-                member_openid = handler.message.author.member_openid
+                member_openid = handler.user_id
                 self.logger.debug(f"[{self.name}] 用户 member_openid: {member_openid}")
                 bound_player_id = self.bind_manager.get_game_id(member_openid)
                 self.logger.debug(f"[{self.name}] 绑定的 player_id: {bound_player_id}")
