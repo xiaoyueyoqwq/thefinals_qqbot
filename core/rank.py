@@ -70,16 +70,21 @@ class RankAPI(BaseAPI):
             target_season = season or SeasonConfig.CURRENT_SEASON
             bot_logger.info(f"[RankAPI] 开始在赛季 {target_season} 中搜索玩家: '{player_name}'")
 
-            if not self.search_indexer.is_ready():
-                bot_logger.warning("[RankAPI] 搜索索引尚未准备就绪，尝试使用传统方法。")
+            # 如果查询的不是当前赛季，或者索引器未就绪，则直接使用传统方法
+            if not SeasonConfig.is_current_season(target_season) or not self.search_indexer.is_ready():
+                if not SeasonConfig.is_current_season(target_season):
+                    bot_logger.info(f"[RankAPI] 查询非当前赛季 ({target_season})，将使用传统模糊搜索。")
+                else: # 搜索索引尚未准备就绪
+                    bot_logger.warning("[RankAPI] 搜索索引尚未准备就绪，尝试使用传统方法。")
                 return await self.season_manager.get_player_data(player_name, target_season, use_fuzzy_search=True)
 
-            # 1. 使用 SearchIndexer 进行深度搜索
+            # 1. 使用 SearchIndexer 进行深度搜索 (仅限当前赛季)
             search_results = self.search_indexer.search(player_name, limit=1)
             
             if not search_results:
-                bot_logger.warning(f"[RankAPI] 深度搜索未能找到玩家: '{player_name}'")
-                return None
+                bot_logger.warning(f"[RankAPI] 深度搜索未能找到玩家: '{player_name}'，尝试在当前赛季进行传统模糊搜索。")
+                # 深度搜索失败后，可以再尝试一次传统模糊搜索作为兜底
+                return await self.season_manager.get_player_data(player_name, target_season, use_fuzzy_search=True)
             
             # 2. 获取最匹配的玩家
             best_match = search_results[0]
@@ -222,10 +227,10 @@ class RankQuery:
     def _get_rank_trend(self, rank_change: int) -> Tuple[str, str]:
         """获取排名趋势和颜色"""
         if rank_change < 0:
-            return "↓", "text-red-500"  # 排名数字变小，表示上升
+            return "↑", "text-green-500", # 排名数字变小，表示上升
         elif rank_change > 0:
-            return "↑", "text-green-500"  # 排名数字变大，表示下降
-        return "=", "text-gray-500"
+            return "↓", "text-red-500", # 排名数字变大，表示下降
+        return "", "text-gray-500", ""
 
     def prepare_template_data(self, player_data: dict, season: str) -> Optional[Dict]:
         """准备模板数据"""
@@ -258,6 +263,11 @@ class RankQuery:
             # 获取赛季背景
             background = self.season_backgrounds.get(season, f"../images/seasons/{SeasonConfig.CURRENT_SEASON}.png")
             
+            # 提取平台ID
+            steam_id = player_data.get("steamName")
+            xbox_id = player_data.get("xboxName")
+            psn_id = player_data.get("psnName")
+
             return {
                 "player_name": player_name,
                 "player_tag": player_tag,
@@ -268,7 +278,10 @@ class RankQuery:
                 "rank_trend": rank_trend,
                 "rank_trend_color": rank_color,
                 "rank_change": str(abs(rank_change)) if rank_change != 0 else "",
-                "background": background
+                "background": background,
+                "steam_id": steam_id,
+                "xbox_id": xbox_id,
+                "psn_id": psn_id,
             }
             
         except Exception as e:
@@ -315,7 +328,7 @@ class RankQuery:
                 return None, error_msg, None, None
                 
             try:
-                # 查询玩家数据
+                # 查询玩家数据, 确保始终使用模糊搜索
                 season_data = {season: await self.api.get_player_stats(player_name, season, use_fuzzy_search=True)}
                 
                 # 如果没有找到任何数据
@@ -329,29 +342,16 @@ class RankQuery:
                     error_msg = "\n⚠️ 处理玩家数据时出错"
                     return None, error_msg, None, None
 
-                # 根据赛季选择HTML模板文件路径
+                # 根据赛季选择HTML模板文件名
                 if season == "s7":
-                    html_template_path_to_use = os.path.join(self.template_dir, "rank_s7.html")
+                    template_filename = "rank_s7.html"
                 else:
-                    html_template_path_to_use = self.html_template_path # 默认模板 rank.html
+                    template_filename = "rank.html"
 
-                # 读取HTML模板内容
-                try:
-                    with open(html_template_path_to_use, 'r', encoding='utf-8') as f:
-                        html_template_content = f.read()
-                except FileNotFoundError:
-                    error_msg = f"\n❌ 模板文件未找到: {os.path.basename(html_template_path_to_use)}"
-                    bot_logger.error(error_msg)
-                    return None, error_msg, None, None
-                except Exception as e:
-                    error_msg = f"\n⚠️ 读取模板文件时出错: {str(e)}"
-                    bot_logger.error(error_msg, exc_info=True)
-                    return None, error_msg, None, None
-
-                # 生成图片，传入HTML模板内容
+                # 现在直接将模板文件名传递给ImageGenerator
                 image_data = await self.image_generator.generate_image(
                     template_data=template_data,
-                    html_content=html_template_content, # 传入模板内容
+                    html_content=template_filename, # 传递模板文件名
                     wait_selectors=['.rank-icon img', '.bg-container']
                 )
                 

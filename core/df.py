@@ -2,26 +2,28 @@ import asyncio
 from datetime import datetime, date, timedelta
 import orjson as json
 from utils.logger import bot_logger
-from utils.redis_manager import redis_manager
 from typing import Dict, Any, List, Optional
 from utils.config import settings
 from core.season import SeasonManager
 import time
+from pathlib import Path
+from utils.json_utils import load_json, save_json
 
 class DFQuery:
-    """底分查询功能类 (已重构为 Redis)"""
+    """底分查询功能类 (已重构为 JSON 文件持久化)"""
     
     def __init__(self):
         """初始化底分查询"""
         self.season_manager = SeasonManager()
-        self.update_interval = 120  # 实时数据更新间隔（秒）
-        self.daily_save_time = "23:55"  # 每日保存历史数据的时间
+        self.update_interval = 120
+        self.daily_save_time = "23:55"
         
-        # Redis Keys
-        self.redis_key_live = "df:scores:live"
-        self.redis_key_history_prefix = "df:scores:history:"
-        self.redis_key_last_save_date = "df:scores:last_save_date"
+        self.data_dir = Path("data/persistence")
+        self.live_data_path = self.data_dir / "df_live.json"
+        self.history_data_path = self.data_dir / "df_history.json"
+        
         self.last_fetched_data: Dict[str, Any] = {}
+        self.historical_data: List[Dict[str, Any]] = []
 
         self._update_task = None
         self._daily_save_task = None
@@ -30,6 +32,14 @@ class DFQuery:
     async def start(self):
         """启动DFQuery，初始化更新任务和每日保存任务"""
         try:
+            self.last_fetched_data = await load_json(self.live_data_path, default={})
+            if self.last_fetched_data:
+                bot_logger.info("[DFQuery] 已从 JSON 文件成功恢复上次的实时数据。")
+
+            self.historical_data = await load_json(self.history_data_path, default=[])
+            if self.historical_data:
+                bot_logger.info(f"[DFQuery] 已从 JSON 文件加载 {len(self.historical_data)} 条历史数据。")
+
             if not self._update_task:
                 self._update_task = asyncio.create_task(self._update_loop())
                 bot_logger.info("[DFQuery] 实时数据更新任务已启动")
@@ -57,7 +67,7 @@ class DFQuery:
                 await asyncio.sleep(60)
             
     async def fetch_leaderboard(self):
-        """获取并更新排行榜实时数据到 Redis"""
+        """获取并更新排行榜实时数据到 JSON 文件"""
         if self._is_updating: return
         self._is_updating = True
         bot_logger.debug("[DFQuery] 开始从赛季数据更新底分...")
@@ -88,72 +98,61 @@ class DFQuery:
                 return
 
             self.last_fetched_data = scores_to_cache
-            await redis_manager.set(self.redis_key_live, scores_to_cache, expire=600)
+            await save_json(self.live_data_path, scores_to_cache)
         except Exception as e:
             bot_logger.error(f"[DFQuery] 更新实时底分数据时发生错误: {e}", exc_info=True)
         finally:
             self._is_updating = False
 
     async def get_bottom_scores(self) -> Dict[str, Any]:
-        """从 Redis 获取实时底分数据"""
-        try:
-            scores_json = await redis_manager.get(self.redis_key_live)
-            if not scores_json:
-                return {}
-            # RedisManager get() 返回一个字符串, 我们需要解析它
-            return json.loads(scores_json)
-        except (json.JSONDecodeError, TypeError) as e:
-            bot_logger.error(f"[DFQuery] 解析实时底分JSON数据时失败: {e}", exc_info=True)
-            return {}
-        except Exception as e:
-            bot_logger.error(f"[DFQuery] 从 Redis 获取实时底分数据失败: {e}", exc_info=True)
-            return {}
+        """从 JSON 文件获取实时底分数据"""
+        return self.last_fetched_data
             
     async def save_daily_data(self):
-        """保存每日数据快照"""
+        """保存每日数据快照到历史文件"""
         bot_logger.info("[DFQuery] 开始执行每日数据保存...")
         today_str = datetime.now().strftime('%Y-%m-%d')
-        history_key = f"{self.redis_key_history_prefix}{today_str}"
         
-        live_data = await self.get_bottom_scores()
-        if not live_data:
-            bot_logger.warning("[DFQuery] Redis中没有实时数据，将使用最后一次成功获取的数据。")
-            live_data = self.last_fetched_data
-
+        live_data = self.last_fetched_data
         if not live_data:
             bot_logger.warning("[DFQuery] 没有实时数据可供保存为历史快照。")
             return
             
-        await redis_manager.set(history_key, live_data) # 历史数据不过期
-        await redis_manager.set(self.redis_key_last_save_date, today_str)
+        # 为每条记录添加日期
+        for rank, data in live_data.items():
+            record = data.copy()
+            record['date'] = today_str
+            record['rank'] = int(rank)
+            self.historical_data.append(record)
+        
+        # 移除旧的重复数据（如果存在）
+        seen = set()
+        unique_history = []
+        for item in reversed(self.historical_data):
+            # 使用日期和排名的组合作为唯一标识
+            identifier = (item['date'], item['rank'])
+            if identifier not in seen:
+                seen.add(identifier)
+                unique_history.append(item)
+        
+        self.historical_data = list(reversed(unique_history))
+        
+        await save_json(self.history_data_path, self.historical_data)
         bot_logger.info(f"[DFQuery] 已成功保存 {today_str} 的排行榜历史数据。")
 
     async def get_historical_data(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
-        """从 Redis 获取指定日期范围的历史数据"""
+        """从内存中的历史数据筛选指定日期范围的数据"""
         results = []
-        current_date = start_date
-        while current_date <= end_date:
-            date_str = current_date.strftime('%Y-%m-%d')
-            history_key = f"{self.redis_key_history_prefix}{date_str}"
-            
-            try:
-                data_json = await redis_manager.get(history_key)
-                if data_json:
-                    data = json.loads(data_json)
-                    for rank_str, score_data in data.items():
-                        results.append({
-                            "record_date": current_date,
-                            "rank": int(rank_str),
-                            "player_id": score_data.get("player_id"),
-                            "score": score_data.get("score"),
-                            "save_time": score_data.get("update_time") # 复用 update_time
-                        })
-            except (json.JSONDecodeError, TypeError) as e:
-                bot_logger.error(f"[DFQuery] 解析历史数据时出错 (日期: {date_str}): {e}")
-            except Exception as e:
-                bot_logger.error(f"[DFQuery] 获取历史数据时出错 (日期: {date_str}): {e}")
-
-            current_date += timedelta(days=1)
+        for record in self.historical_data:
+            record_date = datetime.fromisoformat(record['date']).date()
+            if start_date <= record_date <= end_date:
+                results.append({
+                    "record_date": record_date,
+                    "rank": record.get('rank'),
+                    "player_id": record.get("player_id"),
+                    "score": record.get("score"),
+                    "save_time": record.get("update_time")
+                })
         return results
 
     async def get_stats_data(self, days: int = 7) -> List[Dict[str, Any]]:
@@ -163,21 +162,20 @@ class DFQuery:
         
         for i in range(days):
             current_date = today - timedelta(days=i)
-            date_str = current_date.strftime('%Y-%m-%d')
             
             # 获取当天数据
-            current_data = await self._get_daily_data_for_stats(date_str)
+            current_data = self._get_daily_data_for_stats(current_date)
             
             # 获取前一天数据
-            previous_date_str = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
-            previous_data = await self._get_daily_data_for_stats(previous_date_str)
+            previous_date = current_date - timedelta(days=1)
+            previous_data = self._get_daily_data_for_stats(previous_date)
 
             # 计算分数和变化
-            rank_500_score = current_data.get("500", {}).get("score")
-            rank_10000_score = current_data.get("10000", {}).get("score")
+            rank_500_score = current_data.get(500, {}).get("score")
+            rank_10000_score = current_data.get(10000, {}).get("score")
             
-            prev_500_score = previous_data.get("500", {}).get("score")
-            prev_10000_score = previous_data.get("10000", {}).get("score")
+            prev_500_score = previous_data.get(500, {}).get("score")
+            prev_10000_score = previous_data.get(10000, {}).get("score")
 
             daily_change_500 = rank_500_score - prev_500_score if rank_500_score is not None and prev_500_score is not None else None
             daily_change_10000 = rank_10000_score - prev_10000_score if rank_10000_score is not None and prev_10000_score is not None else None
@@ -193,16 +191,14 @@ class DFQuery:
         
         return stats
 
-    async def _get_daily_data_for_stats(self, date_str: str) -> Dict[str, Any]:
-        """辅助方法，获取并解析某天的历史数据"""
-        history_key = f"{self.redis_key_history_prefix}{date_str}"
-        try:
-            data_json = await redis_manager.get(history_key)
-            if data_json:
-                return json.loads(data_json)
-        except (json.JSONDecodeError, TypeError) as e:
-            bot_logger.warning(f"[DFQuery] 解析统计用的历史数据失败 (日期: {date_str}): {e}")
-        return {}
+    def _get_daily_data_for_stats(self, target_date: date) -> Dict[int, Any]:
+        """辅助方法，从内存历史数据中获取某天的数据"""
+        daily_data = {}
+        for record in self.historical_data:
+            record_date = datetime.fromisoformat(record['date']).date()
+            if record_date == target_date:
+                daily_data[record['rank']] = record
+        return daily_data
 
     async def format_score_message(self, data: Dict[str, Any]) -> str:
         if not data:
@@ -216,14 +212,8 @@ class DFQuery:
             ""
         ]
         
-        yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-        yesterday_json = await redis_manager.get(f"{self.redis_key_history_prefix}{yesterday_str}")
-        yesterday_data = {}
-        if yesterday_json:
-            try:
-                yesterday_data = json.loads(yesterday_json)
-            except json.JSONDecodeError:
-                bot_logger.warning(f"[DFQuery] Redis中的昨日数据不是有效的JSON: {yesterday_json}")
+        yesterday = (datetime.now() - timedelta(days=1)).date()
+        yesterday_data = self._get_daily_data_for_stats(yesterday)
 
         for rank_str in ["500", "10000"]:
             if rank_str in data:
@@ -235,7 +225,7 @@ class DFQuery:
                     f"▎💯 当前分数: {result.get('score', 0):,}"
                 ])
                 
-                yesterday_rank_data = yesterday_data.get(rank_str)
+                yesterday_rank_data = yesterday_data.get(rank)
                 if yesterday_rank_data:
                     yesterday_score = yesterday_rank_data.get('score', 0)
                     change = result.get('score', 0) - yesterday_score
@@ -274,16 +264,26 @@ class DFQuery:
                 target_time = datetime.strptime(self.daily_save_time, "%H:%M").time()
                 target_datetime = datetime.combine(now.date(), target_time)
 
-                if now >= target_datetime:
-                    last_save_date_str = await redis_manager.get(self.redis_key_last_save_date)
-                    if last_save_date_str != now.strftime('%Y-%m-%d'):
-                        await self.save_daily_data()
-                    target_datetime += timedelta(days=1)
+                # 检查今天是否已经保存过
+                last_save_date = self._get_last_save_date()
+                if now >= target_datetime and last_save_date != now.date():
+                    await self.save_daily_data()
                 
-                wait_seconds = (target_datetime - datetime.now()).total_seconds()
+                # 计算到下一个保存时间的秒数
+                if now < target_datetime:
+                    wait_seconds = (target_datetime - now).total_seconds()
+                else:
+                    # 如果已经过了今天的保存时间，则等到明天
+                    tomorrow_target = target_datetime + timedelta(days=1)
+                    wait_seconds = (tomorrow_target - now).total_seconds()
+                
                 if wait_seconds > 0:
                     await asyncio.sleep(wait_seconds)
-                    await self.save_daily_data() # 时间到了，执行保存
+                
+                # 时间到了，再次检查以确保不会重复保存
+                last_save_date = self._get_last_save_date()
+                if datetime.now().date() != last_save_date:
+                    await self.save_daily_data()
 
             except asyncio.CancelledError:
                 bot_logger.info("[DFQuery] 每日历史数据保存任务已取消。")
@@ -291,6 +291,16 @@ class DFQuery:
             except Exception as e:
                 bot_logger.error(f"[DFQuery] 每日保存任务出错: {e}", exc_info=True)
                 await asyncio.sleep(300) # 出错后5分钟重试
+
+    def _get_last_save_date(self) -> Optional[date]:
+        """从历史数据中获取最后的保存日期"""
+        if not self.historical_data:
+            return None
+        try:
+            last_record = max(self.historical_data, key=lambda x: x['date'])
+            return datetime.fromisoformat(last_record['date']).date()
+        except (ValueError, KeyError):
+            return None
 
     async def stop(self):
         """停止所有任务"""

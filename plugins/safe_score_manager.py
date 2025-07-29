@@ -9,6 +9,7 @@ from datetime import datetime
 from core.plugin import Plugin, on_command
 from utils.message_handler import MessageHandler
 from utils.logger import bot_logger
+from utils.json_utils import load_json, save_json
 
 class SafeScoreManagerPlugin(Plugin):
     """安全分手动管理插件"""
@@ -17,11 +18,14 @@ class SafeScoreManagerPlugin(Plugin):
         super().__init__(**kwargs)
         self.whitelist_path = Path("config/whitelist.yaml")
         self.whitelist: List[str] = []
+        self.score_file_path = Path("data/persistence/safe_score.json")
+        self.score_data: dict = {}
 
     async def on_load(self) -> None:
-        """插件加载时，检查并创建白名单文件"""
+        """插件加载时，加载白名单和安全分数据"""
         await super().on_load()
         await self.load_whitelist()
+        self.score_data = await load_json(self.score_file_path, default={})
         bot_logger.info(f"[{self.name}] 安全分管理器已加载")
 
     async def load_whitelist(self) -> None:
@@ -88,8 +92,9 @@ class SafeScoreManagerPlugin(Plugin):
                 await self.reply(handler, "\n⚠️ 分数不能为负数。")
                 return
 
-            await self.set_state("safe_score", new_score)
-            await self.set_state("safe_score_last_update", time.time())
+            self.score_data['score'] = new_score
+            self.score_data['last_update'] = time.time()
+            await save_json(self.score_file_path, self.score_data)
             
             await self.reply(handler, f"\n✅ 安全分已成功更新为: `{new_score:,}`")
             bot_logger.info(f"用户 {user_id} 将安全分更新为 {new_score}")
@@ -101,14 +106,8 @@ class SafeScoreManagerPlugin(Plugin):
             await self.reply(handler, "\n⚠️ 更新安全分时发生未知错误，请稍后再试")
 
     def get_safe_score(self) -> Tuple[Optional[int], Optional[float]]:
-        """从插件状态获取安全分和最后更新时间"""
-        score_str = self.get_state("safe_score")
-        last_update_str = self.get_state("safe_score_last_update")
-        
-        score = int(score_str) if score_str is not None else None
-        last_update = float(last_update_str) if last_update_str is not None else None
-        
-        return score, last_update
+        """从内存中获取安全分和最后更新时间"""
+        return self.score_data.get("score"), self.score_data.get("last_update")
 
     async def on_unload(self) -> None:
         await super().on_unload()

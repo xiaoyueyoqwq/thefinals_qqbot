@@ -17,6 +17,11 @@ from aiohttp import web
 import aiohttp_cors
 import signal
 import platform
+import subprocess
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import threading
+import socket
 
 # 添加项目根目录到sys.path
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,6 +47,74 @@ if platform.system() == "Windows":
         signal.signal(signal.SIGBREAK, app_manager.handle_sigint)
     except AttributeError:
         pass
+
+def restart_script():
+    """重启当前脚本"""
+    bot_logger.info("\x1b[33m[CommandTester HMR] 检测到文件变动，正在重启服务...\x1b[0m")
+    # 打印触发文件
+    bot_logger.info(f"触发文件: {sys.argv[0]}")
+    
+    # 在新的进程中执行同样的命令
+    # sys.executable 是当前Python解释器的路径
+    # sys.argv 是当前脚本的命令行参数
+    subprocess.Popen([sys.executable] + sys.argv)
+    # 退出当前进程
+    sys.exit()
+
+class HMRHandler(FileSystemEventHandler):
+    """
+    文件变动处理器，带有防抖功能。
+    它会延迟重启，如果在延迟期间有新的文件变动，会重置计时器。
+    这可以防止因快速、连续的文件保存操作而导致的多次重启。
+    """
+    def __init__(self, script_path, debounce_period=1.0):
+        self.script_path = script_path
+        self.debounce_period = debounce_period
+        self.lock = threading.Lock()
+        self.timer: Optional[threading.Timer] = None
+        self.ignore_patterns = [
+            re.compile(p) for p in [
+                r".*[/\\]\.git[/\\]",
+                r".*[/\\]__pycache__[/\\]",
+                r".*[/\\]data[/\\]",
+                r".*[/\\]logs[/\\]",
+                r".*[/\\]static[/\\]",
+                r".*[/\\]resources[/\\]",
+                r".*[/\\]\.cursor[/\\]",
+                r".*\.log$",
+                r".*\.db$",
+                r".*uvicorn_log_config\.json$",
+            ]
+        ]
+
+    def on_any_event(self, event):
+        # 忽略目录变动
+        if event.is_directory:
+            return
+
+        # 检查路径是否应被忽略
+        path = event.src_path.replace("\\", "/")
+        for pattern in self.ignore_patterns:
+            if pattern.match(path):
+                bot_logger.debug(f"[HMR] 忽略文件: {path} 匹配模式: {pattern.pattern}")
+                return
+
+        # 忽略对脚本自身的修改
+        if path.endswith(self.script_path):
+            bot_logger.debug(f"[HMR] 忽略脚本自身的修改: {path}")
+            return
+
+        bot_logger.info(f"[HMR] 检测到文件变动: {path}, 事件类型: {event.event_type}")
+        self._debounce_restart()
+
+    def _debounce_restart(self):
+        with self.lock:
+            if self.timer:
+                self.timer.cancel()
+            
+            # 创建并启动一个新的计时器
+            self.timer = threading.Timer(self.debounce_period, restart_script)
+            self.timer.start()
 
 # 命令测试服务
 class CommandTester:
@@ -250,37 +323,74 @@ class CommandTester:
 # 主函数
 async def main(host="127.0.0.1", port=8080):
     """主函数"""
-    tester = CommandTester(host=host, port=port)
-    loop = asyncio.get_event_loop()
-    app_manager.set_app(tester, loop)
+    # 启动HMR
+    observer = Observer()
+    handler = HMRHandler(os.path.basename(__file__))
+    observer.schedule(handler, path='.', recursive=True)
+    observer.start()
     
-    try:
-        bot_logger.info("命令测试工具启动中...")
-        
-        # 初始化 Redis 和浏览器
-        bot_logger.info("正在初始化 Redis 管理器...")
-        await redis_manager.initialize()
-        bot_logger.info("Redis 管理器初始化完成。")
-
-        bot_logger.info("正在初始化浏览器环境...")
-        await browser_manager.initialize()
-        bot_logger.info("浏览器环境初始化完成。")
-        
-        await tester.start()
-        
-        bot_logger.info(f"命令测试工具已成功启动 http://{host}:{port}/")
-        bot_logger.info("按下 Ctrl+C 可以退出程序")
-        
-        # 保持运行直到收到退出信号
-        while True:
-            try:
-                await asyncio.sleep(1)
-            except asyncio.CancelledError:
-                break
+    # 自动检测端口占用并+1重试
+    max_retry = 20
+    retry = 0
+    orig_port = port
+    while retry < max_retry:
+        try:
+            tester = CommandTester(host=host, port=port)
+            loop = asyncio.get_event_loop()
+            app_manager.set_app(tester, loop)
             
-    except KeyboardInterrupt:
-        bot_logger.info("检测到键盘中断，正在退出...")
+            bot_logger.info("命令测试工具启动中...")
+            
+            # 初始化 Redis 和浏览器
+            bot_logger.info("正在初始化 Redis 管理器...")
+            await redis_manager.initialize()
+            bot_logger.info("Redis 管理器初始化完成。")
+
+            bot_logger.info("正在初始化浏览器环境...")
+            await browser_manager.initialize()
+            bot_logger.info("浏览器环境初始化完成。")
+            
+            await tester.start()
+            
+            bot_logger.info(f"命令测试工具已成功启动 http://{host}:{port}/")
+            bot_logger.info("按下 Ctrl+C 可以退出程序")
+            
+            # 保持运行直到收到退出信号
+            while True:
+                try:
+                    await asyncio.sleep(1)
+                except asyncio.CancelledError:
+                    break
+            break  # 启动成功，跳出重试循环
+        except Exception as e:
+            # 检查是否为端口占用错误
+            err_str = str(e)
+            if (
+                "[Errno 10048]" in err_str and "bind on address" in err_str
+            ) or (
+                isinstance(e, OSError) and getattr(e, "errno", None) in (98, 10048)
+            ) or (
+                "address already in use" in err_str.lower()
+            ) or (
+                "每个套接字地址" in err_str
+            ):
+                bot_logger.error(f"端口 {port} 被占用，尝试使用下一个端口...")
+                port += 1
+                retry += 1
+                continue
+            elif isinstance(e, KeyboardInterrupt):
+                bot_logger.info("检测到键盘中断，正在退出...")
+                break
+            else:
+                bot_logger.error(f"启动服务失败: {str(e)}")
+                raise
+    else:
+        bot_logger.error(f"连续 {max_retry} 次端口尝试均失败，程序退出。")
+        return
         
+    # finally 逻辑
+    try:
+        pass  # 保持和原有结构一致
     finally:
         # 清理资源
         cleanup_success = await app_manager.cleanup_resources()
@@ -288,6 +398,7 @@ async def main(host="127.0.0.1", port=8080):
             bot_logger.warning("资源清理可能不完整")
         
         # 确保事件循环停止
+        loop = asyncio.get_event_loop()
         if loop and not loop.is_closed():
             loop.stop()
 

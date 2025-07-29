@@ -539,6 +539,12 @@ class Plugin(ABC):
         try:
             await self._register_decorators()
             await self.load_data()
+            
+            # 从已加载的数据中恢复状态
+            for key, value in self._data.items():
+                if key.startswith("state_"):
+                    self._states[key[6:]] = value
+
             await self.load_config()
             await self._start_plugin_tasks()
         except PluginValidationError as e:
