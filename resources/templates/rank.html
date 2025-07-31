@@ -8,13 +8,13 @@
     <link rel="preload" href="../images/steam.svg" as="image">
     <link rel="preload" href="../images/xbox.svg" as="image">
     <link rel="preload" href="../images/psn.svg" as="image">
-    <link rel="preload" href="../fonts/google_font.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="../fonts/SourceHanSansSC-Medium.otf" as="font" type="font/otf" crossorigin>
     <link rel="preload" href="{{ background }}" as="image">
     <style>
         /* 字体定义 */
         @font-face {
             font-family: 'CustomFont';
-            src: url('../fonts/google_font.woff2') format('woff2');
+            src: url('../fonts/SourceHanSansSC-Medium.otf') format('opentype');
             font-weight: normal;
             font-style: normal;
             font-display: swap;
@@ -97,6 +97,18 @@
             color: #fff;
             font-size: 1.1rem; /* Adjusted size */
             font-weight: 600;
+        }
+
+        .platform-steam {
+            background: #000000;
+        }
+
+        .platform-xbox {
+            background: #107c10;
+        }
+
+        .platform-psn {
+            background: #0070d1;
         }
         
         /* Rank Change Indicator */
@@ -316,19 +328,19 @@
         <!-- 平台信息 -->
         <div class="platform-container">
             {% if steam_id %}
-            <div class="platform-item">
+            <div class="platform-item platform-steam">
                 <img src="../images/steam.svg" alt="Steam" class="platform-icon">
                 <span class="platform-name">{{ steam_id }}</span>
             </div>
             {% endif %}
             {% if xbox_id %}
-            <div class="platform-item">
+            <div class="platform-item platform-xbox">
                 <img src="../images/xbox.svg" alt="Xbox" class="platform-icon">
                 <span class="platform-name">{{ xbox_id }}</span>
             </div>
             {% endif %}
             {% if psn_id %}
-            <div class="platform-item">
+            <div class="platform-item platform-psn">
                 <img src="../images/psn.svg" alt="PSN" class="platform-icon">
                 <span class="platform-name">{{ psn_id }}</span>
             </div>

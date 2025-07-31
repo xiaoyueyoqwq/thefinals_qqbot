@@ -7,11 +7,11 @@ from utils.logger import bot_logger
 class DogeUploader:
     """多吉云OSS上传器，用于本地开发模式"""
 
-    ACCESS_KEY = ""
-    SECRET_KEY = ""
+    ACCESS_KEY = "b916c6f2b5d2d816"
+    SECRET_KEY = "742ae543c358755bc1c014e8910860ab"
     BUCKET = "syncbuckup"
     BASE_URL = "https://api.dogecloud.com"
-    PUBLIC_URL = "https://sync.xx.com"
+    PUBLIC_URL = "https://sync.luoxiaohei.sdjz.wiki"
 
     def __init__(self):
         bot_logger.info("DogeUploader 已在本地模式下初始化")
