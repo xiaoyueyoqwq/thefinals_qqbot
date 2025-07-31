@@ -12,12 +12,13 @@ import inspect
 import re
 import traceback
 import time
+import yaml
 from datetime import datetime
 from aiohttp import web
 import aiohttp_cors
 import signal
 import platform
-import subprocess
+import multiprocessing
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import threading
@@ -40,81 +41,8 @@ from utils.redis_manager import redis_manager
 # 全局应用管理器
 app_manager = TesterAppManager()
 
-# 设置信号处理
-signal.signal(signal.SIGINT, app_manager.handle_sigint)
-if platform.system() == "Windows":
-    try:
-        signal.signal(signal.SIGBREAK, app_manager.handle_sigint)
-    except AttributeError:
-        pass
-
-def restart_script():
-    """重启当前脚本"""
-    bot_logger.info("\x1b[33m[CommandTester HMR] 检测到文件变动，正在重启服务...\x1b[0m")
-    # 打印触发文件
-    bot_logger.info(f"触发文件: {sys.argv[0]}")
-    
-    # 在新的进程中执行同样的命令
-    # sys.executable 是当前Python解释器的路径
-    # sys.argv 是当前脚本的命令行参数
-    subprocess.Popen([sys.executable] + sys.argv)
-    # 退出当前进程
-    sys.exit()
-
-class HMRHandler(FileSystemEventHandler):
-    """
-    文件变动处理器，带有防抖功能。
-    它会延迟重启，如果在延迟期间有新的文件变动，会重置计时器。
-    这可以防止因快速、连续的文件保存操作而导致的多次重启。
-    """
-    def __init__(self, script_path, debounce_period=1.0):
-        self.script_path = script_path
-        self.debounce_period = debounce_period
-        self.lock = threading.Lock()
-        self.timer: Optional[threading.Timer] = None
-        self.ignore_patterns = [
-            re.compile(p) for p in [
-                r".*[/\\]\.git[/\\]",
-                r".*[/\\]__pycache__[/\\]",
-                r".*[/\\]data[/\\]",
-                r".*[/\\]logs[/\\]",
-                r".*[/\\]static[/\\]",
-                r".*[/\\]resources[/\\]",
-                r".*[/\\]\.cursor[/\\]",
-                r".*\.log$",
-                r".*\.db$",
-                r".*uvicorn_log_config\.json$",
-            ]
-        ]
-
-    def on_any_event(self, event):
-        # 忽略目录变动
-        if event.is_directory:
-            return
-
-        # 检查路径是否应被忽略
-        path = event.src_path.replace("\\", "/")
-        for pattern in self.ignore_patterns:
-            if pattern.match(path):
-                bot_logger.debug(f"[HMR] 忽略文件: {path} 匹配模式: {pattern.pattern}")
-                return
-
-        # 忽略对脚本自身的修改
-        if path.endswith(self.script_path):
-            bot_logger.debug(f"[HMR] 忽略脚本自身的修改: {path}")
-            return
-
-        bot_logger.info(f"[HMR] 检测到文件变动: {path}, 事件类型: {event.event_type}")
-        self._debounce_restart()
-
-    def _debounce_restart(self):
-        with self.lock:
-            if self.timer:
-                self.timer.cancel()
-            
-            # 创建并启动一个新的计时器
-            self.timer = threading.Timer(self.debounce_period, restart_script)
-            self.timer.start()
+def is_windows():
+    return platform.system() == "Windows"
 
 # 命令测试服务
 class CommandTester:
@@ -133,6 +61,7 @@ class CommandTester:
         self.plugin_manager = TestPluginManager()
         self.running = False
         self.html_path = Path(__file__).parent / "command_tester.html"
+        self.config_path = Path(root_dir) / "config" / "config.yaml"
         
         # 设置跨域
         cors = aiohttp_cors.setup(self.app, defaults={
@@ -150,7 +79,9 @@ class CommandTester:
         # 先添加API路由到应用程序
         self.app.router.add_get("/api/command_list", self.handle_command_list)
         self.app.router.add_post("/api/execute_command", self.handle_execute_command)
-        
+        self.app.router.add_get("/api/announcements", self.handle_get_announcements)
+        self.app.router.add_post("/api/announcements", self.handle_update_announcements)
+
         # 然后为所有路由配置CORS
         for route in list(self.app.router.routes()):
             if not isinstance(route, web.StaticResource):  # 静态资源路由不需要添加CORS
@@ -188,7 +119,64 @@ class CommandTester:
         except Exception as e:
             bot_logger.error(f"获取命令列表失败: {str(e)}")
             return web.json_response({"error": f"获取命令列表失败: {str(e)}"}, status=500)
-    
+
+    async def handle_get_announcements(self, request):
+        """获取公告配置"""
+        try:
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                config_data = yaml.safe_load(f)
+            
+            announcements = config_data.get("announcements", {"enabled": False, "items": []})
+            return web.json_response(announcements)
+        except FileNotFoundError:
+            return web.json_response({"error": "配置文件 config.yaml 未找到"}, status=404)
+        except Exception as e:
+            bot_logger.error(f"获取公告配置失败: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def handle_update_announcements(self, request):
+        """更新公告配置"""
+        try:
+            new_data = await request.json()
+            
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                current_config_content = f.read()
+
+            # 自定义 representer 以更好地处理多行字符串
+            def str_presenter(dumper, data):
+                if len(data.splitlines()) > 1:
+                    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+                return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+            
+            yaml.add_representer(str, str_presenter, Dumper=yaml.SafeDumper)
+            
+            # 将新的公告数据转换为 YAML 字符串
+            new_yaml_part = yaml.dump({"announcements": new_data}, allow_unicode=True, indent=2, sort_keys=False, Dumper=yaml.SafeDumper)
+
+            # 使用正则表达式替换旧的公告块
+            # 该模式匹配从行首的 'announcements:' 开始，直到下一个非空白字符行首或文件末尾
+            pattern = re.compile(r"^announcements:.*?(?=\n^\S|\Z)", re.S | re.M)
+
+            if pattern.search(current_config_content):
+                new_config_content = pattern.sub(new_yaml_part.strip(), current_config_content, count=1)
+            else:
+                separator = "\n\n# -----------------------------------------------------------------\n# 公告功能配置\n# -----------------------------------------------------------------\n"
+                new_config_content = current_config_content.rstrip() + separator + new_yaml_part
+
+            with open(self.config_path, "w", encoding="utf-8") as f:
+                f.write(new_config_content)
+                
+            return web.json_response({"success": True, "message": "公告配置已成功更新。"})
+
+        except Exception as e:
+            error_traceback = traceback.format_exc()
+            bot_logger.error(f"更新公告配置失败: {e}\n{error_traceback}")
+            return web.json_response({
+                "success": False, 
+                "error": f"更新配置时出错: {e}",
+                "traceback": error_traceback
+            }, status=500)
+
     async def handle_execute_command(self, request):
         """处理执行命令请求"""
         try:
@@ -320,15 +308,8 @@ class CommandTester:
         
         bot_logger.info("命令测试服务已停止")
 
-# 主函数
-async def main(host="127.0.0.1", port=8080):
-    """主函数"""
-    # 启动HMR
-    observer = Observer()
-    handler = HMRHandler(os.path.basename(__file__))
-    observer.schedule(handler, path='.', recursive=True)
-    observer.start()
-    
+# 启动服务器的独立函数
+async def start_server_async(host, port):
     # 自动检测端口占用并+1重试
     max_retry = 20
     retry = 0
@@ -339,9 +320,16 @@ async def main(host="127.0.0.1", port=8080):
             loop = asyncio.get_event_loop()
             app_manager.set_app(tester, loop)
             
+            # 设置信号处理
+            signal.signal(signal.SIGINT, app_manager.handle_sigint)
+            if is_windows():
+                try:
+                    signal.signal(signal.SIGBREAK, app_manager.handle_sigint)
+                except AttributeError:
+                    pass
+
             bot_logger.info("命令测试工具启动中...")
             
-            # 初始化 Redis 和浏览器
             bot_logger.info("正在初始化 Redis 管理器...")
             await redis_manager.initialize()
             bot_logger.info("Redis 管理器初始化完成。")
@@ -374,7 +362,7 @@ async def main(host="127.0.0.1", port=8080):
             ) or (
                 "每个套接字地址" in err_str
             ):
-                bot_logger.error(f"端口 {port} 被占用，尝试使用下一个端口...")
+                bot_logger.warning(f"端口 {port} 被占用，尝试使用下一个端口...")
                 port += 1
                 retry += 1
                 continue
@@ -390,7 +378,7 @@ async def main(host="127.0.0.1", port=8080):
         
     # finally 逻辑
     try:
-        pass  # 保持和原有结构一致
+        pass
     finally:
         # 清理资源
         cleanup_success = await app_manager.cleanup_resources()
@@ -404,44 +392,130 @@ async def main(host="127.0.0.1", port=8080):
 
         bot_logger.info("命令测试器主程序退出。")
 
-def run():
-    """启动命令测试工具"""
+def run_server_process(host, port):
+    """在子进程中运行服务器的入口点"""
     try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        if "Event loop stopped before Future completed." in str(e):
-            # 这是在程序关闭时可能出现的良性报错，直接忽略
-            pass
-        else:
-            # 如果是其他RuntimeError，则重新引发
-            raise
+        asyncio.run(start_server_async(host, port))
     except KeyboardInterrupt:
-        # 用户通过Ctrl+C退出，正常处理
-        bot_logger.info("通过 KeyboardInterrupt 正常退出。")
+        bot_logger.info("子进程收到键盘中断，正常退出。")
+    except Exception as e:
+        bot_logger.error(f"子进程发生未捕获异常: {e}")
+        bot_logger.error(traceback.format_exc())
     finally:
-        # 确保在退出前执行清理
         cleanup_threads()
-        bot_logger.info("已执行最终清理。")
+        bot_logger.info("子进程已执行最终清理。")
 
-if __name__ == "__main__":
+class HMRHandler(FileSystemEventHandler):
+    """文件变动处理器，用于重启子进程"""
+    def __init__(self, debounce_period=1.5):
+        self.debounce_period = debounce_period
+        self.lock = threading.Lock()
+        self.timer: Optional[threading.Timer] = None
+        self.restart_callback = None
+        self.ignore_patterns = [
+            re.compile(p) for p in [
+                r".*[/\\]\.git[/\\]",
+                r".*[/\\]__pycache__[/\\]",
+                r".*[/\\]data[/\\]",
+                r".*[/\\]logs[/\\]",
+                r".*[/\\]static[/\\]",
+                r".*[/\\]resources[/\\]",
+                r".*[/\\]\.cursor[/\\]",
+                r".*\.log$",
+                r".*\.db$",
+                r".*uvicorn_log_config\.json$",
+                r".*\.tmp$",
+                r".*~$",
+                r".*\.swp$",
+            ]
+        ]
+
+    def set_restart_callback(self, callback):
+        self.restart_callback = callback
+
+    def on_modified(self, event):
+        if event.is_directory:
+            return
+
+        path = event.src_path.replace("\\", "/")
+        
+        # 检查路径是否应被忽略
+        for pattern in self.ignore_patterns:
+            if pattern.search(path):
+                return
+        
+        if os.path.basename(path) == os.path.basename(__file__):
+             return
+
+        bot_logger.info(f"[HMR] 检测到文件修改: {path}")
+        self._debounce_restart()
+
+    def _debounce_restart(self):
+        with self.lock:
+            if self.timer and self.timer.is_alive():
+                self.timer.cancel()
+            
+            if self.restart_callback:
+                self.timer = threading.Timer(self.debounce_period, self.restart_callback)
+                self.timer.start()
+
+def main_hmr(args):
+    """HMR 主程序，管理子进程"""
+    server_process = None
+
+    def restart_server():
+        nonlocal server_process
+        if server_process and server_process.is_alive():
+            bot_logger.info("\x1b[33m[CommandTester HMR] 正在终止旧的服务进程...\x1b[0m")
+            server_process.terminate()
+            server_process.join(timeout=5) # 等待5秒
+            if server_process.is_alive():
+                 bot_logger.warning("[CommandTester HMR] 旧进程在5秒后仍在运行，强制终止。")
+                 server_process.kill() # 在Windows上，terminate是kill的别名
+                 server_process.join()
+
+            bot_logger.info("\x1b[33m[CommandTester HMR] 旧的服务进程已终止。\x1b[0m")
+
+        bot_logger.info("\x1b[33m[CommandTester HMR] 正在启动新的服务进程...\x1b[0m")
+        server_process = multiprocessing.Process(target=run_server_process, args=(args.host, args.port))
+        server_process.start()
+
+    # 初始化文件观察器
+    observer = Observer()
+    handler = HMRHandler()
+    handler.set_restart_callback(restart_server)
+    observer.schedule(handler, path='.', recursive=True)
+    observer.start()
+
+    # 首次启动服务器
+    restart_server()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        bot_logger.info("检测到主进程键盘中断，正在关闭...")
+        if server_process and server_process.is_alive():
+            server_process.terminate()
+            server_process.join()
+        observer.stop()
+        observer.join()
+    finally:
+        bot_logger.info("HMR主进程已退出。")
+
+def main():
+    """作为模块导入时的入口点"""
     parser = argparse.ArgumentParser(description="命令测试工具")
     parser.add_argument("--host", default="127.0.0.1", help="服务主机地址")
     parser.add_argument("--port", type=int, default=8080, help="服务端口号")
-    args = parser.parse_args()
+    # 使用 parse_known_args() 以避免与其他脚本的参数冲突
+    args, _ = parser.parse_known_args()
     
-    try:
-        asyncio.run(main(host=args.host, port=args.port))
-    except RuntimeError as e:
-        if "Event loop stopped before Future completed." in str(e):
-            # 这是在程序关闭时可能出现的良性报错，直接忽略
-            pass
-        else:
-            # 如果是其他RuntimeError，则重新引发
-            raise
-    except KeyboardInterrupt:
-        # 用户通过Ctrl+C退出，正常处理
-        bot_logger.info("通过 KeyboardInterrupt 正常退出。")
-    finally:
-        # 确保在退出前执行清理
-        cleanup_threads()
-        bot_logger.info("已执行最终清理。") 
+    # 在Windows上, 'fork' 会有问题, 'spawn' 是默认且更安全的选择
+    if is_windows() or multiprocessing.get_start_method(allow_none=True) is None:
+        multiprocessing.set_start_method('spawn', force=True)
+
+    main_hmr(args)
+
+if __name__ == "__main__":
+    main()

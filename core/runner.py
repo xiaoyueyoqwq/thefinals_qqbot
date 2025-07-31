@@ -28,6 +28,7 @@ from core.app import CoreApp
 from core.memory import register_resource
 from core.debug import install_pretty_traceback
 from platforms.base_platform import BasePlatform
+from core.announcement import announcement_manager
 
 # ---------------------------------------------------------
 # 业务辅助：检查出口 IP（原样搬迁）
@@ -125,6 +126,7 @@ async def _async_main() -> None:
         await redis_manager.initialize()
         await browser_manager.initialize()
         await image_manager.start()
+        await announcement_manager.initialize()
 
         # 2. 初始化核心应用
         core_app = CoreApp()
@@ -177,7 +179,7 @@ def main(*, local_mode: bool = False) -> None:
     install_pretty_traceback()
 
     if local_mode:
-        from tools.command_tester import run as run_tester
+        from tools.command_tester import main as run_tester
         run_tester()
         return
 

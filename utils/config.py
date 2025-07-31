@@ -163,4 +163,9 @@ class Settings:
             }
         })
 
+    @property
+    def announcements(self) -> DotAccessibleDict:
+        """返回公告配置"""
+        return DotAccessibleDict(_config.get("announcements", {}))
+
 settings = Settings()

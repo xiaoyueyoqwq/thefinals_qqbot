@@ -9,11 +9,12 @@ import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
+from dataclasses import dataclass, field
 
 from core.plugin import Plugin, PluginManager
 from utils.logger import bot_logger
-
+from core.events import Author as GenericAuthor, GenericMessage
 
 # 自定义插件管理器以增强错误处理
 class TestPluginManager(PluginManager):
@@ -76,85 +77,60 @@ class TestPluginManager(PluginManager):
         bot_logger.info(f"插件发现完成: 发现 {len(found_plugins)} 个插件，成功加载 {len(loaded_plugins)} 个插件")
         return loaded_plugins
 
-
 class MockMessageHandler:
     """模拟消息处理器，用于命令测试"""
 
-    def __init__(self, user_id="test_user", group_id="test_group"):
+    def __init__(self, user_id="test_user", group_id="test_group", channel_id="test_channel"):
         """初始化模拟消息处理器
-
+        
         Args:
             user_id: 模拟用户ID
-            group_id: 模拟群组ID
+            group_id: 模拟群组ID (将用作 guild_id)
+            channel_id: 模拟频道ID
         """
         self.text_responses = []
         self.image_responses = []
         self.recalls = []
+        
+        msg_id = "mock_msg_" + datetime.now().strftime("%Y%m%d%H%M%S")
+        author = GenericAuthor(id=user_id, name="Test User")
+
+        # 创建一个与真实 GenericMessage 结构完全兼容的模拟消息
+        self.message = GenericMessage(
+            platform="mock",
+            id=msg_id,
+            channel_id=channel_id,
+            content="",
+            author=author,
+            timestamp=int(datetime.now().timestamp() * 1000),
+            guild_id=group_id, # 使用 group_id 作为 guild_id
+            raw={},
+            extra={}
+        )
+        # 兼容旧代码直接访问 handler.user_id 的情况
         self.user_id = user_id
-        self.group_id = group_id
-
-        # 模拟消息对象
-        class MockAuthor:
-            def __init__(self, user_id):
-                self.id = user_id
-                self.member_openid = user_id
-
-        class MockMessage:
-            def __init__(self, user_id, group_id, content=""):
-                self.id = "mock_msg_" + datetime.now().strftime("%Y%m%d%H%M%S")
-                self.author = MockAuthor(user_id)
-                self.group_openid = group_id
-                self.content = content
-
-        self.message = MockMessage(user_id, group_id)
 
     async def send_text(self, content: str) -> bool:
-        """模拟发送文本消息
-
-        Args:
-            content: 消息内容
-
-        Returns:
-            bool: 是否成功
-        """
+        """模拟发送文本消息"""
         self.text_responses.append(content)
         return True
 
     async def send_image(self, image_data: bytes) -> bool:
-        """模拟发送图片消息
-
-        Args:
-            image_data: 图片数据
-
-        Returns:
-            bool: 是否成功
-        """
+        """模拟发送图片消息"""
         self.image_responses.append(image_data)
         return True
 
     async def recall(self) -> bool:
-        """模拟撤回消息
-
-        Returns:
-            bool: 是否成功
-        """
+        """模拟撤回消息"""
         self.recalls.append(datetime.now())
         return True
 
     def get_latest_response(self) -> Optional[str]:
-        """获取最新的文本响应
-
-        Returns:
-            Optional[str]: 最新的文本响应
-        """
+        """获取最新的文本响应"""
         if self.text_responses:
             return self.text_responses[-1]
         return None
 
     def get_all_responses(self) -> List[str]:
-        """获取所有文本响应
-
-        Returns:
-            List[str]: 所有文本响应
-        """
-        return self.text_responses 
+        """获取所有文本响应"""
+        return self.text_responses

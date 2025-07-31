@@ -7,6 +7,7 @@ from .url_check import obfuscate_urls
 from .messaging.enums import MessageType, FileType
 from .messaging.config import MessageConfig
 from .messaging.controller import MessageController
+from core.announcement import announcement_manager
 
 class MessageAPI:
     """
@@ -68,7 +69,6 @@ class MessageAPI:
                 return result
                 
             except Exception as e:
-                # ... (错误处理逻辑保持不变) ...
                 error_msg = str(e)
                 if "富媒体文件格式不支持" in error_msg:
                     bot_logger.error("图片格式不支持，请确保图片为jpg/png格式")
@@ -92,6 +92,7 @@ class MessageAPI:
     async def send_to_group(self, group_id: str, content: str, msg_type: MessageType, msg_id: str, **kwargs) -> bool:
         """发送群消息"""
         try:
+            is_announcement = kwargs.get("is_announcement", False)
             content = obfuscate_urls(content)
             if not group_id: raise ValueError("Group ID cannot be empty")
 
@@ -108,6 +109,11 @@ class MessageAPI:
             bot_logger.debug(f"发送群消息数据: {msg_data}")
             await self._api.post_group_message(group_openid=group_id, **msg_data)
             bot_logger.info(f"消息发送成功 (ID: {msg_id})")
+
+            # 如果不是公告消息，则检查是否需要发送公告
+            if not is_announcement:
+                await self._send_announcement_if_available(group_id, msg_id)
+
             return True
         except Exception as e:
             bot_logger.error(f"发送群消息失败: {str(e)}", exc_info=True)
@@ -178,4 +184,22 @@ class MessageAPI:
             return True
         except Exception as e:
             bot_logger.error(f"发送私聊消息失败: {str(e)}")
-            return False 
+            return False
+
+    async def _send_announcement_if_available(self, group_id: str, original_msg_id: str):
+        """检查并发送可用的公告"""
+        try:
+            announcement = await announcement_manager.get_announcement_for_group(group_id)
+            if announcement:
+                bot_logger.info(f"正在为群组 {group_id} 发送公告: {announcement.id}")
+                # 直接使用原始消息的ID来发送公告，作为另一条被动回复
+                await self.send_to_group(
+                    group_id=group_id,
+                    content=f"\n{announcement.message}",
+                    msg_type=MessageType.TEXT,
+                    msg_id=original_msg_id, # 使用原始 msg_id
+                    is_announcement=True  # 标记为公告消息，防止无限循环
+                )
+                await announcement_manager.mark_announcement_as_sent(group_id, announcement.id)
+        except Exception as e:
+            bot_logger.error(f"发送公告失败: {e}", exc_info=True)

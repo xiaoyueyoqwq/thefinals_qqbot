@@ -9,7 +9,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CommandLine</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         :root {
             --primary-color: #007bff;
@@ -182,13 +182,29 @@
             align-items: center;
             justify-content: space-between;
         }
+        
+        .panel-header > span {
+            margin-right: auto; /* 将标题推向左侧 */
+        }
+        
+        #announcementListWrapper + .button.primary svg {
+             color: white;
+        }
+        
+        .panel-header-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            margin-right: 0.5rem;
+            opacity: 0.8;
+        }
+
 
         .panel-body {
             padding: 1rem;
         }
 
         .command-list-wrapper {
-            max-height: 350px;
+            max-height: 200px;
             overflow-y: auto;
             scrollbar-width: thin;
             scrollbar-color: var(--text-secondary) transparent;
@@ -745,6 +761,17 @@
             color: white;
             border-color: var(--primary-color);
         }
+        
+        .button.primary {
+             background-color: var(--primary-color);
+             color: white;
+             border-color: var(--primary-color);
+        }
+
+        .button.primary:hover {
+             background-color: var(--primary-hover);
+        }
+
 
         .loading {
             display: inline-block;
@@ -807,7 +834,7 @@
                 height: auto;
             }
 
-            .command-list-wrapper {
+            .command-list-wrapper, .announcement-list-wrapper {
                 max-height: 180px;
             }
         }
@@ -937,6 +964,233 @@
         .error-message li {
             margin: 4px 0;
         }
+        
+        /* 公告管理UI */
+        .announcement-list-wrapper {
+            max-height: 250px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+            padding-right: 5px; /* for scrollbar */
+        }
+        .announcement-list-wrapper::-webkit-scrollbar { width: 6px; }
+        .announcement-list-wrapper::-webkit-scrollbar-track { background: transparent; }
+        .announcement-list-wrapper::-webkit-scrollbar-thumb { background-color: var(--text-secondary); border-radius: 20px; }
+
+        .announcement-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            background-color: var(--bg-color);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            margin-bottom: 1rem;
+            position: relative;
+            transition: var(--transition);
+        }
+        .announcement-item:hover {
+             box-shadow: var(--shadow-md);
+             transform: translateY(-2px);
+        }
+        .announcement-item .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-top: 6px;
+            flex-shrink: 0;
+        }
+        .announcement-item .status-indicator.active { background-color: var(--success-color); }
+        .announcement-item .status-indicator.inactive { background-color: var(--secondary-color); }
+        .announcement-item .status-indicator.upcoming { background-color: var(--info-color); }
+
+        .announcement-content {
+            flex-grow: 1;
+        }
+        .announcement-id {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+        .announcement-message {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .announcement-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .announcement-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.25rem;
+            color: var(--text-secondary);
+            transition: var(--transition);
+        }
+        .action-btn:hover {
+            color: var(--primary-color);
+            transform: scale(1.1);
+        }
+        .action-btn svg {
+            width: 1.1rem;
+            height: 1.1rem;
+        }
+        .action-btn.delete:hover {
+            color: var(--danger-color);
+        }
+        
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease-in-out;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal {
+            background: var(--panel-bg);
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow-md);
+            transform: scale(0.95);
+            transition: all 0.3s ease-in-out;
+        }
+        .modal-overlay.visible .modal {
+             transform: scale(1);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: var(--transition);
+        }
+                 .form-group input:focus, .form-group textarea:focus {
+             outline: none;
+             border-color: var(--primary-color);
+             box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.2);
+         }
+         .quick-time-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+         }
+         .quick-time-btn {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: var(--transition);
+         }
+         .quick-time-btn:hover {
+            background: var(--hover-color);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+         }
+          .form-group textarea {
+             min-height: 100px;
+             resize: vertical;
+         }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: var(--dark-color);
+            color: var(--light-color);
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            z-index: 2000;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease-in-out;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast.success {
+            background-color: var(--success-color);
+        }
+        .toast.error {
+            background-color: var(--danger-color);
+        }
+
+
     </style>
 </head>
 <body>
@@ -967,12 +1221,24 @@
             <symbol id="icon-very-slow" viewBox="0 0 24 24">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" opacity="0.4"/>
             </symbol>
+            <symbol id="icon-edit" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83l3.75 3.75l1.83-1.83z"/>
+            </symbol>
+            <symbol id="icon-delete" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+            </symbol>
+            <symbol id="icon-add" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </symbol>
+            <symbol id="icon-announcement" viewBox="0 0 24 24">
+                 <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            </symbol>
         </svg>
     </div>
     <div class="container">
         <header>
             <h1>CommandLine</h1>
-            <p class="subtitle">v0.0.2 Build 202406300001</p>
+            <p class="subtitle">v0.0.3 Build 202407310001</p>
         </header>
         <div class="content">
             <div class="chat-container">
@@ -983,9 +1249,7 @@
                             <span>系统</span>
                         </div>
                         <div class="message-content">👋 欢迎使用CommandLine。它可以在不启动QQ机器人服务的情况下本地测试所有命令。
-
 请在下方输入框中输入命令，例如 <span class="clickable-command" data-command="/ds Dizzy">/ds Dizzy</span> 来测试深度搜索命令。
-
 你也可以在右侧点击命令快速测试。</div>
                     </div>
                 </div>
@@ -1006,12 +1270,32 @@
             </div>
             <div class="sidebar">
                 <div class="panel">
-                    <div class="panel-header">可用命令</div>
+                                         <div class="panel-header">
+                        <span>公告管理</span>
+                        <div>
+                            <button class="action-btn" id="addAnnouncementBtn" title="添加新公告" style="margin-right: 1rem;">
+                                <svg><use href="#icon-add"/></svg>
+                            </button>
+                            <label class="toggle">
+                              <input type="checkbox" id="announcementEnabledSwitch">
+                              <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                         <div class="announcement-list-wrapper" id="announcementListWrapper">
+                            <!-- 公告列表将动态填充 -->
+                         </div>
+                    </div>
+                </div>
+                <div class="panel">
+                    <div class="panel-header">
+                         <span>可用命令</span>
+                    </div>
                     <div class="panel-body">
                         <input type="text" id="commandSearch" placeholder="搜索命令..." style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); background-color: var(--bg-color); color: var(--text-color); margin-bottom: 1rem;">
                         <div class="command-list-wrapper">
                             <div class="command-list" id="commandList">
-                                <!-- 命令列表将通过JS动态加载 -->
                                 <div style="display: flex; align-items: center; justify-content: center; padding: 1rem;">
                                     <div class="loading"></div>
                                     <span>加载中...</span>
@@ -1069,7 +1353,53 @@
             </div>
         </div>
     </div>
+    
+    <!-- Announcement Modal -->
+    <div class="modal-overlay" id="announcementModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">添加公告</h2>
+                <button class="modal-close-btn" id="modalCloseBtn">&times;</button>
+            </div>
+            <form id="announcementForm">
+                <input type="hidden" id="announcementIndex" value="-1">
+                <div class="form-group">
+                    <label for="announcementId">公告ID (必须唯一)</label>
+                    <input type="text" id="announcementId" required>
+                </div>
+                <div class="form-group">
+                    <label for="announcementMessage">公告内容</label>
+                    <textarea id="announcementMessage" rows="4" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="announcementStartTime">开始时间</label>
+                    <input type="text" id="announcementStartTime" required>
+                    <div class="quick-time-buttons">
+                        <button type="button" class="quick-time-btn" data-field="announcementStartTime" data-hours="0">现在</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="announcementEndTime">结束时间</label>
+                    <input type="text" id="announcementEndTime" required>
+                    <div class="quick-time-buttons">
+                        <button type="button" class="quick-time-btn" data-field="announcementEndTime" data-hours="1">1小时后</button>
+                        <button type="button" class="quick-time-btn" data-field="announcementEndTime" data-hours="6">6小时后</button>
+                        <button type="button" class="quick-time-btn" data-field="announcementEndTime" data-hours="12">12小时后</button>
+                        <button type="button" class="quick-time-btn" data-field="announcementEndTime" data-hours="24">24小时后</button>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="button" id="modalCancelBtn">取消</button>
+                    <button type="submit" class="button primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
     <script>
         // 将 sendCommand 函数暴露到全局作用域
         let globalSendCommand;
@@ -1087,6 +1417,19 @@
             const commandSearch = document.getElementById('commandSearch');
             const autocompleteContainer = document.getElementById('autocomplete-container');
             
+            // 公告相关 DOM
+            const announcementListWrapper = document.getElementById('announcementListWrapper');
+            const announcementEnabledSwitch = document.getElementById('announcementEnabledSwitch');
+            const addAnnouncementBtn = document.getElementById('addAnnouncementBtn');
+            const announcementModal = document.getElementById('announcementModal');
+            const modalCloseBtn = document.getElementById('modalCloseBtn');
+            const modalCancelBtn = document.getElementById('modalCancelBtn');
+            const announcementForm = document.getElementById('announcementForm');
+            const modalTitle = document.getElementById('modalTitle');
+            const toast = document.getElementById('toast');
+            
+            let currentAnnouncements = { enabled: false, items: [] };
+            
             let isWaitingForResponse = false;
             let selectedSuggestionIndex = -1;
 
@@ -1099,6 +1442,13 @@
                     document.body.classList.remove('force-dark');
                 }
             }
+            
+            flatpickr("#announcementStartTime, #announcementEndTime", {
+                enableTime: true,
+                dateFormat: "Y-m-d H:i:S",
+                time_24hr: true,
+                locale: "zh"
+            });
 
             darkMode.addEventListener('change', setColorScheme);
             setColorScheme();
@@ -1110,33 +1460,18 @@
 
             // 加载命令列表
             fetchCommandList();
+            fetchAnnouncements();
 
             // 获取执行时间的图标和类名
             function getExecutionTimeInfo(time) {
                 if (time < 3000) {  // 小于 3s 认为是超快
-                    return {
-                        icon: 'fast',
-                        class: 'fast',
-                        text: '响应超快'
-                    };
+                    return { icon: 'fast', class: 'fast', text: '响应超快' };
                 } else if (time < 4000) {  // 小于 4s 认为是不错
-                    return {
-                        icon: 'normal',
-                        class: 'normal',
-                        text: '响应不错'
-                    };
+                    return { icon: 'normal', class: 'normal', text: '响应不错' };
                 } else if (time < 5000) {  // 小于 5s 认为是慢
-                    return {
-                        icon: 'slow',
-                        class: 'slow',
-                        text: '响应较慢'
-                    };
+                    return { icon: 'slow', class: 'slow', text: '响应较慢' };
                 } else {  // 大于 5s 认为是非常慢
-                    return {
-                        icon: 'very-slow',
-                        class: 'very-slow',
-                        text: '响应非常慢'
-                    };
+                    return { icon: 'very-slow', class: 'very-slow', text: '响应非常慢' };
                 }
             }
 
@@ -1179,7 +1514,9 @@
                             sendCommand();
                         });
                     });
-                } else if (imageData) { // Only add image if no text content
+                } 
+                
+                if (imageData) { 
                     const imageContainer = document.createElement('div');
                     imageContainer.className = 'message-image';
                     imageContainer.style.cssText = 'margin-top: 10px; max-width: 100%; overflow: hidden; border-radius: 8px;';
@@ -1190,19 +1527,7 @@
                     image.onclick = () => {
                         // 创建全屏预览
                         const preview = document.createElement('div');
-                        preview.style.cssText = `
-                            position: fixed;
-                            top: 0;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            background: rgba(0, 0, 0, 0.9);
-                            display: flex;
-                            justify-content: center;
-                            align-items: center;
-                            z-index: 1000;
-                            cursor: pointer;
-                        `;
+                        preview.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.9); display: flex; justify-content: center; align-items: center; z-index: 1000; cursor: pointer;`;
                         
                         const previewImg = document.createElement('img');
                         previewImg.src = image.src;
@@ -1215,32 +1540,25 @@
                         preview.onclick = () => preview.remove();
                     };
                     
-                    imageContainer.appendChild(image);
-                    messageDiv.appendChild(imageContainer);
+                    imageContainer.appendChild(image); // Add image to its container
+                    messageContent.appendChild(imageContainer);
                 }
 
                 messageDiv.appendChild(header);
                 messageDiv.appendChild(messageContent);
 
-                // 添加执行时间显示（仅对机器人消息）
                 if (type === 'bot' && executionTime !== null) {
                     const timeInfo = getExecutionTimeInfo(executionTime);
                     const timeDiv = document.createElement('div');
                     timeDiv.className = `execution-time ${timeInfo.class}`;
-                    timeDiv.innerHTML = `
-                        <svg><use href="#icon-${timeInfo.icon}"/></svg>
-                        <span>${executionTime}ms</span>
-                        <span class="execution-time-text">${timeInfo.text}</span>
-                    `;
+                    timeDiv.innerHTML = `<svg><use href="#icon-${timeInfo.icon}"/></svg><span>${executionTime}ms</span><span class="execution-time-text">${timeInfo.text}</span>`;
                     messageDiv.appendChild(timeDiv);
                 }
 
-                // 添加消息操作按钮
                 const actions = document.createElement('div');
                 actions.className = 'message-actions';
 
                 if (type === 'user') {
-                    // 重试按钮
                     const retryBtn = document.createElement('button');
                     retryBtn.className = 'message-action-btn';
                     retryBtn.innerHTML = '<svg><use href="#icon-retry"/></svg>重试';
@@ -1251,29 +1569,15 @@
                     actions.appendChild(retryBtn);
                 }
 
-                // 复制按钮 (对所有消息都添加)
                 const copyBtn = document.createElement('button');
                 copyBtn.className = 'message-action-btn';
                 copyBtn.innerHTML = '<svg><use href="#icon-copy"/></svg>复制';
                 copyBtn.addEventListener('click', () => {
-                    // 如果有图片,复制图片链接
                     if (imageData) {
                         const imgUrl = `data:image/jpeg;base64,${imageData}`;
-                        navigator.clipboard.writeText(imgUrl).then(() => {
-                            const originalText = copyBtn.innerHTML;
-                            copyBtn.innerHTML = '<svg><use href="#icon-copy"/></svg>已复制图片链接';
-                            setTimeout(() => {
-                                copyBtn.innerHTML = originalText;
-                            }, 2000);
-                        });
+                        navigator.clipboard.writeText(imgUrl).then(() => showCopyFeedback(copyBtn, '已复制图片链接'));
                     } else {
-                        navigator.clipboard.writeText(content).then(() => {
-                            const originalText = copyBtn.innerHTML;
-                            copyBtn.innerHTML = '<svg><use href="#icon-copy"/></svg>已复制';
-                            setTimeout(() => {
-                                copyBtn.innerHTML = originalText;
-                            }, 2000);
-                        });
+                        navigator.clipboard.writeText(content).then(() => showCopyFeedback(copyBtn, '已复制'));
                     }
                 });
                 actions.appendChild(copyBtn);
@@ -1285,20 +1589,17 @@
                     scrollToBottom();
                 }
             }
+            
+            function showCopyFeedback(btn, text) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = `<svg><use href="#icon-copy"/></svg>${text}`;
+                setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+            }
 
-            // 添加等待动画
             function addTypingIndicator() {
                 const typingDiv = document.createElement('div');
                 typingDiv.className = 'bot-typing';
-                typingDiv.innerHTML = `
-                    <div class="message-avatar">B</div>
-                    <span>正在输入</span>
-                    <div class="typing-dots">
-                        <div class="typing-dot"></div>
-                        <div class="typing-dot"></div>
-                        <div class="typing-dot"></div>
-                    </div>
-                `;
+                typingDiv.innerHTML = `<div class="message-avatar">B</div><span>正在输入</span><div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
                 chatMessages.appendChild(typingDiv);
                 if (autoScroll.checked) {
                     scrollToBottom();
@@ -1306,82 +1607,53 @@
                 return typingDiv;
             }
 
-            // 发送命令
             async function sendCommand(forceSend = false) {
                 const command = commandInput.value.trim();
                 if (command === '' || isWaitingForResponse) return;
 
-                // 检查命令是否存在于命令列表中
                 if (!forceSend && command.startsWith('/')) {
-                    const commandName = command.split(' ')[0].substring(1); // 获取命令名称(不含参数)
+                    const commandName = command.split(' ')[0].substring(1);
                     const commandExists = Object.keys(window.availableCommands || {}).includes(commandName);
                     
                     if (!commandExists) {
                         const errorDiv = document.createElement('div');
                         errorDiv.className = 'error-message';
-                        errorDiv.innerHTML = `
-                            <div style="margin-bottom: 10px;">命令 /${commandName} 不存在。请检查:</div>
-                            <ol style="margin: 0; padding-left: 20px;">
-                                <li>命令名称是否正确</li>
-                                <li>对应的命令代码是否已注册</li>
-                                <li>命令插件是否已正确加载</li>
-                            </ol>
-                            <div class="force-send-button" id="forceSendBtn">
-                                <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
-                                    <path d="M12 2L4 20l8-3 8 3L12 2z" fill="currentColor"/>
-                                </svg>
-                                强制发送
-                            </div>
-                        `;
+                        errorDiv.innerHTML = `<div style="margin-bottom: 10px;">命令 /${commandName} 不存在。请检查:</div><ol style="margin: 0; padding-left: 20px;"><li>命令名称是否正确</li><li>对应的命令代码是否已注册</li><li>命令插件是否已正确加载</li></ol><div class="force-send-button" id="forceSendBtn"><svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;"><path d="M12 2L4 20l8-3 8 3L12 2z" fill="currentColor"/></svg>强制发送</div>`;
                         chatMessages.appendChild(errorDiv);
 
-                        // 使用 DOM 方式绑定点击事件
                         const forceSendBtn = errorDiv.querySelector('#forceSendBtn');
                         forceSendBtn.addEventListener('click', () => sendCommand(true));
 
-                        if (autoScroll.checked) {
-                            scrollToBottom();
-                        }
+                        if (autoScroll.checked) scrollToBottom();
                         return;
                     }
                 }
                 
-                // 添加用户消息
                 addMessage(command, 'user');
-                
-                // 清空输入框
                 commandInput.value = '';
                 charCount.textContent = '0 个字符';
                 
-                // 发送请求
                 isWaitingForResponse = true;
                 sendButton.disabled = true;
                 
-                // 添加等待动画
                 const typingIndicator = addTypingIndicator();
                 
                 fetch('/api/execute_command', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ command: command })
                 })
                 .then(response => response.json())
                 .then(data => {
-                    // 移除等待动画
                     typingIndicator.remove();
-                    
                     if (data.error) {
-                        addErrorMessage(data.error);
+                        addErrorMessage(data.error, data.traceback);
                     } else {
                         addMessage(data.response, 'bot', data.image, data.execution_time);
                     }
                 })
                 .catch(error => {
-                    // 移除等待动画
                     typingIndicator.remove();
-                    
                     addErrorMessage('服务器连接错误，请检查后端服务是否运行。');
                     console.error('Error:', error);
                 })
@@ -1391,113 +1663,75 @@
                     commandInput.focus();
                 });
             }
-
-            // 将 sendCommand 函数暴露到全局作用域
+            
             globalSendCommand = sendCommand;
 
-            // 添加错误消息
-            function addErrorMessage(content) {
+            function addErrorMessage(content, traceback = null) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'error-message';
-                errorDiv.textContent = content;
-                chatMessages.appendChild(errorDiv);
-                
-                if (autoScroll.checked) {
-                    scrollToBottom();
+                let html = `<div>${content}</div>`;
+                if(traceback) {
+                    html += `<details class="error-details"><summary>详细信息</summary><pre><code>${traceback}</code></pre></details>`;
                 }
+                errorDiv.innerHTML = html;
+                chatMessages.appendChild(errorDiv);
+                if (autoScroll.checked) scrollToBottom();
             }
 
-            // 获取格式化的时间戳
             function getTimestamp() {
                 const now = new Date();
                 return `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`;
             }
 
-            // 滚动到底部
             function scrollToBottom() {
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
 
-            // 获取命令列表
             function fetchCommandList() {
                 fetch('/api/command_list')
                 .then(response => response.json())
                 .then(data => {
                     commandList.innerHTML = '';
-                    
                     if (data.error) {
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'error-message';
-                        errorDiv.textContent = data.error;
-                        commandList.appendChild(errorDiv);
+                        commandList.innerHTML = `<div class="error-message">${data.error}</div>`;
                         return;
                     }
 
-                    // 保存命令列表到全局变量
                     window.availableCommands = data.commands;
                     
-                    // 按插件名分组命令
                     const pluginCommands = {};
-                    
                     for (const [command, info] of Object.entries(data.commands)) {
                         const pluginName = info.plugin || '其他';
-                        
-                        if (!pluginCommands[pluginName]) {
-                            pluginCommands[pluginName] = [];
-                        }
-                        
-                        pluginCommands[pluginName].push({
-                            command: command,
-                            description: info.description || '无描述',
-                            hidden: info.hidden || false
-                        });
+                        if (!pluginCommands[pluginName]) pluginCommands[pluginName] = [];
+                        pluginCommands[pluginName].push({ command, ...info });
                     }
                     
-                    // 为每个插件创建命令区域
                     for (const [pluginName, commands] of Object.entries(pluginCommands)) {
-                        // 跳过隐藏的命令
                         const visibleCommands = commands.filter(cmd => !cmd.hidden);
                         if (visibleCommands.length === 0) continue;
                         
                         const commandGroup = document.createElement('div');
                         commandGroup.className = 'command-group';
-                        
                         const groupTitle = document.createElement('div');
                         groupTitle.className = 'command-group-title';
                         groupTitle.textContent = pluginName;
-                        
                         commandGroup.appendChild(groupTitle);
                         
-                        // 添加命令
                         visibleCommands.forEach(cmd => {
                             const cmdItem = document.createElement('div');
                             cmdItem.className = 'command-item';
                             cmdItem.setAttribute('data-command', `/${cmd.command}`);
-                            
-                            const cmdTitle = document.createElement('div');
-                            cmdTitle.className = 'command-title';
-                            cmdTitle.textContent = `/${cmd.command}`;
-                            
-                            const cmdDesc = document.createElement('div');
-                            cmdDesc.className = 'command-description';
-                            cmdDesc.textContent = cmd.description;
-                            
-                            cmdItem.appendChild(cmdTitle);
-                            cmdItem.appendChild(cmdDesc);
-                            
+                            cmdItem.innerHTML = `<div class="command-title">/${cmd.command}</div><div class="command-description">${cmd.description || '无描述'}</div>`;
                             cmdItem.addEventListener('click', function() {
                                 commandInput.value = this.getAttribute('data-command');
                                 commandInput.focus();
                                 charCount.textContent = `${commandInput.value.length} 个字符`;
                             });
-                            
                             commandGroup.appendChild(cmdItem);
                         });
-                        
                         commandList.appendChild(commandGroup);
                     }
 
-                    // 检查是否有命令
                     if (commandList.children.length === 0) {
                         commandList.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">没有可用的命令</div>';
                     }
@@ -1508,10 +1742,8 @@
                 });
             }
 
-            // 按钮事件
-            sendButton.addEventListener('click', sendCommand);
+            sendButton.addEventListener('click', () => sendCommand());
             
-            // 输入框事件
             commandInput.addEventListener('keydown', function(e) {
                 const items = autocompleteContainer.querySelectorAll('.autocomplete-item');
                 let suggestionHandled = false;
@@ -1529,8 +1761,7 @@
                         suggestionHandled = true;
                     } else if (e.key === 'Tab' && items.length > 0) {
                         e.preventDefault();
-                        const targetIndex = selectedSuggestionIndex > -1 ? selectedSuggestionIndex : 0;
-                        items[targetIndex].click();
+                        items[selectedSuggestionIndex > -1 ? selectedSuggestionIndex : 0].click();
                         suggestionHandled = true;
                     } else if (e.key === 'Enter' && selectedSuggestionIndex > -1) {
                         e.preventDefault();
@@ -1551,15 +1782,12 @@
             
             commandInput.addEventListener('input', updateAutocomplete);
             
-            // 清空聊天记录
             clearButton.addEventListener('click', function() {
-                // 保留第一条欢迎消息
                 const welcomeMessage = chatMessages.firstChild;
                 chatMessages.innerHTML = '';
                 chatMessages.appendChild(welcomeMessage);
             });
 
-            // 命令列表搜索
             commandSearch.addEventListener('input', function() {
                 const searchTerm = this.value.toLowerCase();
                 const commandGroups = document.querySelectorAll('.command-group');
@@ -1588,7 +1816,6 @@
                 });
             });
 
-            // 自动补全
             function updateAutocomplete() {
                 const text = commandInput.value;
                 if (text.startsWith('/') && !text.includes(' ')) {
@@ -1598,14 +1825,12 @@
                     
                     autocompleteContainer.innerHTML = '';
                     if (suggestions.length > 0) {
-                        suggestions.slice(0, 10).forEach((suggestion, index) => { // Limit to 10 suggestions
+                        suggestions.slice(0, 10).forEach((suggestion, index) => {
                             const item = document.createElement('div');
                             item.className = 'autocomplete-item';
-                            
                             const cmdInfo = window.availableCommands[suggestion];
                             const desc = cmdInfo.description || '无描述';
                             item.innerHTML = `<span class="cmd-name">/${suggestion}</span><span class="cmd-desc">${desc}</span>`;
-                            
                             item.dataset.command = `/${suggestion}`;
                             item.addEventListener('click', () => {
                                 commandInput.value = `/${suggestion} `;
@@ -1637,13 +1862,181 @@
                 });
             }
 
-            // Hide autocomplete when clicking outside
             document.addEventListener('click', (e) => {
                 const isClickInside = commandInput.contains(e.target) || autocompleteContainer.contains(e.target);
                 if (!isClickInside) {
                     autocompleteContainer.classList.remove('visible');
                 }
             });
+            
+            // --- Announcement Logic ---
+            
+            function renderAnnouncements() {
+                announcementEnabledSwitch.checked = currentAnnouncements.enabled;
+                announcementListWrapper.innerHTML = '';
+                if (!currentAnnouncements.items || currentAnnouncements.items.length === 0) {
+                    announcementListWrapper.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 1rem;">没有公告</div>`;
+                    return;
+                }
+                
+                currentAnnouncements.items.forEach((item, index) => {
+                    const now = new Date();
+                    const start = new Date(item.start_time.replace(' ', 'T') + 'Z'); // Assume UTC if no timezone
+                    const end = new Date(item.end_time.replace(' ', 'T') + 'Z');
+                    let status = 'inactive';
+                    if (now >= start && now <= end) status = 'active';
+                    else if (now < start) status = 'upcoming';
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'announcement-item';
+                    itemDiv.innerHTML = `
+                        <div class="status-indicator ${status}" title="${status}"></div>
+                        <div class="announcement-content">
+                            <div class="announcement-id">${item.id}</div>
+                            <div class="announcement-message">${item.message}</div>
+                            <div class="announcement-time">
+                                <span>${item.start_time}</span> - <span>${item.end_time}</span>
+                            </div>
+                        </div>
+                        <div class="announcement-actions">
+                            <button class="action-btn edit" data-index="${index}" title="编辑">
+                                <svg><use href="#icon-edit"/></svg>
+                            </button>
+                            <button class="action-btn delete" data-index="${index}" title="删除">
+                                <svg><use href="#icon-delete"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    announcementListWrapper.appendChild(itemDiv);
+                });
+                
+                // Add event listeners for edit/delete
+                document.querySelectorAll('.announcement-actions .edit').forEach(btn => btn.addEventListener('click', handleEditAnnouncement));
+                document.querySelectorAll('.announcement-actions .delete').forEach(btn => btn.addEventListener('click', handleDeleteAnnouncement));
+            }
+            
+            function fetchAnnouncements() {
+                fetch('/api/announcements')
+                    .then(res => res.json())
+                    .then(data => {
+                        currentAnnouncements = data;
+                        renderAnnouncements();
+                    })
+                    .catch(e => {
+                        showToast('获取公告失败', 'error');
+                        console.error(e);
+                    });
+            }
+
+            async function saveAnnouncements() {
+                try {
+                    const response = await fetch('/api/announcements', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(currentAnnouncements)
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                       throw new Error(result.error || '保存失败');
+                    }
+                    showToast('公告已保存');
+                    fetchAnnouncements(); // Refresh list
+                } catch(e) {
+                    showToast(`保存失败: ${e.message}`, 'error');
+                    console.error(e);
+                }
+            }
+
+            function handleEditAnnouncement(e) {
+                const index = e.currentTarget.dataset.index;
+                openModal(currentAnnouncements.items[index], index);
+            }
+            
+            function handleDeleteAnnouncement(e) {
+                const index = e.currentTarget.dataset.index;
+                if (confirm(`确定要删除公告 "${currentAnnouncements.items[index].id}" 吗？`)) {
+                    currentAnnouncements.items.splice(index, 1);
+                    saveAnnouncements();
+                }
+            }
+
+            announcementEnabledSwitch.addEventListener('change', () => {
+                currentAnnouncements.enabled = announcementEnabledSwitch.checked;
+                saveAnnouncements();
+            });
+            
+            addAnnouncementBtn.addEventListener('click', () => openModal());
+            
+            function openModal(item = null, index = -1) {
+                announcementForm.reset();
+                if (item) {
+                    modalTitle.textContent = '编辑公告';
+                    document.getElementById('announcementId').value = item.id;
+                    document.getElementById('announcementMessage').value = item.message;
+                    document.getElementById('announcementStartTime')._flatpickr.setDate(item.start_time);
+                    document.getElementById('announcementEndTime')._flatpickr.setDate(item.end_time);
+                    document.getElementById('announcementIndex').value = index;
+                } else {
+                    modalTitle.textContent = '添加新公告';
+                    document.getElementById('announcementId').value = `ann_${Date.now()}`;
+                    document.getElementById('announcementIndex').value = -1;
+                }
+                announcementModal.classList.add('visible');
+            }
+            
+            function closeModal() {
+                 announcementModal.classList.remove('visible');
+            }
+            
+            modalCloseBtn.addEventListener('click', closeModal);
+            modalCancelBtn.addEventListener('click', closeModal);
+            document.querySelectorAll('.quick-time-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const targetFieldId = e.target.dataset.field;
+                    const hours = parseInt(e.target.dataset.hours);
+                    const targetInput = document.getElementById(targetFieldId);
+                    
+                    if (targetInput && targetInput._flatpickr) {
+                        const now = new Date();
+                        now.setHours(now.getHours() + hours);
+                        targetInput._flatpickr.setDate(now, true); // true to trigger change event
+                    }
+                });
+            });
+            
+            announcementForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const index = parseInt(document.getElementById('announcementIndex').value);
+                const newAnn = {
+                    id: document.getElementById('announcementId').value.trim(),
+                    message: document.getElementById('announcementMessage').value.trim(),
+                    start_time: document.getElementById('announcementStartTime').value,
+                    end_time: document.getElementById('announcementEndTime').value,
+                };
+                
+                if(!newAnn.id || !newAnn.message || !newAnn.start_time || !newAnn.end_time) {
+                    showToast('所有字段均为必填项', 'error');
+                    return;
+                }
+                
+                if (index > -1) {
+                    currentAnnouncements.items[index] = newAnn;
+                } else {
+                    currentAnnouncements.items.push(newAnn);
+                }
+                
+                saveAnnouncements();
+                closeModal();
+            });
+            
+            function showToast(message, type = 'success') {
+                toast.textContent = message;
+                toast.className = `toast ${type} show`;
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+
         });
     </script>
 </body>

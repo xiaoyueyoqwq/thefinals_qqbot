@@ -36,6 +36,14 @@
       {
         "pattern": "^(?P<season>s\\d+)heavyhitters$",
         "template": "{season}全民曹飞"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)cashball$",
+        "template": "{season}光州球赛"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)blastoff$",
+        "template": "{season}全民炸飞"
       }
     ]
   }
