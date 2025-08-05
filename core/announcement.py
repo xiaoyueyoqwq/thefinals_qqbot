@@ -58,7 +58,7 @@ class AnnouncementManager:
 
     def _is_active(self, announcement: Announcement) -> bool:
         """检查公告当前是否处于活动时间。"""
-        now = datetime.now(announcement.start_time.tzinfo)
+        now = datetime.now()
         return announcement.start_time <= now <= announcement.end_time
 
     async def _sent_data_for_group(self, group_id: str) -> Dict:
