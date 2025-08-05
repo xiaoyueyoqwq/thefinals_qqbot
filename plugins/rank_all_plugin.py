@@ -74,8 +74,9 @@ class RankAllPlugin(Plugin):
                 # 如果没有参数，则使用绑定的ID
                 bound_id = self.bind_manager.get_game_id(handler.user_id)
                 if not bound_id:
-                    await self.reply(handler, self._get_help_message())
+                    await self.reply(handler, self._messages["not_found"])
                     return
+                player_name = bound_id
             
             # 验证ID格式
             if not self._validate_embark_id(player_name):
