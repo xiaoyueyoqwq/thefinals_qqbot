@@ -49,9 +49,6 @@ class RankPlugin(Plugin):
             
             if error_msg:
                 bot_logger.error(f"[{self.name}] 查询失败: {error_msg}")
-                # 检查是否为“未找到玩家”的特定错误
-                if "未找到玩家数据" in error_msg:
-                    error_msg += "\n\n💡 **小贴士**：\n- 检查玩家ID是否正确\n- 尝试绑定ID `/bind 你的ID`\n- 确保ID格式为 `名字#1234`"
                 await self.reply(handler, error_msg)
                 return
                 
