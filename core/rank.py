@@ -227,10 +227,10 @@ class RankQuery:
     def _get_rank_trend(self, rank_change: int) -> Tuple[str, str]:
         """获取排名趋势和颜色"""
         if rank_change < 0:
-            return "↑", "text-green-500", # 排名数字变小，表示上升
+            return "↑", "text-green-500" # 排名数字变小，表示上升
         elif rank_change > 0:
-            return "↓", "text-red-500", # 排名数字变大，表示下降
-        return "", "text-gray-500", ""
+            return "↓", "text-red-500" # 排名数字变大，表示下降
+        return "", "text-gray-500"
 
     def prepare_template_data(self, player_data: dict, season: str) -> Optional[Dict]:
         """准备模板数据"""
