@@ -1,19 +1,13 @@
 import os
 import asyncio
 from typing import Optional, Tuple, Dict, List
-from pathlib import Path
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
-from utils.message_api import FileType, MessageAPI
 from utils.config import settings
 from core.season import SeasonManager, SeasonConfig
-from datetime import datetime, timedelta
 from utils.templates import SEPARATOR
 from core.image_generator import ImageGenerator
-import uuid
-import orjson as json
-from utils.image_manager import ImageManager
-from typing import Dict, Any, Optional
+
 
 class RankAPI(BaseAPI):
     """排位系统API封装"""
