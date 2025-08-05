@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 import dateutil.parser
+import pytz
 from typing import List, Dict, Optional
 
 from utils.json_utils import load_json, save_json
@@ -34,10 +35,15 @@ class AnnouncementManager:
         if not announcements_config:
             return
             
+        gtc_plus_8 = pytz.timezone('Asia/Shanghai')
+
         for ann_data in announcements_config:
             try:
-                start_time = dateutil.parser.isoparse(ann_data["start_time"])
-                end_time = dateutil.parser.isoparse(ann_data["end_time"])
+                start_time_naive = dateutil.parser.isoparse(ann_data["start_time"])
+                end_time_naive = dateutil.parser.isoparse(ann_data["end_time"])
+
+                start_time = gtc_plus_8.localize(start_time_naive)
+                end_time = gtc_plus_8.localize(end_time_naive)
                 
                 self._announcements.append(Announcement(
                     id=ann_data["id"],
@@ -57,9 +63,21 @@ class AnnouncementManager:
         bot_logger.info("公告管理器初始化完成，已加载已发送公告历史。")
 
     def _is_active(self, announcement: Announcement) -> bool:
-        """检查公告当前是否处于活动时间。"""
-        now = datetime.now()
-        return announcement.start_time <= now <= announcement.end_time
+        """检查公告当前是否处于活动时间（强制GTC+8）。"""
+        gtc_plus_8 = pytz.timezone('Asia/Shanghai')
+        now_utc = datetime.utcnow()
+        now_gtc8 = pytz.utc.localize(now_utc).astimezone(gtc_plus_8)
+        
+        is_active = announcement.start_time <= now_gtc8 <= announcement.end_time
+        
+        bot_logger.debug(
+            f"[公告状态检查] ID: {announcement.id}\n"
+            f"  - 当前GTC+8时间: {now_gtc8.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
+            f"  - 公告开始时间:   {announcement.start_time.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
+            f"  - 公告结束时间:   {announcement.end_time.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
+            f"  - 是否生效:       {'是' if is_active else '否'}"
+        )
+        return is_active
 
     async def _sent_data_for_group(self, group_id: str) -> Dict:
         """安全地获取单个群组的今日已发送公告数据"""
