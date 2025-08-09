@@ -252,6 +252,26 @@ class RankQuery:
             
             # 获取排名趋势
             rank_change = player_data.get("change", 0)
+            
+            # 如果API没有提供change字段，尝试从其他可能的字段获取
+            if rank_change == 0:
+                # 检查其他可能的字段名
+                rank_change = player_data.get("rankChange", 0)
+                if rank_change == 0:
+                    rank_change = player_data.get("rank_change", 0)
+                if rank_change == 0:
+                    rank_change = player_data.get("changeFromPrevious", 0)
+            
+            # 添加调试日志来查看API数据结构  
+            # 只在DEBUG模式下输出详细信息
+            if rank_change == 0:
+                available_fields = list(player_data.keys())
+                bot_logger.debug(f"[RankQuery] 玩家 {player_data.get('name', 'Unknown')} API数据字段: {available_fields}")
+                # 查找可能包含排名变化的字段
+                change_related_fields = [k for k in available_fields if 'change' in k.lower() or 'prev' in k.lower() or 'trend' in k.lower()]
+                if change_related_fields:
+                    bot_logger.debug(f"[RankQuery] 可能的排名变化字段: {change_related_fields}")
+            
             rank_trend, rank_color = self._get_rank_trend(rank_change)
             
             # 获取赛季背景

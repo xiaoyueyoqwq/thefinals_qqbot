@@ -85,8 +85,10 @@ class StatsData(BaseModel):
     record_date: date
     rank_500_score: Optional[int]
     rank_10000_score: Optional[int]
+    diamond_bottom_score: Optional[int]
     daily_change_500: Optional[int]
     daily_change_10000: Optional[int]
+    daily_change_diamond_bottom: Optional[int]
     
     class Config:
         json_encoders = {
@@ -129,12 +131,13 @@ class DFAPIPlugin(Plugin):
     @api_route("/api/df/current", methods=["GET"], 
                response_model=CurrentScoreResponse,
                summary="获取当前底分数据",
-               description="""获取最新的排行榜底分数据，包括500名和10000名的分数。
+               description="""获取最新的排行榜底分数据，包括500名、10000名和钻石段位最后一位的分数。
 
 返回说明:
-1. 正常情况: 返回包含500名和10000名的数据列表
+1. 正常情况: 返回包含500名、10000名和钻石段位底部的数据列表
 2. 空数据情况: 当数据库中没有数据时,返回空列表 data=[]
 3. 错误情况: 返回500错误,并说明具体原因
+4. 钻石段位数据: rank=-1表示钻石段位最后一位
 
 示例响应:
 ```json
@@ -150,6 +153,12 @@ class DFAPIPlugin(Plugin):
             "rank": 10000,
             "player_id": "player456",
             "score": 1000,
+            "update_time": "2024-02-18T14:30:00"
+        },
+        {
+            "rank": -1,
+            "player_id": "diamond_player",
+            "score": 1800,
             "update_time": "2024-02-18T14:30:00"
         }
     ],
@@ -181,6 +190,7 @@ class DFAPIPlugin(Plugin):
             
             # 转换为响应格式
             score_data = []
+            # 处理固定排名数据
             for rank in [500, 10000]:
                 if str(rank) in scores:
                     data = scores[str(rank)]
@@ -190,6 +200,17 @@ class DFAPIPlugin(Plugin):
                         score=data["score"],
                         update_time=data["update_time"]
                     ))
+            
+            # 处理钻石段位数据
+            if "diamond_bottom" in scores:
+                data = scores["diamond_bottom"]
+                # 使用特殊的rank值-1来表示钻石段位底部
+                score_data.append(ScoreData(
+                    rank=-1,  # 特殊标记，表示钻石段位底部
+                    player_id=data["player_id"],
+                    score=data["score"],
+                    update_time=data["update_time"]
+                ))
             
             return CurrentScoreResponse(
                 data=score_data,
@@ -302,8 +323,10 @@ class DFAPIPlugin(Plugin):
 数据说明:
 - rank_500_score: 500名的分数
 - rank_10000_score: 10000名的分数
+- diamond_bottom_score: 钻石段位最后一位的分数
 - daily_change_500: 500名的分数日变化(可能为null)
 - daily_change_10000: 10000名的分数日变化(可能为null)
+- daily_change_diamond_bottom: 钻石段位最后一位分数日变化(可能为null)
 
 示例响应:
 ```json
@@ -313,8 +336,10 @@ class DFAPIPlugin(Plugin):
             "record_date": "2025-02-18",
             "rank_500_score": 1500,
             "rank_10000_score": 1000,
+            "diamond_bottom_score": 1800,
             "daily_change_500": 50,
-            "daily_change_10000": 30
+            "daily_change_10000": 30,
+            "daily_change_diamond_bottom": 20
         }
     ],
     "latest_update": "2025-02-18T14:30:00"
