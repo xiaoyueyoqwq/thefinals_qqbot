@@ -141,7 +141,6 @@ class DFQuery:
                         diamond_bottom_rank = rank
                         diamond_bottom_data = {
                             "player_id": player_data.get('name'),
-                            "score": player_data.get('rankScore'),
                             "update_time": datetime.now().isoformat(),
                             "league": league,
                             "rank": rank
@@ -154,7 +153,7 @@ class DFQuery:
             # 添加钻石段位数据到缓存
             if diamond_bottom_data:
                 scores_to_cache["diamond_bottom"] = diamond_bottom_data
-                bot_logger.info(f"[DFQuery] 找到钻石段位最后一位: 排名 {diamond_bottom_rank}, {diamond_bottom_data['league']}, 玩家 {diamond_bottom_data['player_id']}, 分数 {diamond_bottom_data['score']}")
+                bot_logger.info(f"[DFQuery] 找到钻石段位最后一位: 排名 {diamond_bottom_rank}, {diamond_bottom_data['league']}, 玩家 {diamond_bottom_data['player_id']}")
             
             if not scores_to_cache:
                 bot_logger.warning("[DFQuery] 未找到目标排名 (500, 10000, diamond_bottom) 的数据。")
@@ -249,25 +248,25 @@ class DFQuery:
             # 计算分数和变化
             rank_500_score = current_data.get(500, {}).get("score")
             rank_10000_score = current_data.get(10000, {}).get("score")
-            diamond_bottom_score = current_data.get("diamond_bottom", {}).get("score")
+            diamond_bottom_rank = current_data.get("diamond_bottom", {}).get("rank")
             
             prev_500_score = previous_data.get(500, {}).get("score")
             prev_10000_score = previous_data.get(10000, {}).get("score")
-            prev_diamond_bottom_score = previous_data.get("diamond_bottom", {}).get("score")
+            prev_diamond_bottom_rank = previous_data.get("diamond_bottom", {}).get("rank")
 
             daily_change_500 = rank_500_score - prev_500_score if rank_500_score is not None and prev_500_score is not None else None
             daily_change_10000 = rank_10000_score - prev_10000_score if rank_10000_score is not None and prev_10000_score is not None else None
-            daily_change_diamond_bottom = diamond_bottom_score - prev_diamond_bottom_score if diamond_bottom_score is not None and prev_diamond_bottom_score is not None else None
+            daily_change_diamond_rank = prev_diamond_bottom_rank - diamond_bottom_rank if diamond_bottom_rank is not None and prev_diamond_bottom_rank is not None else None
 
-            if rank_500_score is not None or rank_10000_score is not None or diamond_bottom_score is not None:
+            if rank_500_score is not None or rank_10000_score is not None or diamond_bottom_rank is not None:
                 stats.append({
                     "record_date": current_date,
                     "rank_500_score": rank_500_score,
                     "rank_10000_score": rank_10000_score,
-                    "diamond_bottom_score": diamond_bottom_score,
+                    "diamond_bottom_rank": diamond_bottom_rank,
                     "daily_change_500": daily_change_500,
                     "daily_change_10000": daily_change_10000,
-                    "daily_change_diamond_bottom": daily_change_diamond_bottom,
+                    "daily_change_diamond_rank": daily_change_diamond_rank,
                 })
         
         return stats
@@ -335,30 +334,31 @@ class DFQuery:
             result = data["diamond_bottom"]
             # 获取排名信息
             rank_info = result.get('rank', '未知')
-            rank_display = f"（第{rank_info:,}名）" if rank_info != '未知' else ""
+            rank_display = f"第{rank_info:,}名" if rank_info != '未知' else "未知"
             
             message.extend([
-                f"▎💎 上钻底分{rank_display}",
+                "▎💎 上钻底分",
                 f"▎👤 玩家 ID: {result.get('player_id', 'N/A')}",
-                f"▎💯 当前分数: {result.get('score', 0):,}"
+                f"▎💯 当前排名: {rank_display}"
             ])
             
-            # 直接从昨日数据中获取diamond_bottom数据
+            # 直接从昨日数据中获取diamond_bottom排名数据
             yesterday_diamond_data = yesterday_data.get("diamond_bottom")
             if yesterday_diamond_data:
-                yesterday_score = yesterday_diamond_data.get('score', 0)
-                change = result.get('score', 0) - yesterday_score
+                yesterday_rank = yesterday_diamond_data.get('rank', 0)
+                current_rank = result.get('rank', 0)
+                rank_change = yesterday_rank - current_rank  # 排名数字变小是上升
                 
-                if change > 0:
-                    change_text, change_icon = f"+{change:,}", "📈"
-                elif change < 0:
-                    change_text, change_icon = f"{change:,}", "📉"
+                if rank_change > 0:
+                    change_text, change_icon = f"↑{rank_change:,}", "📈"
+                elif rank_change < 0:
+                    change_text, change_icon = f"↓{abs(rank_change):,}", "📉"
                 else:
                     change_text, change_icon = "±0", "➖"
                     
                 message.extend([
-                    f"▎📅 昨日分数: {yesterday_score:,}",
-                    f"▎{change_icon} 分数变化: {change_text}"
+                    f"▎📅 昨日排名: 第{yesterday_rank:,}名",
+                    f"▎{change_icon} 排名变化: {change_text}"
                 ])
             else:
                 message.append("▎📅 昨日数据: 暂无")
