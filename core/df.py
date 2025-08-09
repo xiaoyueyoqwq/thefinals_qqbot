@@ -143,7 +143,8 @@ class DFQuery:
                             "player_id": player_data.get('name'),
                             "score": player_data.get('rankScore'),
                             "update_time": datetime.now().isoformat(),
-                            "league": league
+                            "league": league,
+                            "rank": rank
                         }
                 
                 # 如果找到所有固定排名且已经超出钻石段位范围，可以提前退出
@@ -332,8 +333,12 @@ class DFQuery:
         # 处理钻石段位数据
         if "diamond_bottom" in data:
             result = data["diamond_bottom"]
+            # 获取排名信息
+            rank_info = result.get('rank', '未知')
+            rank_display = f"（第{rank_info:,}名）" if rank_info != '未知' else ""
+            
             message.extend([
-                "▎💎 上钻底分",
+                f"▎💎 上钻底分{rank_display}",
                 f"▎👤 玩家 ID: {result.get('player_id', 'N/A')}",
                 f"▎💯 当前分数: {result.get('score', 0):,}"
             ])
