@@ -169,9 +169,17 @@ async def get_image(image_id: str, request: Request):
             raise HTTPException(status_code=413, detail="Image too large")
             
         # 检查文件类型
-        import imghdr
-        if imghdr.what(image_path) not in ['png', 'jpeg', 'gif']:
-            raise HTTPException(status_code=400, detail="Invalid image type")
+        from PIL import Image
+        try:
+            with Image.open(image_path) as img:
+                # 获取图片格式并转换为小写，与原来的检查逻辑保持一致
+                img_format = img.format.lower() if img.format else None
+                if img_format not in ['png', 'jpeg', 'gif']:
+                    raise HTTPException(status_code=400, detail="Invalid image type")
+        except Exception as img_error:
+            # 如果PIL无法打开文件，说明不是有效的图片文件
+            if not isinstance(img_error, HTTPException):
+                raise HTTPException(status_code=400, detail="Invalid image file")
             
     except HTTPException:
         raise
