@@ -15,11 +15,11 @@
   }
   .poster {
     position: relative;
-    width: 768px;
+    width: 680px; /* Changed from 768px */
     margin: 0 auto;
     background: #000;
     box-shadow: 0 0 0 1px #000 inset;
-    padding: 56px 60px 40px;
+    padding: 56px 50px 40px; /* Changed from 56px 60px 40px */
   }
   .title-header {
     text-align: center;
@@ -85,14 +85,14 @@
   }
   .row {
     display: grid;
-    grid-template-columns: 180px 1fr;
+    grid-template-columns: 160px 1fr; /* Changed from 180px */
     align-items: center;
     column-gap: 36px;
   }
   .row + .row { margin-top: 26px; }
   .badge {
-    width: 160px;
-    height: 160px;
+    width: 140px; /* Changed from 160px */
+    height: 140px; /* Changed from 160px */
     object-fit: contain;
     filter: drop-shadow(0 10px 10px rgba(0,0,0,.6));
   }
@@ -105,14 +105,14 @@
     display: flex;
     align-items: baseline;
     gap: 14px;
-    font-size: 32px;
+    font-size: 30px; /* Changed from 32px */
     font-weight: 800;
     letter-spacing: 1px;
   }
   .meta .label .sub {
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 800;
-    font-size: 26px;
+    font-size: 24px; /* Changed from 26px */
     opacity: .9;
   }
   .big {
@@ -124,16 +124,16 @@
   .big .num {
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 900;
-    font-size: 96px;
+    font-size: 80px; /* Changed from 96px */
     letter-spacing: 1px;
   }
   .big .unit {
-    font-size: 40px;
+    font-size: 34px; /* Changed from 40px */
     font-weight: 800;
     opacity: .95;
   }
   .big .th {
-    font-size: 44px;
+    font-size: 38px; /* Changed from 44px */
     font-weight: 800;
     transform: translateY(-8px);
     opacity: .95;
@@ -159,11 +159,11 @@
   .delta .val {
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 800;
-    font-size: 28px;
+    font-size: 26px; /* Changed from 28px */
     opacity: .95;
   }
   .footnote {
-    font-size: 18px;
+    font-size: 16px; /* Changed from 18px */
     opacity: .85;
     margin-top: 4px;
   }
@@ -171,7 +171,7 @@
     margin-top: 44px;
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 900;
-    font-size: 22px;
+    font-size: 20px; /* Changed from 22px */
     letter-spacing: .5px;
     text-align: center;
     opacity: .95;
@@ -258,7 +258,7 @@
       </div>
     </section>
     <div class="signature">
-        {{ safe_score_line }}
+        {{ safe_score_line }} | Design: Kuroko#0157
     </div>
   </main>
 </body>
