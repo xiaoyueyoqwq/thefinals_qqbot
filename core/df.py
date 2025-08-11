@@ -309,7 +309,7 @@ class DFQuery:
             image_data = await self.image_generator.generate_image(
                 template_data=template_data,
                 html_content="the_finals_cutoff.html",
-                wait_selectors=['.poster']
+                clip_selector=".poster" # 只截取海报主体部分
             )
             bot_logger.info("[DFQuery] 成功生成底分图片。")
             return image_data
