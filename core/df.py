@@ -5,6 +5,8 @@ from utils.logger import bot_logger
 from typing import Dict, Any, List, Optional
 from utils.config import settings
 from core.season import SeasonManager
+from core.image_generator import ImageGenerator
+import os
 
 from pathlib import Path
 from utils.json_utils import load_json, save_json
@@ -34,6 +36,12 @@ class DFQuery:
         self._update_task = None
         self._daily_save_task = None
         self._is_updating = False
+
+        # 初始化图片生成器
+        self.resources_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
+        self.template_dir = os.path.join(self.resources_dir, "templates")
+        self.image_generator = ImageGenerator(self.template_dir)
+        self.html_template_path = os.path.join(self.template_dir, "the_finals_cutoff.html")
 
     async def start(self):
         """启动DFQuery，初始化更新任务和每日保存任务"""
@@ -215,6 +223,100 @@ class DFQuery:
         )
         bot_logger.info(f"[DFQuery] 已成功保存 {today_str} 的排行榜历史数据到 Redis 和 JSON 文件。")
 
+    def _get_change_trend(self, change: Optional[float], is_rank: bool = False) -> Dict[str, Any]:
+        """根据变化值获取趋势、颜色和文本. is_rank为True表示排名变化（数字越小越好）"""
+        if change is None:
+            return { "show_arrow": False, "direction_class": "", "color": "text-gray-500", "text": "" }
+        
+        if change == 0:
+            return { "show_arrow": False, "direction_class": "", "color": "text-gray-500", "text": "±0" }
+
+        # 对于分数，change > 0 是上升
+        # 对于排名，(昨日 - 今日) > 0 是上升
+        # 此逻辑中，所有 change > 0 都代表“向好”的变化
+        if change > 0: # 上升
+            direction_class = "" # 默认方向是向上
+            color = "text-green-500"
+            text = f"+{change:,}" if not is_rank else f"{change:,}"
+        else: # 下降
+            direction_class = "down" # 需要旋转
+            color = "text-red-500"
+            text = f"{abs(change):,}" if is_rank else f"{change:,}"
+
+        return {
+            "show_arrow": True,
+            "direction_class": direction_class,
+            "color": color,
+            "text": text,
+        }
+
+    def _prepare_cutoff_template_data(self, data: Dict[str, Any], yesterday_data: Dict[str, Any], safe_score_line: str) -> Dict[str, Any]:
+        """为 'the_finals_cutoff.html' 准备模板数据"""
+        
+        def format_num(n):
+            return f"{n:,}" if isinstance(n, (int, float)) else ""
+
+        # 处理 Top 500 (红宝石)
+        ruby_data = data.get("500", {})
+        ruby_score = ruby_data.get("score")
+        yesterday_ruby_score = yesterday_data.get(500, {}).get("score")
+        ruby_change = ruby_score - yesterday_ruby_score if ruby_score is not None and yesterday_ruby_score is not None else None
+        
+        # 处理 Top 10000 (入榜)
+        cutoff_data = data.get("10000", {})
+        cutoff_score = cutoff_data.get("score")
+        yesterday_cutoff_score = yesterday_data.get(10000, {}).get("score")
+        cutoff_change = cutoff_score - yesterday_cutoff_score if cutoff_score is not None and yesterday_cutoff_score is not None else None
+
+        # 处理 Diamond Bottom (钻石)
+        diamond_data = data.get("diamond_bottom", {})
+        diamond_rank = diamond_data.get("rank")
+        yesterday_diamond_rank = yesterday_data.get("diamond_bottom", {}).get("rank")
+        # 排名变化：昨日排名 - 今日排名 (正数表示排名上升)
+        diamond_rank_change = yesterday_diamond_rank - diamond_rank if isinstance(diamond_rank, int) and isinstance(yesterday_diamond_rank, int) else None
+
+        template_data = {
+            "ruby_score": format_num(ruby_score),
+            "ruby_player": ruby_data.get("player_id", ""),
+            "ruby_change": self._get_change_trend(ruby_change, is_rank=False),
+
+            "cutoff_score": format_num(cutoff_score),
+            "cutoff_player": cutoff_data.get("player_id", ""),
+            "cutoff_change": self._get_change_trend(cutoff_change, is_rank=False),
+            
+            "diamond_rank": format_num(diamond_rank),
+            "diamond_player": diamond_data.get("player_id", ""),
+            "diamond_change": self._get_change_trend(diamond_rank_change, is_rank=True),
+
+            "update_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "safe_score_line": safe_score_line
+        }
+        return template_data
+        
+    async def generate_cutoff_image(self, safe_score_line: str) -> Optional[bytes]:
+        """生成底分查询结果图片"""
+        live_data = await self.get_bottom_scores()
+        if not live_data:
+            bot_logger.warning("[DFQuery] 无法生成图片，因为没有实时数据。")
+            return None
+        
+        yesterday = (datetime.now() - timedelta(days=1)).date()
+        yesterday_data = self._get_daily_data_for_stats(yesterday)
+
+        template_data = self._prepare_cutoff_template_data(live_data, yesterday_data, safe_score_line)
+
+        try:
+            image_data = await self.image_generator.generate_image(
+                template_data=template_data,
+                html_content="the_finals_cutoff.html",
+                wait_selectors=['.poster']
+            )
+            bot_logger.info("[DFQuery] 成功生成底分图片。")
+            return image_data
+        except Exception as e:
+            bot_logger.error(f"[DFQuery] 生成底分图片失败: {e}", exc_info=True)
+            return None
+
     async def get_historical_data(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
         """从内存中的历史数据筛选指定日期范围的数据"""
         results = []
@@ -302,28 +404,33 @@ class DFQuery:
             if rank_str in data:
                 result = data[rank_str]
                 rank = int(rank_str)
+                score = result.get('score')
                 message.extend([
                     f"▎🏆 第 {rank:,} 名",
                     f"▎👤 玩家 ID: {result.get('player_id', 'N/A')}",
-                    f"▎💯 当前分数: {result.get('score', 0):,}"
+                    f"▎💯 当前分数: {score:,}" if score is not None else "▎💯 当前分数: 暂无"
                 ])
                 
                 yesterday_rank_data = yesterday_data.get(rank)
                 if yesterday_rank_data:
-                    yesterday_score = yesterday_rank_data.get('score', 0)
-                    change = result.get('score', 0) - yesterday_score
-                    
-                    if change > 0:
-                        change_text, change_icon = f"+{change:,}", "📈"
-                    elif change < 0:
-                        change_text, change_icon = f"{change:,}", "📉"
-                    else:
-                        change_text, change_icon = "±0", "➖"
+                    yesterday_score = yesterday_rank_data.get('score')
+                    if score is not None and yesterday_score is not None:
+                        change = score - yesterday_score
+                        if change > 0:
+                            change_text, change_icon = f"+{change:,}", "📈"
+                        elif change < 0:
+                            change_text, change_icon = f"{change:,}", "📉"
+                        else:
+                            change_text, change_icon = "±0", "➖"
                         
-                    message.extend([
-                        f"▎📅 昨日分数: {yesterday_score:,}",
-                        f"▎{change_icon} 分数变化: {change_text}"
-                    ])
+                        message.extend([
+                            f"▎📅 昨日分数: {yesterday_score:,}",
+                            f"▎{change_icon} 分数变化: {change_text}"
+                        ])
+                    else:
+                        message.append(f"▎📅 昨日分数: {yesterday_score:,}" if yesterday_score is not None else "▎📅 昨日数据: 暂无")
+                        message.append("▎📊 分数变化: 暂无")
+
                 else:
                     message.append("▎📅 昨日数据: 暂无")
                 
@@ -333,8 +440,8 @@ class DFQuery:
         if "diamond_bottom" in data:
             result = data["diamond_bottom"]
             # 获取排名信息
-            rank_info = result.get('rank', '未知')
-            rank_display = f"第{rank_info:,}名" if rank_info != '未知' else "未知"
+            current_rank = result.get('rank')
+            rank_display = f"第{current_rank:,}名" if isinstance(current_rank, int) else "暂无"
             
             message.extend([
                 "▎💎 上钻底分",
@@ -345,21 +452,26 @@ class DFQuery:
             # 直接从昨日数据中获取diamond_bottom排名数据
             yesterday_diamond_data = yesterday_data.get("diamond_bottom")
             if yesterday_diamond_data:
-                yesterday_rank = yesterday_diamond_data.get('rank', 0)
-                current_rank = result.get('rank', 0)
-                rank_change = yesterday_rank - current_rank  # 排名数字变小是上升
-                
-                if rank_change > 0:
-                    change_text, change_icon = f"↑{rank_change:,}", "📈"
-                elif rank_change < 0:
-                    change_text, change_icon = f"↓{abs(rank_change):,}", "📉"
-                else:
-                    change_text, change_icon = "±0", "➖"
+                yesterday_rank = yesterday_diamond_data.get('rank')
+                # 安全地进行比较和计算
+                if isinstance(current_rank, int) and isinstance(yesterday_rank, int):
+                    rank_change = yesterday_rank - current_rank  # 排名数字变小是上升
                     
-                message.extend([
-                    f"▎📅 昨日排名: 第{yesterday_rank:,}名",
-                    f"▎{change_icon} 排名变化: {change_text}"
-                ])
+                    if rank_change > 0:
+                        change_text, change_icon = f"↑{rank_change:,}", "📈"
+                    elif rank_change < 0:
+                        change_text, change_icon = f"↓{abs(rank_change):,}", "📉"
+                    else:
+                        change_text, change_icon = "±0", "➖"
+                    
+                    message.extend([
+                        f"▎📅 昨日排名: 第{yesterday_rank:,}名",
+                        f"▎{change_icon} 排名变化: {change_text}"
+                    ])
+                else:
+                    # 如果任一排名数据无效，则显示暂无
+                    message.append(f"▎📅 昨日排名: 第{yesterday_rank:,}名" if isinstance(yesterday_rank, int) else "▎📅 昨日数据: 暂无")
+                    message.append("▎📊 排名变化: 暂无")
             else:
                 message.append("▎📅 昨日数据: 暂无")
             

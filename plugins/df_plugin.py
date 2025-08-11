@@ -33,17 +33,6 @@ class DFPlugin(Plugin):
     async def handle_df(self, handler: MessageHandler, content: str) -> None:
         """处理底分查询命令"""
         try:
-            # 获取数据
-            data = await self.df_query.get_bottom_scores()
-
-            if not data:
-                bot_logger.warning(f"[{self.name}] 未能从 DFQuery 获取到底分数据。")
-                await handler.send_text("获取底分数据失败，请稍后再试。")
-                return
-
-            # 从 core/df.py 获取格式化消息
-            base_response = await self.df_query.format_score_message(data)
-
             # 从 SafeScoreManagerPlugin 获取安全分
             safe_score, safe_score_last_update = None, None
             safe_score_plugin = self._plugin_manager.plugins.get("SafeScoreManagerPlugin")
@@ -51,22 +40,21 @@ class DFPlugin(Plugin):
                 safe_score, safe_score_last_update = safe_score_plugin.get_safe_score()
 
             # 构建安全分消息
-            safe_score_line = "🛡️当前安全分: 暂未设置"
+            safe_score_line = "当前安全分: 暂未设置"
             if safe_score is not None:
-                safe_score_line = f"🛡️当前安全分: {safe_score:,}"
+                safe_score_line = f"当前安全分: {safe_score:,}"
                 if safe_score_last_update:
                     last_update_str = datetime.fromtimestamp(safe_score_last_update).strftime('%Y-%m-%d %H:%M:%S')
                     safe_score_line += f" (更新于: {last_update_str})"
 
-            # 分割基础消息，以便插入安全分
-            lines = base_response.strip().split('\n')
-            
-            # 将安全分信息插入到标题和更新时间之后
-            final_lines = lines[:2] + [safe_score_line] + lines[2:]
-            
-            final_response = "\n".join(final_lines)
+            # 生成图片
+            image_bytes = await self.df_query.generate_cutoff_image(safe_score_line)
 
-            await handler.send_text(final_response)
+            if image_bytes:
+                if not await handler.send_image(image_bytes):
+                    await handler.send_text("\n⚠️ 发送图片时发生错误")
+            else:
+                await handler.send_text("获取底分数据失败或图片生成失败，请稍后再试。")
 
         except Exception as e:
             error_msg = f"查询失败: {e}"

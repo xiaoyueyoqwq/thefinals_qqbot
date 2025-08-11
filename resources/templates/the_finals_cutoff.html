@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THE FINALS | CUTOFF - 复刻</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://proxy.sdjz.wiki/https:/fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  html,body,div,span,h1,h2,h3,h4,h5,h6,p,img,ul,li { margin:0; padding:0; border:0; }
+  body {
+    background: #111;
+    color: #fff;
+    font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  }
+  .poster {
+    position: relative;
+    width: 768px;
+    margin: 0 auto;
+    background: #000;
+    box-shadow: 0 0 0 1px #000 inset;
+    padding: 56px 60px 40px;
+  }
+  .title-header {
+    text-align: center;
+    margin-bottom: 52px;
+  }
+  .title-image {
+    max-width: 100%;
+    height: auto;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    margin-bottom: 52px;
+  }
+  .brand .text-a {
+    font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    font-size: 56px;
+    letter-spacing: 2px;
+  }
+  .brand .apex {
+    width: 68px;
+    height: 36px;
+    position: relative;
+    display: inline-block;
+  }
+  .brand .apex::before,
+  .brand .apex::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-left: 34px solid transparent;
+    border-right: 34px solid transparent;
+  }
+  .brand .apex::before {
+    border-bottom: 36px solid #f1f1f1;
+    filter: drop-shadow(0 2px 0 rgba(0,0,0,.3));
+  }
+  .brand .apex::after {
+    border-bottom: 22px solid #000;
+    left: 0;
+    transform: translateY(5px);
+  }
+  .brand .divider {
+    height: 48px;
+    width: 4px;
+    background: #dcdcdc;
+    margin: 0 6px 0 4px;
+  }
+  .brand .text-b {
+    font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    font-size: 56px;
+    letter-spacing: 2px;
+  }
+  .rule {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #404040, transparent);
+    margin: 30px 0 36px;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    align-items: center;
+    column-gap: 36px;
+  }
+  .row + .row { margin-top: 26px; }
+  .badge {
+    width: 160px;
+    height: 160px;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 10px rgba(0,0,0,.6));
+  }
+  .meta {
+    display: grid;
+    grid-template-rows: auto auto auto;
+    row-gap: 8px;
+  }
+  .meta .label {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  .meta .label .sub {
+    font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+    font-weight: 800;
+    font-size: 26px;
+    opacity: .9;
+  }
+  .big {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 14px;
+    margin: 6px 0;
+  }
+  .big .num {
+    font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    font-size: 96px;
+    letter-spacing: 1px;
+  }
+  .big .unit {
+    font-size: 40px;
+    font-weight: 800;
+    opacity: .95;
+  }
+  .big .th {
+    font-size: 44px;
+    font-weight: 800;
+    transform: translateY(-8px);
+    opacity: .95;
+  }
+  .delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 20px;
+    transform: translateY(-8px);
+  }
+  .delta .icon {
+    font-size: 28px;
+  }
+  .delta img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+  }
+  .delta img.down {
+    transform: rotate(180deg);
+  }
+  .delta .val {
+    font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+    font-weight: 800;
+    font-size: 28px;
+    opacity: .95;
+  }
+  .footnote {
+    font-size: 18px;
+    opacity: .85;
+    margin-top: 4px;
+  }
+  .signature {
+    margin-top: 44px;
+    font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: .5px;
+    text-align: center;
+    opacity: .95;
+  }
+  .block { margin: 10px 0 26px; }
+
+  .text-green-500 { color: #22c55e; }
+  .text-red-500 { color: #ef4444; }
+  .text-gray-500 { color: #6b7280; }
+
+</style>
+</head>
+<body>
+  <main class="poster" role="img" aria-label="THE FINALS CUTOFF 信息面板复刻">
+    <header class="title-header">
+      <img src="../images/TITLE.png" alt="THE FINALS CUTOFF" class="title-image">
+    </header>
+    <section class="row block">
+      <div>
+        <img class="badge" src="../images/rank_icons/ruby.png" alt="红宝石徽章">
+      </div>
+      <div class="meta">
+        <div class="label">
+          <span>红宝石准入分</span>
+          <span class="sub">Last Ruby</span>
+        </div>
+        <div class="big">
+          <span class="num">{{ ruby_score }}</span>
+          <span class="unit">pts</span>
+          <span class="delta">
+            {% if ruby_change.show_arrow %}
+            <img src="../images/JIANTOU.png" alt="变化趋势" class="{{ ruby_change.direction_class }}">
+            {% endif %}
+            <span class="val {{ ruby_change.color }}">{{ ruby_change.text }}</span>
+          </span>
+        </div>
+        <div class="footnote">Top 500 : {{ ruby_player }}</div>
+      </div>
+    </section>
+    <div class="rule"></div>
+    <section class="row block">
+      <div>
+        <img class="badge" src="../images/rank_icons/diamond-4.png" alt="钻石4徽章">
+      </div>
+      <div class="meta">
+        <div class="label">
+          <span>钻石准入排名</span>
+          <span class="sub">Last Diamond</span>
+        </div>
+        <div class="big">
+          <span class="num">{{ diamond_rank }}</span>
+          <span class="th">th</span>
+          <span class="delta">
+            {% if diamond_change.show_arrow %}
+            <img src="../images/JIANTOU.png" alt="变化趋势" class="{{ diamond_change.direction_class }}">
+            {% endif %}
+            <span class="val {{ diamond_change.color }}">{{ diamond_change.text }}</span>
+          </span>
+        </div>
+        <div class="footnote">Lastest Pro : {{ diamond_player }}</div>
+      </div>
+    </section>
+    <div class="rule"></div>
+    <section class="row block">
+      <div>
+        <img class="badge" src="../images/rank_icons/platinum-3.png" alt="白金3徽章">
+      </div>
+      <div class="meta">
+        <div class="label">
+          <span>入榜分</span>
+          <span class="sub">Cutoff Score</span>
+        </div>
+        <div class="big">
+          <span class="num">{{ cutoff_score }}</span>
+          <span class="unit">pts</span>
+          <span class="delta">
+            {% if cutoff_change.show_arrow %}
+            <img src="../images/JIANTOU.png" alt="变化趋势" class="{{ cutoff_change.direction_class }}">
+            {% endif %}
+            <span class="val {{ cutoff_change.color }}">{{ cutoff_change.text }}</span>
+          </span>
+        </div>
+        <div class="footnote">Top 10,000 : {{ cutoff_player }}</div>
+      </div>
+    </section>
+    <div class="signature">
+        {{ safe_score_line }}
+    </div>
+  </main>
+</body>
+</html>
