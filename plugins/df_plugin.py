@@ -43,9 +43,6 @@ class DFPlugin(Plugin):
             safe_score_line = "当前安全分: 暂未设置"
             if safe_score is not None:
                 safe_score_line = f"当前安全分: {safe_score:,}"
-                if safe_score_last_update:
-                    last_update_str = datetime.fromtimestamp(safe_score_last_update).strftime('%Y-%m-%d %H:%M:%S')
-                    safe_score_line += f" (更新于: {last_update_str})"
 
             # 生成图片
             image_bytes = await self.df_query.generate_cutoff_image(safe_score_line)
