@@ -36,7 +36,6 @@ class ImageGenerator:
                            template_data: dict, 
                            html_content: Optional[str] = None, # 这里的 html_content 实际上是模板文件名
                            wait_selectors: Optional[List[str]] = None,
-                           clip_selector: Optional[str] = None, # 新增，用于裁剪的选择器
                            image_quality: int = 85) -> Optional[bytes]:
         """从页面池获取页面，使用 Jinja2 渲染HTML并生成图片。"""
         page: Optional[Page] = None
@@ -72,24 +71,12 @@ class ImageGenerator:
                 except PlaywrightTimeoutError as e:
                     bot_logger.warning(f"等待选择器超时: {wait_selectors}, 错误: {e}")
 
-            screenshot_options = {
-                "type": "png", # 改为png以支持透明度
-                "omit_background": True, # 设置背景透明
-                "scale": 'device'
-            }
-
-            if clip_selector:
-                element = page.locator(clip_selector)
-                await element.wait_for(state="visible", timeout=1000)
-                screenshot_options["clip"] = await element.bounding_box()
-            else:
-                screenshot_options["full_page"] = True
-                screenshot_options["type"] = 'jpeg'
-                screenshot_options["quality"] = image_quality
-                del screenshot_options["omit_background"]
-
-            screenshot = await page.screenshot(**screenshot_options)
-            
+            screenshot = await page.screenshot(
+                full_page=True,
+                type='jpeg',
+                quality=image_quality,
+                scale='device'
+            )
             return screenshot
 
         except Exception as e:
