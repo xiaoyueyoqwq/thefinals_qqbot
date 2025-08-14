@@ -197,8 +197,9 @@ class DFQuery:
             record = data.copy()
             record['date'] = today_str
             if rank == "diamond_bottom":
-                # 对于diamond_bottom，保持特殊标记
-                record['rank'] = "diamond_bottom" 
+                # 对于diamond_bottom，保持特殊标记，同时将数字排名保存到新字段
+                record['numeric_rank'] = data.get('rank')
+                record['rank'] = "diamond_bottom"
             else:
                 record['rank'] = int(rank)
             self.historical_data.append(record)
@@ -271,7 +272,9 @@ class DFQuery:
         # 处理 Diamond Bottom (钻石)
         diamond_data = data.get("diamond_bottom", {})
         diamond_rank = diamond_data.get("rank")
-        yesterday_diamond_rank = yesterday_data.get("diamond_bottom", {}).get("rank")
+        yesterday_diamond_data = yesterday_data.get("diamond_bottom", {})
+        yesterday_diamond_rank = yesterday_diamond_data.get("numeric_rank") if yesterday_diamond_data else None
+        
         # 排名变化：昨日排名 - 今日排名 (正数表示排名上升)
         diamond_rank_change = yesterday_diamond_rank - diamond_rank if isinstance(diamond_rank, int) and isinstance(yesterday_diamond_rank, int) else None
 
