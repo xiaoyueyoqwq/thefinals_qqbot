@@ -234,15 +234,18 @@ class DFQuery:
 
         # 对于分数，change > 0 是上升
         # 对于排名，(昨日 - 今日) > 0 是上升
-        # 此逻辑中，所有 change > 0 都代表“向好”的变化
+        # 此逻辑中，所有 change > 0 都代表"向好"的变化
         if change > 0: # 上升
             direction_class = "" # 默认方向是向上
             color = "text-green-500"
-            text = f"+{change:,}" if not is_rank else f"{change:,}"
+            if is_rank:
+                text = f"{change:,}"  # 排名变化不显示+号
+            else:
+                text = f"+{change:,}"  # 分数变化显示+号
         else: # 下降
             direction_class = "down" # 需要旋转
             color = "text-red-500"
-            text = f"{abs(change):,}" if is_rank else f"{change:,}"
+            text = f"{change:,}"  # 负数已经自带-号
 
         return {
             "show_arrow": True,
