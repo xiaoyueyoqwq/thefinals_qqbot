@@ -257,8 +257,11 @@
         <div class="footnote">Top 10,000 : {{ cutoff_player }}</div>
       </div>
     </section>
+    {% if season_remaining_days is not none %}
     <div class="signature">
-        {{ safe_score_line }} | Design: Kuroko#0157
+      {{ safe_score_line }} | 赛季剩余 <span style="color:#ef4444;">{{ season_remaining_days }}</span> 天</span> | Design: Kuroko#0157
+    </div>
+    {% endif %}
     </div>
   </main>
 </body>

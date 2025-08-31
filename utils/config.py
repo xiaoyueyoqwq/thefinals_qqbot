@@ -64,6 +64,8 @@ class Settings:
     # 赛季配置
     CURRENT_SEASON = _config.get("season", {}).get("current", "s6")  # 当前赛季
     UPDATE_INTERVAL = _config.get("season", {}).get("update_interval", 90)  # 更新间隔(秒)
+    SEASON_END_TIMESTAMP = _config.get("season", {}).get("end_timestamp", None) # 赛季结束时间戳
+    END_TIME = _config.get("season", {}).get("end_time", None) # 赛季结束时间（字符串）
     
     # 翻译配置
     TRANSLATION_ENABLED = _config.get("translation", {}).get("enabled", True)  # 是否启用翻译
@@ -167,5 +169,19 @@ class Settings:
     def announcements(self) -> DotAccessibleDict:
         """返回公告配置"""
         return DotAccessibleDict(_config.get("announcements", {}))
+
+    def get(self, key, default=None):
+        """
+        Dynamically get a value from the _config dictionary using dot notation.
+        Example: settings.get("season.end_time")
+        """
+        keys = key.split('.')
+        value = _config
+        try:
+            for k in keys:
+                value = value[k]
+            return value
+        except (KeyError, TypeError):
+            return default
 
 settings = Settings()

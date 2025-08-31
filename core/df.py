@@ -155,7 +155,7 @@ class DFQuery:
                         }
                 
                 # 如果找到所有固定排名且已经超出钻石段位范围，可以提前退出
-                if len(scores_to_cache) == len(target_ranks) and diamond_bottom_data and rank > diamond_bottom_rank + 1000:
+                if len(scores_to_cache) == len(target_ranks) and diamond_bottom_data and diamond_bottom_rank and rank > diamond_bottom_rank + 1000:
                     break
             
             # 添加钻石段位数据到缓存
@@ -260,16 +260,40 @@ class DFQuery:
         def format_num(n):
             return f"{n:,}" if isinstance(n, (int, float)) else ""
 
+        # 计算赛季剩余天数
+        season_end_timestamp = settings.get("season.end_timestamp")
+        remaining_days = None
+        if season_end_timestamp:
+            try:
+                end_date = datetime.fromtimestamp(int(season_end_timestamp))
+                remaining_time = end_date - datetime.now()
+                if remaining_time.days >= 0:
+                    remaining_days = remaining_time.days
+            except (ValueError, TypeError):
+                bot_logger.warning(f"[DFQuery] 无效的赛季结束时间戳配置: {season_end_timestamp}")
+
+        # 计算赛季剩余天数（支持字符串时间格式）
+        season_end_time_str = settings.get("season.end_time")
+        remaining_days = None
+        if season_end_time_str:
+            try:
+                end_date = datetime.strptime(season_end_time_str, "%Y-%m-%d %H:%M:%S")
+                remaining_time = end_date - datetime.now()
+                if remaining_time.days >= 0:
+                    remaining_days = remaining_time.days
+            except Exception:
+                bot_logger.warning(f"[DFQuery] 无效的赛季结束时间配置: {season_end_time_str}")
+
         # 处理 Top 500 (红宝石)
         ruby_data = data.get("500", {})
         ruby_score = ruby_data.get("score")
-        yesterday_ruby_score = yesterday_data.get(500, {}).get("score")
+        yesterday_ruby_score = yesterday_data.get("500", {}).get("score")
         ruby_change = ruby_score - yesterday_ruby_score if ruby_score is not None and yesterday_ruby_score is not None else None
         
         # 处理 Top 10000 (入榜)
         cutoff_data = data.get("10000", {})
         cutoff_score = cutoff_data.get("score")
-        yesterday_cutoff_score = yesterday_data.get(10000, {}).get("score")
+        yesterday_cutoff_score = yesterday_data.get("10000", {}).get("score")
         cutoff_change = cutoff_score - yesterday_cutoff_score if cutoff_score is not None and yesterday_cutoff_score is not None else None
 
         # 处理 Diamond Bottom (钻石)
@@ -295,7 +319,8 @@ class DFQuery:
             "diamond_change": self._get_change_trend(diamond_rank_change, is_rank=True),
 
             "update_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "safe_score_line": safe_score_line
+            "safe_score_line": safe_score_line,
+            "season_remaining_days": remaining_days
         }
         return template_data
         
@@ -383,11 +408,18 @@ class DFQuery:
         """辅助方法，从内存历史数据中获取某天的数据"""
         daily_data = {}
         for record in self.historical_data:
-            record_date = datetime.fromisoformat(record['date']).date()
-            if record_date == target_date:
-                # 处理不同类型的rank键（数字或字符串）
-                rank_key = record['rank']
-                daily_data[rank_key] = record
+            record_date_str = record.get('date')
+            if not record_date_str:
+                continue
+            try:
+                record_date = datetime.fromisoformat(record_date_str).date()
+                if record_date == target_date:
+                    # 处理不同类型的rank键（数字或字符串）
+                    rank_key = record['rank']
+                    daily_data[str(rank_key)] = record
+            except (ValueError, KeyError):
+                bot_logger.warning(f"Skipping invalid date format in historical data: {record_date_str}")
+                continue
         return daily_data
 
     async def format_score_message(self, data: Dict[str, Any]) -> str:
