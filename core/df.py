@@ -225,33 +225,27 @@ class DFQuery:
         bot_logger.info(f"[DFQuery] 已成功保存 {today_str} 的排行榜历史数据到 Redis 和 JSON 文件。")
 
     def _get_change_trend(self, change: Optional[float], is_rank: bool = False) -> Dict[str, Any]:
-        """根据变化值获取趋势、颜色和文本. is_rank为True表示排名变化（数字越大越靠后，数字越小越靠前）"""
+        """根据变化值获取趋势、颜色和文本. is_rank为True表示排名变化（数字越小越好）"""
         if change is None:
             return { "show_arrow": False, "direction_class": "", "color": "text-gray-500", "text": "" }
-
+        
         if change == 0:
             return { "show_arrow": False, "direction_class": "", "color": "text-gray-500", "text": "±0" }
 
-        if is_rank:
-            # 钻石名次变化：change > 0（名次变大，排名靠后）为上涨，绿色；change < 0（名次变小，排名靠前）为下降，红色
-            if change > 0:
-                direction_class = ""
-                color = "text-green-500"
-                text = f"↑{change:,}"
+        # 对于分数，change > 0 是上升
+        # 对于排名，(昨日 - 今日) > 0 是上升
+        # 此逻辑中，所有 change > 0 都代表"向好"的变化
+        if change > 0: # 上升
+            direction_class = "" # 默认方向是向上
+            color = "text-green-500"
+            if is_rank:
+                text = f"{change:,}"  # 排名变化不显示+号
             else:
-                direction_class = "down"
-                color = "text-red-500"
-                text = f"↓{abs(change):,}"
-        else:
-            # 分数变化逻辑不变
-            if change > 0:
-                direction_class = ""
-                color = "text-green-500"
-                text = f"+{change:,}"
-            else:
-                direction_class = "down"
-                color = "text-red-500"
-                text = f"{change:,}"
+                text = f"+{change:,}"  # 分数变化显示+号
+        else: # 下降
+            direction_class = "down" # 需要旋转
+            color = "text-red-500"
+            text = f"{change:,}"  # 负数已经自带-号
 
         return {
             "show_arrow": True,
