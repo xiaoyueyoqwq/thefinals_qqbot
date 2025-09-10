@@ -1,6 +1,6 @@
 {
   "93R": {
-    "introduction": "“矮子专用法马斯",
+    "introduction": "“矮子专用法马斯”",
     "damage": {
       "body": 26,
       "head": 39
@@ -68,7 +68,7 @@
   "LH1": {
     "introduction": "“抽死你”",
     "damage": {
-      "body": 42,
+      "body": 44,
       "head": 84
     },
     "damage_decay": {
@@ -161,7 +161,7 @@
     ]
   },
   "SH1900": {
-    "introduction": "出生短喷",
+    "introduction": "“出生短喷”",
     "damage": {
       "pellet_damage": 13,
       "pellet_count": 15
@@ -323,7 +323,7 @@
   "CB-01 Repeater": {
     "introduction": "“也就欺负欺负矮子了”",
     "damage": {
-      "body": 84,
+      "body": 88,
       "head": 126
     },
     "damage_decay": {
@@ -476,15 +476,15 @@
     ]
   },
   "Pike-556": {
-    "introduction": "“三枪一个矮子”",
+    "introduction": "“s8惨遭毒手...”",
     "damage": {
-      "body": 50,
+      "body": 48,
       "head": 75
     },
     "damage_decay": {
-      "min_range": 45,
+      "min_range": 40,
       "max_range": 50,
-      "decay_multiplier": 0.75
+      "decay_multiplier": 0.8
     },
     "technical_data": {
       "rpm": "200",
@@ -546,8 +546,8 @@
       "head": 88
     },
     "damage_decay": {
-      "min_range": 35,
-      "max_range": 42,
+      "min_range": 32,
+      "max_range": 39,
       "decay_multiplier": 0.5
     },
     "technical_data": {
@@ -579,7 +579,7 @@
     ]
   },
   "KS-23": {
-    "introduction": "“属于胖子的左轮”",
+    "introduction": "“s8之后直接查无此人”",
     "damage": {
       "body": 100
     },
@@ -656,7 +656,7 @@
     }
   },
   "M60": {
-    "introduction": "“Pro哥的第二把专武”",
+    "introduction": "“定位尴尬的小可爱”",
     "damage": {
       "body": 20,
       "head": 30
