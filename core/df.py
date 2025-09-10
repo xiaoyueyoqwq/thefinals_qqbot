@@ -261,26 +261,19 @@ class DFQuery:
             return f"{n:,}" if isinstance(n, (int, float)) else ""
 
         # 计算赛季剩余天数
-        season_end_timestamp = settings.get("season.end_timestamp")
-        remaining_days = None
-        if season_end_timestamp:
-            try:
-                end_date = datetime.fromtimestamp(int(season_end_timestamp))
-                remaining_time = end_date - datetime.now()
-                if remaining_time.days >= 0:
-                    remaining_days = remaining_time.days
-            except (ValueError, TypeError):
-                bot_logger.warning(f"[DFQuery] 无效的赛季结束时间戳配置: {season_end_timestamp}")
-
-        # 计算赛季剩余天数（支持字符串时间格式）
         season_end_time_str = settings.get("season.end_time")
-        remaining_days = None
+        remaining_days_display = None
         if season_end_time_str:
             try:
                 end_date = datetime.strptime(season_end_time_str, "%Y-%m-%d %H:%M:%S")
                 remaining_time = end_date - datetime.now()
-                if remaining_time.days >= 0:
-                    remaining_days = remaining_time.days
+                if remaining_time.total_seconds() > 0:
+                    if remaining_time.days < 1:
+                        remaining_days_display = "即将™到来"
+                    else:
+                        remaining_days_display = f"{remaining_time.days} 天"
+                else:
+                    remaining_days_display = "已结束"
             except Exception:
                 bot_logger.warning(f"[DFQuery] 无效的赛季结束时间配置: {season_end_time_str}")
 
@@ -320,7 +313,7 @@ class DFQuery:
 
             "update_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             "safe_score_line": safe_score_line,
-            "season_remaining_days": remaining_days
+            "season_remaining_days": remaining_days_display
         }
         return template_data
         
