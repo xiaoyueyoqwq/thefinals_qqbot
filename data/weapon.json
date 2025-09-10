@@ -767,6 +767,28 @@
       "大锤"
     ]
   },
+  "P90": {
+    "introduction": "“射就完事了”",
+    "damage": {
+      "body": 14,
+      "head": 21
+    },
+    "technical_data": {},
+    "aliases": [
+      "P90"
+    ]
+  },
+  "BFR Titan": {
+    "introduction": "“手持防空炮”",
+    "damage": {
+      "body": "???"
+    },
+    "technical_data": {},
+    "aliases": [
+      "BFR Titan",
+      "BFR"
+    ]
+  },
   "Spear": {
     "introduction": "“平台杀手”",
     "damage": {
