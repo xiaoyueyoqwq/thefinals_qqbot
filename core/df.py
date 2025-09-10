@@ -262,29 +262,20 @@ class DFQuery:
 
         # 计算赛季剩余天数
         season_end_time_str = settings.get("season.end_time")
-        season_end_timestamp = settings.get("season.end_timestamp")
-        season_remaining_days_display = None
-        
-        end_date = None
+        remaining_days_display = None
         if season_end_time_str:
             try:
                 end_date = datetime.strptime(season_end_time_str, "%Y-%m-%d %H:%M:%S")
+                remaining_time = end_date - datetime.now()
+                if remaining_time.total_seconds() > 0:
+                    if remaining_time.days < 1:
+                        remaining_days_display = "即将™到来"
+                    else:
+                        remaining_days_display = f"{remaining_time.days} 天"
+                else:
+                    remaining_days_display = "已结束"
             except Exception:
                 bot_logger.warning(f"[DFQuery] 无效的赛季结束时间配置: {season_end_time_str}")
-        elif season_end_timestamp:
-            try:
-                end_date = datetime.fromtimestamp(int(season_end_timestamp))
-            except (ValueError, TypeError):
-                bot_logger.warning(f"[DFQuery] 无效的赛季结束时间戳配置: {season_end_timestamp}")
-
-        if end_date:
-            remaining_time = end_date - datetime.now()
-            if remaining_time.total_seconds() <= 0:
-                season_remaining_days_display = "已结束"
-            elif remaining_time.days < 1:
-                season_remaining_days_display = "即将™到来"
-            else:
-                season_remaining_days_display = remaining_time.days
 
         # 处理 Top 500 (红宝石)
         ruby_data = data.get("500", {})
@@ -322,7 +313,7 @@ class DFQuery:
 
             "update_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             "safe_score_line": safe_score_line,
-            "season_remaining_days": season_remaining_days_display
+            "season_remaining_days": remaining_days_display
         }
         return template_data
         
