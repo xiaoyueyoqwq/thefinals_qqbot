@@ -781,9 +781,15 @@
   "BFR Titan": {
     "introduction": "“手持防空炮”",
     "damage": {
-      "body": "???"
+      "body": 98,
+      "head": 147
     },
-    "technical_data": {},
+    "technical_data": {
+      "rpm": "75",
+      "magazine_size": "5",
+      "empty_reload": "4.61s",
+      "tactical_reload": "Segmented (分段式)"
+    },
     "aliases": [
       "BFR Titan",
       "BFR"

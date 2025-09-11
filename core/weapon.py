@@ -158,4 +158,4 @@ class WeaponData:
                     output += f"▎ {class_name} ({hp_key} HP): N/A\n"
             output += f"{SEPARATOR}"
 
-        return output.rstrip()
+        return output.strip()
