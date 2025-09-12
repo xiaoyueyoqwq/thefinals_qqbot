@@ -32,130 +32,126 @@ class WeaponData:
     def get_weapon_data(self, query: str) -> Optional[str]:
         """
         根据武器名称或别名查询武器数据并格式化输出
-
-        参数:
-        - query (str): 用户输入的武器名称或别名
-
-        返回:
-        - Optional[str]: 格式化后的武器数据字符串，如果未找到则返回 None
         """
-
         normalized_query = query.lower()
-
         for weapon_name, data in self.weapon_data.items():
             aliases = [alias.lower() for alias in data.get('aliases', [])]
             if normalized_query == weapon_name.lower() or normalized_query in aliases:
                 return self._format_weapon_data(weapon_name, data)
-
         return None
 
     def _format_weapon_data(self, weapon_name: str, data: Dict[str, Any]) -> str:
         """
         格式化武器数据为易读的字符串
-
-        参数:
-        - weapon_name (str): 武器的官方名称
-        - data (Dict[str, Any]): 武器数据字典
-
-        返回:
-        - str: 格式化后的字符串
         """
-        # 开始构建输出
-        output = f"\n✨ {weapon_name} | THE FINALS\n"
+        parts = [f"✨ {weapon_name} | THE FINALS"]
 
-        # 介绍
+        if intro_part := self._format_introduction(data):
+            parts.append(intro_part)
+        if damage_part := self._format_damage(data):
+            parts.append(damage_part)
+        if decay_part := self._format_damage_decay(data):
+            parts.append(decay_part)
+        if tech_part := self._format_technical_data(data):
+            parts.append(tech_part)
+        if ttk_part := self._format_ttk(data):
+            parts.append(ttk_part)
+
+        return f"\n{f'\n{SEPARATOR}\n'.join(parts)}\n{SEPARATOR}"
+
+    def _format_introduction(self, data: Dict[str, Any]) -> Optional[str]:
+        """格式化武器介绍部分"""
         if intro := data.get('introduction'):
-            output += f"📖 简介: {intro}\n{SEPARATOR}\n"
+            return f"📖 简介: {intro}"
+        return None
 
-        # 伤害数据
+    def _format_damage(self, data: Dict[str, Any]) -> Optional[str]:
+        """格式化武器伤害部分"""
         damage = data.get('damage', {})
-        if damage:
-            output += "▎💥 基础伤害:\n"
-            damage_translations = {
-                'body': '躯干伤害',
-                'head': '爆头伤害',
-                'pellet_damage': '每颗弹丸伤害',
-                'pellet_count': '弹丸数量',
-                'secondary': '次要攻击',
-                'bullet_damage': '子弹伤害',
-                'head_bullet_damage': '子弹爆头伤害',
-                'bullet_count': '子弹数量',
-                'direct': '直接命中伤害',
-                'splash': '溅射伤害',
-                'splash_radius': '溅射范围'
-            }
-            for key, value in damage.items():
-                key_name = damage_translations.get(key, key)
-                output += f"▎ {key_name}: {value}\n"
-            output += f"{SEPARATOR}\n"
+        if not damage:
+            return None
 
-        # 伤害衰减
+        damage_parts = ["▎💥 基础伤害:"]
+        damage_translations = {
+            'body': '躯干伤害', 'head': '爆头伤害',
+            'pellet_damage': '每颗弹丸伤害', 'pellet_count': '弹丸数量',
+            'secondary': '次要攻击', 'bullet_damage': '子弹伤害',
+            'head_bullet_damage': '子弹爆头伤害', 'bullet_count': '子弹数量',
+            'direct': '直接命中伤害', 'splash': '溅射伤害',
+            'splash_radius': '溅射范围'
+        }
+        for key, value in damage.items():
+            key_name = damage_translations.get(key, key)
+            damage_parts.append(f"▎ {key_name}: {value}")
+        return "\n".join(damage_parts)
+
+    def _format_damage_decay(self, data: Dict[str, Any]) -> Optional[str]:
+        """格式化武器伤害衰减部分"""
         damage_decay = data.get('damage_decay', {})
-        if damage_decay:
-            output += "▎📉 伤害衰减:\n"
-            output += f"▎ 起始衰减: {damage_decay.get('min_range', 'N/A')}m\n"
-            output += f"▎ 最大衰减: {damage_decay.get('max_range', 'N/A')}m\n"
-            output += f"▎ 衰减系数: {damage_decay.get('decay_multiplier', 'N/A')}\n"
-            output += f"{SEPARATOR}\n"
-
-        # 提取身体伤害和射速，用于后续计算
-        technical_data = data.get('technical_data', {})
-        
-        rpm = 0
-        if 'rpm' in technical_data:
-            rpm_str = str(technical_data['rpm'])
-            match = re.search(r'^\d+', rpm_str)
-            if match:
-                rpm = int(match.group())
-
-        # 技术数据
-        if technical_data:
-            output += "▎🎯 武器参数:\n"
-
-            tech_translations = {
-                'rpm': '射速',
-                'magazine_size': '弹匣容量',
-                'empty_reload': '空仓装填',
-                'tactical_reload': '战术装填',
-                'fire_mode': '射击模式'
-            }
-
-            # 定义期望的显示顺序，以规范化输出
-            display_order = ['rpm', 'magazine_size', 'empty_reload', 'tactical_reload', 'fire_mode']
+        if not damage_decay:
+            return None
             
-            # 1. 按预设顺序显示参数
-            for key in display_order:
-                if key in technical_data:
-                    translated_key = tech_translations.get(key, key)
-                    output += f"▎ {translated_key}: {technical_data[key]}\n"
+        decay_parts = ["▎📉 伤害衰减:"]
+        decay_parts.append(f"▎ 起始衰减: {damage_decay.get('min_range', 'N/A')}m")
+        decay_parts.append(f"▎ 最大衰减: {damage_decay.get('max_range', 'N/A')}m")
+        decay_parts.append(f"▎ 衰减系数: {damage_decay.get('decay_multiplier', 'N/A')}")
+        return "\n".join(decay_parts)
 
-            # 2. 显示其他未在display_order中的技术数据 (为了兼容性)
-            for key, value in technical_data.items():
-                if key not in display_order:
-                    translated_key = tech_translations.get(key, key)
-                    output += f"▎ {translated_key}: {value}\n"
+    def _format_technical_data(self, data: Dict[str, Any]) -> Optional[str]:
+        """格式化武器技术数据部分"""
+        technical_data = data.get('technical_data', {})
+        if not technical_data:
+            return None
 
-            # 3. 最后显示DPS
-            # 获取躯干伤害
-            body_damage = damage.get('body', 0) # 获取躯干伤害，如果不存在则为0
-            # 计算DPS: (射速 * 躯干伤害) / 60
-            dps = int((rpm * body_damage) / 60) if rpm > 0 and body_damage > 0 else 0 # 确保射速和伤害大于0才计算
-            output += f"▎ 每秒伤害 (DPS): {dps}\n"
+        tech_parts = ["▎🎯 武器参数:"]
+        tech_translations = {
+            'rpm': '射速', 'magazine_size': '弹匣容量',
+            'empty_reload': '空仓装填', 'tactical_reload': '战术装填',
+            'fire_mode': '射击模式'
+        }
+        
+        display_order = ['rpm', 'magazine_size', 'empty_reload', 'tactical_reload', 'fire_mode']
+        
+        for key in display_order:
+            if key in technical_data:
+                translated_key = tech_translations.get(key, key)
+                tech_parts.append(f"▎ {translated_key}: {technical_data[key]}")
 
-            output += f"{SEPARATOR}\n"
+        for key, value in technical_data.items():
+            if key not in display_order:
+                translated_key = tech_translations.get(key, key)
+                tech_parts.append(f"▎ {translated_key}: {value}")
+        
+        damage = data.get('damage', {})
+        rpm_str = str(technical_data.get('rpm', '0'))
+        match = re.search(r'^\d+', rpm_str)
+        rpm = int(match.group()) if match else 0
+        
+        damage_per_shot = 0
+        if 'body' in damage:
+            damage_per_shot = damage['body']
+        elif 'pellet_damage' in damage and 'pellet_count' in damage:
+            damage_per_shot = damage['pellet_damage'] * damage['pellet_count']
+        elif 'bullet_damage' in damage and 'bullet_count' in damage:
+            damage_per_shot = damage['bullet_damage'] * damage['bullet_count']
+            
+        dps = int((rpm * damage_per_shot) / 60) if rpm > 0 and damage_per_shot > 0 else 0
+        tech_parts.append(f"▎ 每秒伤害 (DPS): {dps}")
+        
+        return "\n".join(tech_parts)
 
-        # TTK 显示 (Read from JSON instead of calculating)
+    def _format_ttk(self, data: Dict[str, Any]) -> Optional[str]:
+        """格式化武器TTK部分"""
         ttk_data = data.get('ttk', {})
-        if ttk_data:
-            output += "▎🔒 武器TTK:\n"
-            # Ensure output order and handle missing data
-            class_hp_map = {'轻型': '150', '中型': '250', '重型': '350'}
-            for class_name, hp_key in class_hp_map.items():
-                ttk_value = ttk_data.get(hp_key)
-                if ttk_value is not None:
-                    output += f"▎ {class_name} ({hp_key} HP): {ttk_value:.3f}s\n"
-                else:
-                    output += f"▎ {class_name} ({hp_key} HP): N/A\n"
-            output += f"{SEPARATOR}"
+        if not ttk_data:
+            return None
 
-        return output.strip()
+        ttk_parts = ["▎🔒 武器TTK:"]
+        class_hp_map = {'轻型': '150', '中型': '250', '重型': '350'}
+        for class_name, hp_key in class_hp_map.items():
+            ttk_value = ttk_data.get(hp_key)
+            if ttk_value is not None:
+                ttk_parts.append(f"▎ {class_name} ({hp_key} HP): {ttk_value:.3f}s")
+            else:
+                ttk_parts.append(f"▎ {class_name} ({hp_key} HP): N/A")
+        return "\n".join(ttk_parts)

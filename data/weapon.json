@@ -773,16 +773,34 @@
       "body": 14,
       "head": 21
     },
-    "technical_data": {},
+    "damage_decay": {
+      "min_range": 10,
+      "max_range": 20,
+      "decay_multiplier": 0.6
+    },
+    "technical_data": {
+      "rpm": "900",
+      "magazine_size": "50"
+    },
     "aliases": [
       "P90"
-    ]
+    ],
+    "ttk": {
+      "150": 0.67,
+      "250": 1.13,
+      "350": 1.6
+    }
   },
   "BFR Titan": {
     "introduction": "“手持防空炮”",
     "damage": {
       "body": 98,
       "head": 147
+    },
+    "damage_decay": {
+      "min_range": 30,
+      "max_range": 45,
+      "decay_multiplier": 0.7
     },
     "technical_data": {
       "rpm": "75",
