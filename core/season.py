@@ -17,11 +17,13 @@ class SeasonConfig:
     API_TIMEOUT = settings.API_TIMEOUT
     API_BASE_URL = settings.api_base_url
     UPDATE_INTERVAL = settings.UPDATE_INTERVAL
-    SEASONS = {
-        "cb1": "Closed Beta 1", "cb2": "Closed Beta 2", "ob": "Open Beta",
-        "s1": "Season 1", "s2": "Season 2", "s3": "Season 3",
-        "s4": "Season 4", "s5": "Season 5", "s6": "Season 6", "s7": "Season 7",
-    }
+    
+    # 动态生成赛季列表
+    SEASONS = {"cb1": "Closed Beta 1", "cb2": "Closed Beta 2", "ob": "Open Beta"}
+    if CURRENT_SEASON and CURRENT_SEASON.startswith('s') and CURRENT_SEASON[1:].isdigit():
+        current_season_num = int(CURRENT_SEASON[1:])
+        for i in range(1, current_season_num + 1):
+            SEASONS[f's{i}'] = f'Season {i}'
 
     @classmethod
     def is_current_season(cls, season_id: str) -> bool:

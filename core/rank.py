@@ -156,6 +156,7 @@ class RankQuery:
             "s5": "../images/seasons/s5.png",
             "s6": "../images/seasons/s6.jpg",
             "s7": "../images/seasons/s7.jpg",
+            "s8": "../images/seasons/s8.png",
         }
         
         # 段位图标映射表
