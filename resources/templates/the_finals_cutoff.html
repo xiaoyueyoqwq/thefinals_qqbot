@@ -191,7 +191,7 @@
     </header>
     <section class="row block">
       <div>
-        <img class="badge" src="../images/rank_icons/ruby.png" alt="红宝石徽章">
+        <img class="badge" src="../images/rank_icons/{{ ruby_icon }}" alt="{{ ruby_rank_name }}徽章">
       </div>
       <div class="meta">
         <div class="label">
@@ -237,7 +237,7 @@
     <div class="rule"></div>
     <section class="row block">
       <div>
-        <img class="badge" src="../images/rank_icons/platinum-3.png" alt="白金3徽章">
+        <img class="badge" src="../images/rank_icons/{{ cutoff_icon }}" alt="{{ cutoff_rank_name }}徽章">
       </div>
       <div class="meta">
         <div class="label">
@@ -259,7 +259,7 @@
     </section>
     {% if season_remaining_days is not none %}
     <div class="signature">
-      {{ safe_score_line }} | 赛季剩余 <span style="color:#ef4444;">{{ season_remaining_days }}</span>{% if season_remaining_days is number %} 天{% endif %} | Design: Kuroko
+      {{ safe_score_line }} | 赛季剩余 <span style="color:#ef4444;">{{ season_remaining_days }}</span>{% if season_remaining_days is number %} 天{% endif %} | Design: La.Pluma#0279
     </div>
     {% endif %}
     </div>
