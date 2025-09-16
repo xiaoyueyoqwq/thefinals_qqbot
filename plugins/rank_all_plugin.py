@@ -10,6 +10,7 @@ from utils.templates import SEPARATOR
 from botpy.message import Message
 from botpy.ext.command_util import Commands
 from utils.config import settings
+from core.search_indexer import SearchIndexer
 
 class RankAllPlugin(Plugin):
     """全赛季排名查询插件"""
@@ -19,6 +20,8 @@ class RankAllPlugin(Plugin):
         super().__init__()
         self.rank_all = RankAll()
         self.bind_manager = BindManager()
+        # 使用SeasonManager中的搜索索引器，而不是创建新实例
+        self.search_indexer = None
         self._messages = {
             "not_found": (
                 f"\n❌ 未提供玩家ID\n"
@@ -43,7 +46,9 @@ class RankAllPlugin(Plugin):
                 f"2. #号后必须是数字\n"
                 f"3. 可以使用/bind绑定完整ID"
             ),
-            "query_failed": "\n⚠️ 查询失败，请稍后重试"
+            "query_failed": "\n⚠️ 查询失败，请稍后重试",
+            "player_not_found": "\n⚠️ 未找到玩家 `{player_name}`",
+            "multiple_players_found": "\n🤔 找到多个可能匹配的玩家，请提供更精确的名称"
         }
         bot_logger.debug(f"[{self.name}] 初始化全赛季排名查询插件")
 
@@ -78,9 +83,42 @@ class RankAllPlugin(Plugin):
                     return
                 player_name = bound_id
             
-            # 验证ID格式
+            # 如果玩家ID不完整，则使用模糊搜索
             if not self._validate_embark_id(player_name):
-                await self.reply(handler, self._messages["invalid_format"])
+                bot_logger.debug(f"[{self.name}] 玩家ID '{player_name}' 不完整，执行模糊搜索")
+                
+                # 获取SeasonManager中的搜索索引器
+                if not self.search_indexer:
+                    self.search_indexer = self.rank_all.season_manager.search_indexer
+                
+                if self.search_indexer and self.search_indexer.is_ready():
+                    search_results = self.search_indexer.search(player_name, limit=5)
+
+                    if not search_results:
+                        await self.reply(handler, self._messages["player_not_found"].format(player_name=player_name))
+                        return
+                    
+                    if len(search_results) > 1:
+                        # 如果第一个结果的相似度远高于其他结果，则直接采用
+                        if search_results[0]['similarity_score'] > search_results[1]['similarity_score'] * 1.5:
+                            player_name = search_results[0]['name']
+                            bot_logger.debug(f"[{self.name}] 模糊搜索找到最佳匹配: '{player_name}'")
+                        else:
+                            player_list = "\n".join([f"- {p['name']}" for p in search_results])
+                            await self.reply(handler, self._messages["multiple_players_found"].format(player_list=player_list))
+                            return
+                    else:
+                        player_name = search_results[0]['name']
+                        bot_logger.debug(f"[{self.name}] 模糊搜索找到唯一匹配: '{player_name}'")
+                else:
+                    # 如果搜索索引未就绪，返回未找到玩家信息
+                    await self.reply(handler, self._messages["player_not_found"].format(player_name=player_name))
+                    return
+
+            # 模糊搜索后的结果应该已经是完整ID，但为了安全起见验证一下
+            if not self._validate_embark_id(player_name):
+                bot_logger.warning(f"[{self.name}] 模糊搜索返回的ID格式不正确: {player_name}")
+                await self.reply(handler, self._messages["player_not_found"].format(player_name=player_name))
                 return
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}")
