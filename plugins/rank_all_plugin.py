@@ -48,7 +48,7 @@ class RankAllPlugin(Plugin):
             ),
             "query_failed": "\n⚠️ 查询失败，请稍后重试",
             "player_not_found": "\n⚠️ 未找到玩家 `{player_name}`",
-            "multiple_players_found": "\n🤔 找到多个可能匹配的玩家，请提供更精确的名称"
+            "multiple_players_found": "\n🤔 找到多个可能匹配的玩家，请提供更精确的名称\n{player_list}"
         }
         bot_logger.debug(f"[{self.name}] 初始化全赛季排名查询插件")
 
