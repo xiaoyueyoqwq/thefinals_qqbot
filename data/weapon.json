@@ -776,7 +776,7 @@
     "damage_decay": {
       "min_range": 10,
       "max_range": 20,
-      "decay_multiplier": 0.6
+      "decay_multiplier": 0.62
     },
     "technical_data": {
       "rpm": "900",
