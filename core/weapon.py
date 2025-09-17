@@ -57,7 +57,8 @@ class WeaponData:
         if ttk_part := self._format_ttk(data):
             parts.append(ttk_part)
 
-        return f"\n{f'\n{SEPARATOR}\n'.join(parts)}\n{SEPARATOR}"
+        separator_with_newlines = f'\n{SEPARATOR}\n'
+        return f"\n{separator_with_newlines.join(parts)}\n{SEPARATOR}"
 
     def _format_introduction(self, data: Dict[str, Any]) -> Optional[str]:
         """格式化武器介绍部分"""

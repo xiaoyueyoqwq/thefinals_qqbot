@@ -1,8 +1,8 @@
 from core.plugin import Plugin, on_command
 from utils.message_handler import MessageHandler
 
-# 您更新后的文案
 FAQ_MESSAGE = """
+
 🤔 为什么查不到玩家信息
 
 这通常不是出错了。

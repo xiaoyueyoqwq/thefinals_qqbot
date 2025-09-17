@@ -4,26 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>THE FINALS | CUTOFF - 复刻</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://proxy.sdjz.wiki/https:/fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<!-- 预加载 Google 字体 -->
+<link rel="preload" href="../fonts/google_fonts.css" as="style">
+<link rel="stylesheet" href="../fonts/google_fonts.css">
 <style>
   html,body,div,span,h1,h2,h3,h4,h5,h6,p,img,ul,li { margin:0; padding:0; border:0; }
   body {
     background: #000;
     color: #fff;
-    font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Montserrat', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
   }
   .poster {
     position: relative;
-    width: 680px; /* Changed from 768px */
-    margin: 0 auto;
+    width: 100%;
+    margin: 0;
     background: #000;
     box-shadow: 0 0 0 1px #000 inset;
-    padding: 56px 50px 40px; /* Changed from 56px 60px 40px */
+    padding: 112px 20px 80px;
   }
   .title-header {
     text-align: center;
-    margin-bottom: 52px;
+    margin-bottom: 104px;
   }
   .title-image {
     max-width: 100%;
@@ -32,18 +33,18 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 22px;
-    margin-bottom: 52px;
+    gap: 24px;
+    margin-bottom: 104px;
   }
   .brand .text-a {
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 900;
-    font-size: 56px;
-    letter-spacing: 2px;
+    font-size: 112px;
+    letter-spacing: 4px;
   }
   .brand .apex {
-    width: 68px;
-    height: 36px;
+    width: 136px;
+    height: 72px;
     position: relative;
     display: inline-block;
   }
@@ -54,103 +55,103 @@
     bottom: 0;
     width: 0;
     height: 0;
-    border-left: 34px solid transparent;
-    border-right: 34px solid transparent;
+    border-left: 68px solid transparent;
+    border-right: 68px solid transparent;
   }
   .brand .apex::before {
-    border-bottom: 36px solid #f1f1f1;
-    filter: drop-shadow(0 2px 0 rgba(0,0,0,.3));
+    border-bottom: 72px solid #f1f1f1;
+    filter: drop-shadow(0 4px 0 rgba(0,0,0,.3));
   }
   .brand .apex::after {
-    border-bottom: 22px solid #000;
+    border-bottom: 44px solid #000;
     left: 0;
-    transform: translateY(5px);
+    transform: translateY(10px);
   }
   .brand .divider {
-    height: 48px;
-    width: 4px;
+    height: 96px;
+    width: 8px;
     background: #dcdcdc;
-    margin: 0 6px 0 4px;
+    margin: 0 12px 0 8px;
   }
   .brand .text-b {
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 900;
-    font-size: 56px;
-    letter-spacing: 2px;
+    font-size: 112px;
+    letter-spacing: 4px;
   }
   .rule {
-    height: 2px;
+    height: 4px;
     background: linear-gradient(90deg, transparent, #404040, transparent);
-    margin: 30px 0 36px;
+    margin: 60px 0 72px;
   }
   .row {
     display: grid;
-    grid-template-columns: 160px 1fr; /* Changed from 180px */
+    grid-template-columns: 320px 1fr;
     align-items: center;
-    column-gap: 36px;
+    column-gap: 40px;
   }
-  .row + .row { margin-top: 26px; }
+  .row + .row { margin-top: 52px; }
   .badge {
-    width: 140px; /* Changed from 160px */
-    height: 140px; /* Changed from 160px */
+    width: 280px;
+    height: 280px;
     object-fit: contain;
-    filter: drop-shadow(0 10px 10px rgba(0,0,0,.6));
+    filter: drop-shadow(0 20px 20px rgba(0,0,0,.6));
   }
   .meta {
     display: grid;
     grid-template-rows: auto auto auto;
-    row-gap: 8px;
+    row-gap: 16px;
   }
   .meta .label {
     display: flex;
     align-items: baseline;
-    gap: 14px;
-    font-size: 30px; /* Changed from 32px */
+    gap: 16px;
+    font-size: 60px;
     font-weight: 800;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
   }
   .meta .label .sub {
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 800;
-    font-size: 24px; /* Changed from 26px */
+    font-size: 48px;
     opacity: .9;
   }
   .big {
     display: inline-flex;
     align-items: baseline;
-    gap: 14px;
-    margin: 6px 0;
+    gap: 16px;
+    margin: 12px 0;
   }
   .big .num {
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 900;
-    font-size: 80px; /* Changed from 96px */
-    letter-spacing: 1px;
+    font-size: 160px;
+    letter-spacing: 2px;
   }
   .big .unit {
-    font-size: 34px; /* Changed from 40px */
+    font-size: 68px;
     font-weight: 800;
     opacity: .95;
   }
   .big .th {
-    font-size: 38px; /* Changed from 44px */
+    font-size: 76px;
     font-weight: 800;
-    transform: translateY(-8px);
+    transform: translateY(-16px);
     opacity: .95;
   }
   .delta {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    margin-left: 20px;
-    transform: translateY(-8px);
+    gap: 16px;
+    margin-left: 40px;
+    transform: translateY(-16px);
   }
   .delta .icon {
-    font-size: 28px;
+    font-size: 56px;
   }
   .delta img {
-    width: 20px;
-    height: 20px;
+    width: 40px;
+    height: 40px;
     object-fit: contain;
   }
   .delta img.down {
@@ -159,24 +160,24 @@
   .delta .val {
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 800;
-    font-size: 26px; /* Changed from 28px */
+    font-size: 52px;
     opacity: .95;
   }
   .footnote {
-    font-size: 16px; /* Changed from 18px */
+    font-size: 32px;
     opacity: .85;
-    margin-top: 4px;
+    margin-top: 8px;
   }
   .signature {
-    margin-top: 44px;
+    margin-top: 88px;
     font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
     font-weight: 900;
-    font-size: 20px; /* Changed from 22px */
-    letter-spacing: .5px;
+    font-size: 40px;
+    letter-spacing: 1px;
     text-align: center;
     opacity: .95;
   }
-  .block { margin: 10px 0 26px; }
+  .block { margin: 20px 0 52px; }
 
   .text-green-500 { color: #22c55e; }
   .text-red-500 { color: #ef4444; }
@@ -208,7 +209,7 @@
             <span class="val {{ ruby_change.color }}">{{ ruby_change.text }}</span>
           </span>
         </div>
-        <div class="footnote">Top 500 : {{ ruby_player }}</div>
+        <div class="footnote">Top 1000 : {{ ruby_player }}</div>
       </div>
     </section>
     <div class="rule"></div>

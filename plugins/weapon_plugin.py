@@ -3,6 +3,7 @@ from core.weapon import WeaponData
 from utils.message_handler import MessageHandler
 from utils.logger import bot_logger
 from utils.templates import SEPARATOR
+from pathlib import Path
 
 class WeaponPlugin(Plugin):
     """武器信息插件"""
@@ -45,7 +46,22 @@ class WeaponPlugin(Plugin):
             response = self.weapon_data.get_weapon_data(weapon_name)
 
             if not response:
-                await self.reply(handler, f"\n⚠️ 未找到武器 {weapon_name} 的信息")
+                # 发送错误消息和武器名称对照图片
+                await self.reply(handler, f"\n⚠️ 未找到武器 {weapon_name} 的信息，您可以在下方图片中找到对应名称后重试。")
+                
+                # 读取并发送本地图片
+                weapon_image_path = Path("resources/images/weapon_names.png")
+                if weapon_image_path.exists():
+                    try:
+                        with open(weapon_image_path, "rb") as f:
+                            image_data = f.read()
+                        await handler.send_image(image_data)
+                    except Exception as e:
+                        bot_logger.error(f"[{self.name}] 读取武器名称图片失败: {str(e)}")
+                        await self.reply(handler, "图片链接: https://uapis.cn/static/uploads/febd9ce692dee3c97a1b8e1a3bec3cc3.png")
+                else:
+                    bot_logger.warning(f"[{self.name}] 武器名称图片文件不存在: {weapon_image_path}")
+                    await self.reply(handler, "图片链接: https://uapis.cn/static/uploads/febd9ce692dee3c97a1b8e1a3bec3cc3.png")
                 return
 
             await self.reply(handler, response)
