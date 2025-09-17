@@ -16,11 +16,11 @@
   }
   .poster {
     position: relative;
-    width: 100%;
-    margin: 0;
+    width: 1360px;
+    margin: 0 auto;
     background: #000;
     box-shadow: 0 0 0 1px #000 inset;
-    padding: 112px 20px 80px;
+    padding: 112px 100px 80px;
   }
   .title-header {
     text-align: center;
@@ -33,7 +33,7 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: 44px;
     margin-bottom: 104px;
   }
   .brand .text-a {
@@ -88,7 +88,7 @@
     display: grid;
     grid-template-columns: 320px 1fr;
     align-items: center;
-    column-gap: 40px;
+    column-gap: 72px;
   }
   .row + .row { margin-top: 52px; }
   .badge {
@@ -105,7 +105,7 @@
   .meta .label {
     display: flex;
     align-items: baseline;
-    gap: 16px;
+    gap: 28px;
     font-size: 60px;
     font-weight: 800;
     letter-spacing: 2px;
@@ -119,7 +119,7 @@
   .big {
     display: inline-flex;
     align-items: baseline;
-    gap: 16px;
+    gap: 28px;
     margin: 12px 0;
   }
   .big .num {
@@ -192,7 +192,7 @@
     </header>
     <section class="row block">
       <div>
-        <img class="badge" src="../images/rank_icons/{{ ruby_icon }}" alt="{{ ruby_rank_name }}徽章">
+        <img class="badge" src="../images/rank_icons/ruby.png" alt="红宝石徽章">
       </div>
       <div class="meta">
         <div class="label">
@@ -238,7 +238,7 @@
     <div class="rule"></div>
     <section class="row block">
       <div>
-        <img class="badge" src="../images/rank_icons/{{ cutoff_icon }}" alt="{{ cutoff_rank_name }}徽章">
+        <img class="badge" src="../images/rank_icons/platinum-3.png" alt="白金3徽章">
       </div>
       <div class="meta">
         <div class="label">
@@ -260,7 +260,7 @@
     </section>
     {% if season_remaining_days is not none %}
     <div class="signature">
-      {{ safe_score_line }} | 赛季剩余 <span style="color:#ef4444;">{{ season_remaining_days }}</span>{% if season_remaining_days is number %} 天{% endif %} | Design: La.Pluma#0279
+      {{ safe_score_line }} | 赛季剩余 <span style="color:#ef4444;">{{ season_remaining_days }}</span>{% if season_remaining_days is number %} 天{% endif %} | Design: 黒子Kuro
     </div>
     {% endif %}
     </div>
