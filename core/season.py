@@ -17,11 +17,13 @@ class SeasonConfig:
     API_TIMEOUT = settings.API_TIMEOUT
     API_BASE_URL = settings.api_base_url
     UPDATE_INTERVAL = settings.UPDATE_INTERVAL
-    SEASONS = {
-        "cb1": "Closed Beta 1", "cb2": "Closed Beta 2", "ob": "Open Beta",
-        "s1": "Season 1", "s2": "Season 2", "s3": "Season 3",
-        "s4": "Season 4", "s5": "Season 5", "s6": "Season 6", "s7": "Season 7",
-    }
+    
+    # 动态生成赛季列表
+    SEASONS = {"cb1": "Closed Beta 1", "cb2": "Closed Beta 2", "ob": "Open Beta"}
+    if CURRENT_SEASON and CURRENT_SEASON.startswith('s') and CURRENT_SEASON[1:].isdigit():
+        current_season_num = int(CURRENT_SEASON[1:])
+        for i in range(1, current_season_num + 1):
+            SEASONS[f's{i}'] = f'Season {i}'
 
     @classmethod
     def is_current_season(cls, season_id: str) -> bool:
@@ -64,7 +66,21 @@ class Season:
             exists = await redis_manager._get_client().exists(self.redis_key_players)
             if not exists:
                 bot_logger.info(f"赛季 {self.season_id} 数据不在 Redis 中，将从 API 获取...")
-                await self._update_data()
+                try:
+                    await self._update_data()
+                    # 验证数据是否成功获取
+                    data_exists = await redis_manager._get_client().exists(self.redis_key_players)
+                    if data_exists:
+                        bot_logger.info(f"赛季 {self.season_id} 数据成功从API获取并存储到Redis")
+                    else:
+                        bot_logger.warning(f"赛季 {self.season_id} API调用完成，但Redis中仍无数据，可能是API返回空数据")
+                except Exception as api_error:
+                    bot_logger.error(f"赛季 {self.season_id} 从API获取数据失败: {api_error}")
+                    # 对于历史赛季，API失败不应该阻止整个初始化过程
+                    if not self._is_current:
+                        bot_logger.warning(f"历史赛季 {self.season_id} API获取失败，将在后续查询时重试")
+                    else:
+                        raise  # 当前赛季的API失败应该抛出异常
             else:
                 bot_logger.debug(f"赛季 {self.season_id} 数据已存在于 Redis，跳过初始化获取。")
 
@@ -191,6 +207,21 @@ class Season:
                 data_json = await redis_manager._get_client().hget(self.redis_key_players, found_names[0])
                 if data_json:
                     return json.loads(data_json)
+        
+        # 3. 如果是历史赛季且没有找到数据，检查是否需要从API重新获取
+        if not self._is_current:
+            # 检查Redis中是否完全没有该赛季的数据
+            has_any_data = await redis_manager._get_client().exists(self.redis_key_players)
+            if not has_any_data:
+                bot_logger.info(f"历史赛季 {self.season_id} 在Redis中无数据，尝试从API获取...")
+                try:
+                    await self._update_data()
+                    # 重新尝试查找
+                    data_json = await redis_manager._get_client().hget(self.redis_key_players, player_name_lower)
+                    if data_json:
+                        return json.loads(data_json)
+                except Exception as e:
+                    bot_logger.error(f"历史赛季 {self.season_id} 从API获取数据失败: {e}")
         
         return None
 

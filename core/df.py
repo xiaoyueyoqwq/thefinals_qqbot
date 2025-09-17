@@ -224,6 +224,56 @@ class DFQuery:
         )
         bot_logger.info(f"[DFQuery] 已成功保存 {today_str} 的排行榜历史数据到 Redis 和 JSON 文件。")
 
+    def _get_rank_info_by_score(self, score: int) -> tuple[str, str]:
+        """根据分数获取段位信息
+        
+        Args:
+            score: 玩家分数
+            
+        Returns:
+            tuple: (段位名称, 图标文件名)
+        """
+        if score >= 47500:
+            return "Diamond 1", "diamond-1.png"
+        elif score >= 45000:
+            return "Diamond 2", "diamond-2.png"
+        elif score >= 42500:
+            return "Diamond 3", "diamond-3.png"
+        elif score >= 40000:
+            return "Diamond 4", "diamond-4.png"
+        elif score >= 37500:
+            return "Platinum 1", "platinum-1.png"
+        elif score >= 35000:
+            return "Platinum 2", "platinum-2.png"
+        elif score >= 32500:
+            return "Platinum 3", "platinum-3.png"
+        elif score >= 30000:
+            return "Platinum 4", "platinum-4.png"
+        elif score >= 27500:
+            return "Gold 1", "gold-1.png"
+        elif score >= 25000:
+            return "Gold 2", "gold-2.png"
+        elif score >= 22500:
+            return "Gold 3", "gold-3.png"
+        elif score >= 20000:
+            return "Gold 4", "gold-4.png"
+        elif score >= 17500:
+            return "Silver 1", "silver-1.png"
+        elif score >= 15000:
+            return "Silver 2", "silver-2.png"
+        elif score >= 12500:
+            return "Silver 3", "silver-3.png"
+        elif score >= 10000:
+            return "Silver 4", "silver-4.png"
+        elif score >= 7500:
+            return "Bronze 1", "bronze-1.png"
+        elif score >= 5000:
+            return "Bronze 2", "bronze-2.png"
+        elif score >= 2500:
+            return "Bronze 3", "bronze-3.png"
+        else:
+            return "Bronze 4", "bronze-4.png"
+
     def _get_change_trend(self, change: Optional[float], is_rank: bool = False) -> Dict[str, Any]:
         """根据变化值获取趋势、颜色和文本. is_rank为True表示排名变化（数字越小越好）"""
         if change is None:
@@ -283,11 +333,17 @@ class DFQuery:
         yesterday_ruby_score = yesterday_data.get("500", {}).get("score")
         ruby_change = ruby_score - yesterday_ruby_score if ruby_score is not None and yesterday_ruby_score is not None else None
         
+        # 动态获取Ruby段位图标
+        ruby_rank_name, ruby_icon = self._get_rank_info_by_score(ruby_score) if ruby_score else ("Ruby", "ruby.png")
+        
         # 处理 Top 10000 (入榜)
         cutoff_data = data.get("10000", {})
         cutoff_score = cutoff_data.get("score")
         yesterday_cutoff_score = yesterday_data.get("10000", {}).get("score")
         cutoff_change = cutoff_score - yesterday_cutoff_score if cutoff_score is not None and yesterday_cutoff_score is not None else None
+
+        # 动态获取入榜段位图标
+        cutoff_rank_name, cutoff_icon = self._get_rank_info_by_score(cutoff_score) if cutoff_score else ("Platinum 3", "platinum-3.png")
 
         # 处理 Diamond Bottom (钻石)
         diamond_data = data.get("diamond_bottom", {})
@@ -302,10 +358,14 @@ class DFQuery:
             "ruby_score": format_num(ruby_score),
             "ruby_player": ruby_data.get("player_id", ""),
             "ruby_change": self._get_change_trend(ruby_change, is_rank=False),
+            "ruby_rank_name": ruby_rank_name,
+            "ruby_icon": ruby_icon,
 
             "cutoff_score": format_num(cutoff_score),
             "cutoff_player": cutoff_data.get("player_id", ""),
             "cutoff_change": self._get_change_trend(cutoff_change, is_rank=False),
+            "cutoff_rank_name": cutoff_rank_name,
+            "cutoff_icon": cutoff_icon,
             
             "diamond_rank": format_num(diamond_rank),
             "diamond_player": diamond_data.get("player_id", ""),

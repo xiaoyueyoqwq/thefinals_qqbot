@@ -3,7 +3,7 @@ import asyncio
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
-from core.season import SeasonManager
+from core.season import SeasonConfig, SeasonManager
 from utils.templates import SEPARATOR
 
 class PowerShiftAPI(BaseAPI):
@@ -111,7 +111,7 @@ class PowerShiftQuery:
         if result := self.api._format_player_data(data["data"]):
             name, platforms, rank, score = result
             return (
-                f"\n🏆 平台争霸 | THE FINALS\n"
+                f"\n🏆 {SeasonConfig.CURRENT_SEASON}平台争霸 | THE FINALS\n"
                 f"{SEPARATOR}\n"
                 f"📋 玩家: {name}\n"
                 f"🖥️ 平台: {platforms}\n"
