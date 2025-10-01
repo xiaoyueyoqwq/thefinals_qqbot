@@ -1,0 +1,134 @@
+# ============================================================
+# THE FINALS QQ Bot - Docker Compose 配置
+# ============================================================
+
+services:
+  # ============================================================
+  # Redis 缓存服务
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: thefinals-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================
+  # QQ Bot 主服务
+  # ============================================================
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BUILD_DATE=${BUILD_DATE:-now}
+        - VERSION=${VERSION:-latest}
+    image: thefinals-qqbot:latest
+    container_name: thefinals-bot
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      # 配置文件 (只读)
+      - ./config:/app/config:ro
+      # 数据持久化
+      - ./data:/app/data
+      # 日志
+      - ./logs:/app/logs
+      # 静态资源 (临时图片)
+      - ./static/temp_images:/app/static/temp_images
+    environment:
+      # Python 环境
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      # 时区设置
+      - TZ=Asia/Shanghai
+      # Redis 连接 (从配置文件读取，这里可以覆盖)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    # 资源限制 (可根据需要调整)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================
+  # Nginx 反向代理（HTTPS）
+  # ============================================================
+  nginx:
+    image: nginx:alpine
+    container_name: thefinals-nginx
+    restart: unless-stopped
+    depends_on:
+      - bot
+    ports:
+      - "8444:8444"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - bot-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ============================================================
+# 网络配置
+# ============================================================
+networks:
+  bot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+# ============================================================
+# 数据卷
+# ============================================================
+volumes:
+  redis-data:
+    driver: local
+

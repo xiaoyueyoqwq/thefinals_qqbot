@@ -107,6 +107,33 @@ async def root():
     """将根路径重定向到API文档页面"""
     return RedirectResponse(url="/docs")
 
+@app.get("/health", include_in_schema=False)
+async def health_check():
+    """健康检查端点 - 用于 Docker 容器健康检查"""
+    import time
+    from utils.redis_manager import redis_manager
+    
+    health_status = {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "services": {
+            "api": "ok"
+        }
+    }
+    
+    # 检查 Redis 连接
+    try:
+        if redis_manager and redis_manager.client:
+            await redis_manager.client.ping()
+            health_status["services"]["redis"] = "ok"
+        else:
+            health_status["services"]["redis"] = "not_configured"
+    except Exception as e:
+        health_status["services"]["redis"] = f"error: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    return health_status
+
 @app.get("/docs", include_in_schema=False)
 async def docs():
     return HTMLResponse("""

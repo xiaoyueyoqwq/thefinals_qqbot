@@ -1,28 +1,65 @@
-﻿aiofiles
-aiohttp
-aiohttp-cors
-beautifulsoup4
-fastapi
-httpx
-loguru
-matplotlib
-numpy
-objgraph
-orjson
-pandas
-pillow
-playwright
-psutil
-py-spy
-pympler
-pytest
-pyyaml
-qq-botpy
-redis
-requests
-rich
-scalene
-scikit-learn
-uvicorn
-watchdog
-websockets
+# Core Bot Framework
+qq-botpy==1.2.1
+
+# Web Framework & API
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+starlette==0.48.0
+
+# Async HTTP & Network
+aiohttp==3.12.15
+aiohttp-cors==0.8.1
+httpx==0.28.1
+websockets==14.1
+
+# Data Processing & Serialization
+orjson==3.11.3
+PyYAML==6.0.3
+pydantic==2.11.9
+requests==2.32.3
+
+# File & IO
+aiofiles==24.1.0
+
+# Database & Cache
+redis==6.4.0
+
+# Browser Automation
+playwright==1.54.0
+
+# Image Processing
+Pillow==11.3.0
+
+# Data Analysis & Visualization
+numpy==2.3.3
+matplotlib==3.10.6
+pandas==2.2.3
+
+# HTML Parsing
+beautifulsoup4==4.12.3
+
+# Logging & CLI
+loguru==0.7.3
+rich==14.1.0
+
+# System & Process
+psutil==7.0.0
+watchdog==6.0.0
+
+# Date & Time
+python-dateutil==2.9.0
+pytz==2025.2
+
+# Template Engine
+Jinja2==3.1.6
+
+# Testing (dev dependencies)
+pytest==8.4.1
+pytest-asyncio==0.25.2
+
+# Code Quality (dev dependencies - optional)
+# objgraph==3.6.2
+# pympler==1.1
+# py-spy==0.4.0
+# scalene==1.5.49
+# scikit-learn==1.6.1

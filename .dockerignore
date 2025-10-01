@@ -1,0 +1,111 @@
+# ============================================================
+# Docker Ignore - 排除不需要的文件
+# ============================================================
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv
+
+# IDE & 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker 相关
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+*.dockerfile
+
+# 日志文件
+*.log
+logs/
+*.log.*
+*.log.gz
+
+# 数据库文件 (运行时生成)
+*.db
+*.db-shm
+*.db-wal
+
+# 缓存文件
+*.pickle
+*.cache
+data/cache/
+
+# 临时文件
+*.tmp
+*.temp
+temp/
+tmp/
+static/temp_images/*
+
+# 测试文件
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# 文档
+docs/
+*.md
+!README.md
+LICENSE
+
+# 配置示例文件
+*.example
+*.sample
+
+# 开发工具
+tools/
+code_quality.py
+
+# 备份文件
+*.bak
+*.backup
+data/backups/
+
+# 差异和变更文件
+*_diff.txt
+*_full_diff.txt
+changes.txt
+
+# 数据文件（应该由卷挂载）
+data/
+volumes/
+
+# 构建产物
+dist/
+build/
+*.egg-info/
+
+# 环境变量文件
+.env
+.env.*
+
+# 性能分析
+*.prof
+*.stats
+
+# OS 特定
+Thumbs.db
+desktop.ini
+
