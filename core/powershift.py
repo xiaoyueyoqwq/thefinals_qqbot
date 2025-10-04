@@ -1,10 +1,12 @@
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Union
 import asyncio
+import os
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
 from core.season import SeasonConfig, SeasonManager
 from utils.templates import SEPARATOR
+from core.image_generator import ImageGenerator
 
 class PowerShiftAPI(BaseAPI):
     """平台争霸API封装"""
@@ -102,6 +104,82 @@ class PowerShiftQuery:
     
     def __init__(self):
         self.api = PowerShiftAPI()
+        # 初始化图片生成器
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'templates')
+        self.image_generator = ImageGenerator(template_dir)
+    
+    def _prepare_template_data(self, player_data: dict, season: str) -> Dict:
+        """准备模板数据"""
+        # 获取基础数据
+        name = player_data.get("name", "Unknown")
+        name_parts = name.split("#")
+        player_name = name_parts[0] if name_parts else name
+        player_tag = name_parts[1] if len(name_parts) > 1 else "0000"
+        
+        rank = player_data.get("rank", "N/A")
+        points = player_data.get("points", 0)
+        club_tag = player_data.get("clan", "")  # PowerShift 使用 clan 而不是 clubTag
+        
+        # 获取排名变化
+        change = player_data.get("change", 0)
+        rank_change = ""
+        rank_change_class = ""
+        if change > 0:
+            rank_change = f"↑{change}"
+            rank_change_class = "up"
+        elif change < 0:
+            rank_change = f"↓{abs(change)}"
+            rank_change_class = "down"
+        
+        # 获取平台信息
+        platforms = []
+        if player_data.get("steamName"):
+            platforms.append("Steam")
+        if player_data.get("psnName"):
+            platforms.append("PSN")
+        if player_data.get("xboxName"):
+            platforms.append("Xbox")
+        platform_str = "/".join(platforms) if platforms else "Unknown"
+        
+        # 确定赛季背景图
+        season_bg_map = {
+            "s3": "s3.png",
+            "s4": "s4.png",
+            "s5": "s5.png",
+            "s6": "s6.jpg",
+            "s7": "s7.jpg",
+            "s8": "s8.png"
+        }
+        season_bg = season_bg_map.get(season, "s8.png")
+        
+        # 格式化积分
+        formatted_points = "{:,}".format(points)
+        
+        return {
+            "player_name": player_name,
+            "player_tag": player_tag,
+            "club_tag": club_tag,
+            "platform": platform_str,
+            "rank": rank,
+            "rank_change": rank_change,
+            "rank_change_class": rank_change_class,
+            "points": formatted_points,
+            "season_bg": season_bg
+        }
+    
+    async def generate_powershift_image(self, player_data: dict, season: str) -> Optional[bytes]:
+        """生成平台争霸图片"""
+        try:
+            template_data = self._prepare_template_data(player_data, season)
+            image_bytes = await self.image_generator.generate_image(
+                template_data=template_data,
+                html_content='powershift.html',
+                wait_selectors=['.player-section', '.stats-grid']
+            )
+            return image_bytes
+        except Exception as e:
+            bot_logger.error(f"生成平台争霸图片失败: {str(e)}", exc_info=True)
+            return None
 
     def format_response(self, player_name: str, data: Optional[dict]) -> str:
         """格式化响应消息"""
@@ -122,7 +200,7 @@ class PowerShiftQuery:
                 
         return "\n⚠️ 未找到玩家数据"
 
-    async def process_ps_command(self, player_name: str = None) -> str:
+    async def process_ps_command(self, player_name: str = None) -> Union[str, bytes]:
         """处理平台争霸查询命令"""
         if not player_name:
             return (
@@ -137,11 +215,22 @@ class PowerShiftQuery:
                 "3. 会显示所有平台数据"
             )
 
+        season = settings.CURRENT_SEASON
+        bot_logger.info(f"查询玩家 {player_name} 的平台争霸数据，赛季: {season}")
+
         try:
             # 查询玩家数据
             data = await self.api.get_player_stats(player_name)
             
-            # 格式化并返回结果
+            if not data or not data.get("data"):
+                return "\n⚠️ 未找到玩家数据"
+            
+            # 尝试生成图片
+            image_bytes = await self.generate_powershift_image(data["data"], season)
+            if image_bytes:
+                return image_bytes
+            
+            # 如果图片生成失败，返回文本格式
             return self.format_response(player_name, data)
             
         except Exception as e:

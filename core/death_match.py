@@ -1,10 +1,12 @@
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 import asyncio
+import os
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
 from core.season import SeasonConfig
 from utils.templates import SEPARATOR
+from core.image_generator import ImageGenerator
 
 class DeathMatchAPI(BaseAPI):
     """死亡竞赛API封装"""
@@ -113,6 +115,124 @@ class DeathMatchAPI(BaseAPI):
             f"📋 玩家: {name}{club_tag}\n"
             f"🖥️ 平台: {platform}\n"
             f"📊 排名: #{rank}\n"
-            f"💵 奖金: ${points:,}\n"
+            f"💵 积分: {points:,}\n"
             f"{SEPARATOR}"
-        ) 
+        )
+
+class DeathMatchQuery:
+    """死亡竞赛查询功能"""
+    
+    def __init__(self):
+        self.api = DeathMatchAPI()
+        # 初始化图片生成器
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'templates')
+        self.image_generator = ImageGenerator(template_dir)
+    
+    def _prepare_template_data(self, player_data: dict, season: str) -> Dict:
+        """准备模板数据"""
+        # 获取基础数据
+        name = player_data.get("name", "Unknown")
+        name_parts = name.split("#")
+        player_name = name_parts[0] if name_parts else name
+        player_tag = name_parts[1] if len(name_parts) > 1 else "0000"
+        
+        rank = player_data.get("rank", "N/A")
+        points = player_data.get("points", 0)
+        club_tag = player_data.get("clubTag", "")
+        
+        # 获取排名变化
+        change = player_data.get("change", 0)
+        rank_change = ""
+        rank_change_class = ""
+        if change > 0:
+            rank_change = f"↑{change}"
+            rank_change_class = "up"
+        elif change < 0:
+            rank_change = f"↓{abs(change)}"
+            rank_change_class = "down"
+        
+        # 获取平台信息
+        platforms = []
+        if player_data.get("steamName"):
+            platforms.append("Steam")
+        if player_data.get("psnName"):
+            platforms.append("PSN")
+        if player_data.get("xboxName"):
+            platforms.append("Xbox")
+        platform_str = "/".join(platforms) if platforms else "Unknown"
+        
+        # 确定赛季背景图
+        season_bg_map = {
+            "s3": "s3.png",
+            "s4": "s4.png",
+            "s5": "s5.png",
+            "s6": "s6.jpg",
+            "s7": "s7.jpg",
+            "s8": "s8.png"
+        }
+        season_bg = season_bg_map.get(season, "s8.png")
+        
+        # 格式化积分
+        formatted_points = "{:,}".format(points)
+        
+        return {
+            "player_name": player_name,
+            "player_tag": player_tag,
+            "club_tag": club_tag,
+            "platform": platform_str,
+            "rank": rank,
+            "rank_change": rank_change,
+            "rank_change_class": rank_change_class,
+            "points": formatted_points,
+            "season_bg": season_bg
+        }
+    
+    async def generate_death_match_image(self, player_data: dict, season: str) -> Optional[bytes]:
+        """生成死亡竞赛图片"""
+        try:
+            template_data = self._prepare_template_data(player_data, season)
+            image_bytes = await self.image_generator.generate_image(
+                template_data=template_data,
+                html_content='death_match.html',
+                wait_selectors=['.player-section', '.stats-grid']
+            )
+            return image_bytes
+        except Exception as e:
+            bot_logger.error(f"生成死亡竞赛图片失败: {str(e)}", exc_info=True)
+            return None
+    
+    async def process_dm_command(self, player_name: str = None, season: str = None) -> Union[str, bytes]:
+        """处理死亡竞赛查询命令"""
+        if not player_name:
+            return (
+                "\n❌ 未提供玩家ID\n"
+                f"{SEPARATOR}\n"
+                "🎮 使用方法:\n"
+                "1. /dm 玩家ID\n"
+                f"{SEPARATOR}\n"
+                "💡 小贴士:\n"
+                "1. 可以使用 /bind 绑定ID\n"
+                "2. 支持模糊搜索\n"
+            )
+        
+        season = season or SeasonConfig.CURRENT_SEASON
+        bot_logger.info(f"查询玩家 {player_name} 的死亡竞赛数据，赛季: {season}")
+        
+        try:
+            # 查询数据
+            player_data = await self.api.get_death_match_data(player_name, season)
+            
+            if not player_data:
+                return "\n⚠️ 未找到玩家数据"
+            
+            # 尝试生成图片
+            image_bytes = await self.generate_death_match_image(player_data, season)
+            if image_bytes:
+                return image_bytes
+            
+            # 如果图片生成失败，返回文本格式
+            return self.api.format_player_data(player_data)
+            
+        except Exception as e:
+            bot_logger.error(f"处理死亡竞赛查询命令时出错: {str(e)}")
+            return "\n⚠️ 查询过程中发生错误，请稍后重试" 

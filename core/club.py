@@ -1,8 +1,6 @@
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 import asyncio
 import os
-import orjson as json
-import random
 from utils.logger import bot_logger
 from utils.base_api import BaseAPI
 from utils.config import settings
@@ -10,6 +8,7 @@ from core.rank import RankQuery  # 添加 RankQuery 导入
 from utils.translator import translator
 from utils.templates import SEPARATOR
 from core.deep_search import DeepSearch
+from core.image_generator import ImageGenerator
 
 class ClubAPI(BaseAPI):
     """俱乐部API封装"""
@@ -52,6 +51,9 @@ class ClubQuery:
         self.api = ClubAPI()
         self.rank_query = RankQuery()  # 创建 RankQuery 实例
         self.deep_search = deep_search_instance
+        # 初始化图片生成器
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'templates')
+        self.image_generator = ImageGenerator(template_dir)
 
     def _format_leaderboard_info(self, leaderboards: List[dict]) -> str:
         """格式化排行榜信息"""
@@ -116,6 +118,94 @@ class ClubQuery:
                 
         return "\n".join(result)
 
+    async def _prepare_template_data(self, club_data: List[dict]) -> Dict:
+        """准备模板数据用于图片生成"""
+        if not club_data:
+            return {}
+        
+        club = club_data[0]
+        club_tag = club.get("clubTag", "UNKNOWN")
+        members = club.get("members", [])
+        leaderboards = club.get("leaderboards", [])
+        
+        # 获取所有成员的分数
+        tasks = [self._get_member_score(member) for member in members]
+        member_scores = await asyncio.gather(*tasks)
+        
+        # 按分数降序排序（未上榜的排在最后）
+        sorted_members = sorted(member_scores, key=lambda item: item[1] if item[1] > 0 else -1, reverse=True)
+        
+        # 准备成员列表数据
+        members_data = []
+        for idx, (name, score) in enumerate(sorted_members):
+            member_item = {
+                'name': name,
+                'score': score,
+                'score_display': f'{score:,}' if score > 0 else '未上榜',
+                'class': 'ranked' if score > 0 else 'unranked',
+                'rank_badge': None,
+                'index': idx + 1  # 添加序号字段（从1开始）
+            }
+            
+            # 为Top 3添加特殊标记（只改变样式，不改变显示内容）
+            if score > 0:
+                if idx == 0:
+                    member_item['class'] = 'top-1'
+                elif idx == 1:
+                    member_item['class'] = 'top-2'
+                elif idx == 2:
+                    member_item['class'] = 'top-3'
+            
+            members_data.append(member_item)
+        
+        # 准备排名数据
+        rankings_data = []
+        for board in leaderboards:
+            season = board.get("leaderboard", "未知")
+            rank = board.get("rank", "未知")
+            value = board.get("totalValue", 0)
+            
+            # 只显示当前赛季的排名
+            if not season.startswith(settings.CURRENT_SEASON):
+                continue
+            
+            # 翻译排行榜类型
+            translated_season = translator.translate_leaderboard_type(season)
+            
+            rankings_data.append({
+                'mode': translated_season,
+                'rank': f'{rank:,}' if isinstance(rank, int) else rank,
+                'score': f'{value:,}'
+            })
+        
+        return {
+            'club_tag': club_tag,
+            'member_count': len(members),
+            'members': members_data,
+            'rankings': rankings_data if rankings_data else None
+        }
+
+    async def generate_club_image(self, club_data: List[dict]) -> Optional[bytes]:
+        """生成战队信息图片"""
+        try:
+            template_data = await self._prepare_template_data(club_data)
+            if not template_data:
+                return None
+            
+            # 使用 ImageGenerator 生成图片
+            image_bytes = await self.image_generator.generate_image(
+                template_data=template_data,
+                html_content='club_info.html',
+                wait_selectors=['.member-grid', '.header'],
+                image_quality=90
+            )
+            
+            return image_bytes
+            
+        except Exception as e:
+            bot_logger.error(f"生成战队信息图片失败: {str(e)}", exc_info=True)
+            return None
+
     async def format_response(self, club_data: Optional[List[dict]]) -> str:
         """格式化响应消息"""
         if not club_data:
@@ -155,8 +245,12 @@ class ClubQuery:
                 f"{SEPARATOR}"
             )
 
-    async def process_club_command(self, club_tag: Optional[str] = None) -> str:
-        """处理俱乐部查询命令"""
+    async def process_club_command(self, club_tag: Optional[str] = None) -> Union[str, bytes]:
+        """处理俱乐部查询命令
+        
+        返回:
+            Union[str, bytes]: 返回文本消息或图片bytes
+        """
         if not club_tag:
             return (
                 "\n❌ 未提供俱乐部标签\n"
@@ -180,8 +274,19 @@ class ClubQuery:
                 # 如果没有结果，尝试模糊匹配
                 data = await self.api.get_club_info(club_tag, False)
             
-            # 格式化结果
-            result = await self.format_response(data)
+            if not data:
+                return "\n⚠️ 未找到俱乐部数据"
+            
+            # 尝试生成图片
+            image_bytes = await self.generate_club_image(data)
+            
+            if image_bytes:
+                # 如果图片生成成功，返回图片bytes
+                result = image_bytes
+            else:
+                # 如果图片生成失败，降级到文本格式
+                bot_logger.warning(f"俱乐部 {club_tag} 图片生成失败，使用文本格式")
+                result = await self.format_response(data)
 
             # 缓存俱乐部成员
             if data and self.deep_search:

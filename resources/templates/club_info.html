@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THE FINALS | 战队信息</title>
+<!-- 预加载 Google 字体 -->
+<link rel="preload" href="../fonts/google_fonts.css" as="style">
+<link rel="stylesheet" href="../fonts/google_fonts.css">
+<style>
+  /* 重置样式 */
+  html,body,div,span,h1,h2,h3,h4,h5,h6,p,img,ul,li { margin:0; padding:0; border:0; }
+  
+  body {
+    background: #000;
+    color: #fff;
+    font-family: 'Montserrat', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  .poster {
+    position: relative;
+    width: 1200px;
+    margin: 0 auto;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+    padding: 60px 80px;
+    overflow: hidden;
+  }
+  
+  /* 背景扫描线效果 */
+  .poster::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.03) 2px,
+      rgba(255, 255, 255, 0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+  
+  /* 内容容器 */
+  .content {
+    position: relative;
+    z-index: 2;
+  }
+  
+  /* ===== 头部区域 ===== */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 50px;
+  }
+  
+  .title-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  
+  .squad-label {
+    font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 3px;
+    margin-bottom: 15px;
+  }
+  
+  .squad-label-en {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-left: 15px;
+  }
+  
+  .club-tag-display {
+    position: relative;
+    display: inline-block;
+  }
+  
+  .club-tag {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 5rem;
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: #E31E24;
+  }
+  
+  .member-count {
+    text-align: right;
+  }
+  
+  .member-count-label {
+    font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+  
+  .member-count-label-en {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    display: block;
+    margin-top: 3px;
+  }
+  
+  .member-count-value {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 3rem;
+    font-weight: 900;
+    font-style: italic;
+    color: #E31E24;
+    letter-spacing: 3px;
+    text-shadow: 0 0 15px rgba(227, 30, 36, 0.4);
+  }
+  
+  /* ===== 成员列表区域 ===== */
+  .roster-section {
+    margin-bottom: 50px;
+  }
+  
+  .roster-header {
+    margin-bottom: 30px;
+  }
+  
+  .roster-title {
+    font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #fff;
+  }
+  
+  .roster-title-en {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-left: 15px;
+  }
+  
+  /* 成员网格 - 三列布局 */
+  .member-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px 20px;
+  }
+  
+  .member-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+    font-size: 1.1rem;
+  }
+  
+  /* 已上榜玩家 */
+  .member-item.ranked {
+    color: #fff;
+    border-left-color: rgba(227, 30, 36, 0.3);
+  }
+  
+  /* 未上榜玩家 */
+  .member-item.unranked {
+    color: rgba(255, 255, 255, 0.5);
+    border-left-color: rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Top 1玩家 - 金色 */
+  .member-item.top-1 {
+    border-left-color: #FFD700;
+    border-left-width: 4px;
+  }
+  
+  .member-item.top-1 .member-badge {
+    color: #FFD700;
+    font-weight: 900;
+  }
+  
+  /* Top 2玩家 - 银色 */
+  .member-item.top-2 {
+    border-left-color: #C0C0C0;
+    border-left-width: 4px;
+  }
+  
+  .member-item.top-2 .member-badge {
+    color: #C0C0C0;
+    font-weight: 900;
+  }
+  
+  /* Top 3玩家 - 铜色 */
+  .member-item.top-3 {
+    border-left-color: #CD7F32;
+    border-left-width: 4px;
+  }
+  
+  .member-item.top-3 .member-badge {
+    color: #CD7F32;
+    font-weight: 900;
+  }
+  
+  .member-badge {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+    font-style: normal;
+    min-width: 38px;
+    text-align: right;
+    color: rgba(227, 30, 36, 0.8);
+    letter-spacing: 0.5px;
+  }
+  
+  .member-name {
+    font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+    flex: 1;
+    font-weight: 600;
+    font-size: 1.05rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+  }
+  
+  .member-score {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-style: italic;
+    font-size: 1.05rem;
+    letter-spacing: 1px;
+  }
+  
+  /* ===== 战队排名区域 ===== */
+  .rankings-section {
+    margin-top: 50px;
+    padding-top: 40px;
+    border-top: 2px solid rgba(227, 30, 36, 0.3);
+  }
+  
+  .rankings-header {
+    margin-bottom: 30px;
+  }
+  
+  .rankings-title {
+    font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #fff;
+  }
+  
+  .rankings-title-en {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-left: 15px;
+  }
+  
+  /* 排名卡片网格 */
+  .rankings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  
+  .ranking-card {
+    position: relative;
+    padding: 25px 30px;
+    background: linear-gradient(135deg, rgba(227, 30, 36, 0.1), rgba(227, 30, 36, 0.02));
+    border: 1px solid rgba(227, 30, 36, 0.3);
+    backdrop-filter: blur(10px);
+  }
+  
+  .ranking-mode {
+    font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+  }
+  
+  .ranking-position {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 4rem;
+    font-weight: 900;
+    color: #E31E24;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+    text-shadow: 0 0 20px rgba(227, 30, 36, 0.6);
+  }
+  
+  .ranking-score {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .ranking-score-label {
+    font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    margin-right: 10px;
+  }
+  
+  
+  /* ===== 赞助商区域 ===== */
+  .sponsor-section {
+    margin-top: 60px;
+    padding-top: 30px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .sponsor-label {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+  }
+  
+  .sponsor-logo {
+    height: 24px;
+    width: auto;
+    opacity: 0.4;
+    transition: opacity 0.3s ease;
+  }
+  
+  .sponsor-logo:hover {
+    opacity: 0.6;
+  }
+  
+  /* 动画效果 */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .member-item {
+    animation: fadeIn 0.3s ease-out backwards;
+  }
+  
+  .member-item:nth-child(1) { animation-delay: 0.05s; }
+  .member-item:nth-child(2) { animation-delay: 0.1s; }
+  .member-item:nth-child(3) { animation-delay: 0.15s; }
+</style>
+</head>
+<body>
+  <main class="poster" role="img" aria-label="THE FINALS 战队信息面板">
+    <div class="content">
+      <!-- 头部区域 -->
+      <header class="header">
+        <div class="title-section">
+          <div>
+            <div class="squad-label">战队信息<span class="squad-label-en">Squad Profile</span></div>
+            <div class="club-tag-display">
+              <span class="club-tag">{{ club_tag }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="member-count">
+          <div class="member-count-label">
+            成员总数
+            <span class="member-count-label-en">Total Members</span>
+          </div>
+          <div class="member-count-value">{{ member_count }}</div>
+        </div>
+      </header>
+      
+      <!-- 成员列表区域 -->
+      <section class="roster-section">
+        <div class="roster-header">
+          <h2 class="roster-title">成员列表<span class="roster-title-en">Roster</span></h2>
+        </div>
+        <div class="member-grid">
+           {% for member in members %}
+           <div class="member-item {{ member.class }}">
+             <span class="member-badge">{{ member.index }}</span>
+             <span class="member-name">{{ member.name }}</span>
+             <span class="member-score">{{ member.score_display }}</span>
+           </div>
+           {% endfor %}
+        </div>
+      </section>
+      
+      <!-- 战队排名区域 -->
+      {% if rankings %}
+      <section class="rankings-section">
+        <div class="rankings-header">
+          <h2 class="rankings-title">战队排名<span class="rankings-title-en">Leaderboard</span></h2>
+        </div>
+        <div class="rankings-grid">
+          {% for ranking in rankings %}
+          <div class="ranking-card">
+            <div class="ranking-mode">{{ ranking.mode }}</div>
+            <div class="ranking-position">#{{ ranking.rank }}</div>
+            <div class="ranking-score">
+              <span class="ranking-score-label">总分</span>
+              <span>{{ ranking.score }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+      
+      <!-- 赞助商区域 -->
+      <section class="sponsor-section">
+        <div class="sponsor-label">Powered by</div>
+        <img src="../images/vaiiya_white.svg" alt="Vaiiya" class="sponsor-logo">
+      </section>
+    </div>
+  </main>
+</body>
+</html>
+

@@ -205,16 +205,15 @@
         
         /* 内容盒子 */
         .content-box {
-            width: 1200px;
+            width: 1140px;
             height: 180px;
-            border-radius: 1.5rem;
-            padding: 2rem;
+            padding: 2rem 3rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border: 6px solid rgba(255, 255, 255, 0.4);
-            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
-            background: linear-gradient(to right, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.2));
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.3));
+            backdrop-filter: blur(10px);
+            position: relative;
         }
         
         /* 玩家信息 */
@@ -288,6 +287,8 @@
             display: flex;
             flex-direction: column;
             align-items: flex-end;
+            position: relative;
+            z-index: 1;
         }
         
         .score-number {

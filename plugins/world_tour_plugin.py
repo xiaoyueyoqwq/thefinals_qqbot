@@ -1,4 +1,4 @@
-from core.plugin import Plugin, on_command, on_keyword, on_regex, Event, EventType
+from core.plugin import Plugin, on_command, on_regex
 from utils.message_handler import MessageHandler
 from core.world_tour import WorldTourQuery
 from core.bind import BindManager
@@ -6,14 +6,7 @@ from core.season import SeasonManager
 from utils.logger import bot_logger
 from utils.templates import SEPARATOR
 import re
-import os
-import random
 from utils.config import settings
-import botpy
-from botpy.message import Message
-from botpy.ext.command_util import Commands
-from core.world_tour import WorldTourAPI
-from typing import Optional
 
 class WorldTourPlugin(Plugin):
     """世界巡回赛查询插件"""
@@ -85,8 +78,15 @@ class WorldTourPlugin(Plugin):
             else:
                 result = await self.world_tour_query.process_wt_command(player_name, season)
                 
-            bot_logger.debug(f"[{self.name}] 查询结果: {result}")
-            await self.reply(handler, result)
+            bot_logger.debug(f"[{self.name}] 查询完成，结果类型: {type(result)}")
+            
+            # 根据返回类型处理结果
+            if isinstance(result, bytes):
+                # 返回图片
+                await handler.send_image(result)
+            else:
+                # 返回文本
+                await self.reply(handler, result)
             
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理世界巡回赛查询命令时发生错误: {str(e)}", exc_info=True)

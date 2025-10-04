@@ -1,10 +1,12 @@
 import orjson as json
 import os
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 from utils.templates import SEPARATOR  # 导入分隔线模板
 from utils.logger import bot_logger
 from pathlib import Path
+from core.image_generator import ImageGenerator
+from utils.config import settings
 
 class WeaponData:
     """
@@ -20,6 +22,9 @@ class WeaponData:
         self.weapon_data: Dict[str, Any] = {}
         self.data_path = Path("data/weapon.json")
         self.weapon_data = self._load_data()
+        # 初始化图片生成器
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'templates')
+        self.image_generator = ImageGenerator(template_dir)
 
     def _load_data(self) -> Dict:
         """加载武器数据"""
@@ -156,3 +161,127 @@ class WeaponData:
             else:
                 ttk_parts.append(f"▎ {class_name} ({hp_key} HP): N/A")
         return "\n".join(ttk_parts)
+    
+    def _prepare_template_data(self, weapon_name: str, data: Dict[str, Any]) -> Dict:
+        """准备模板数据"""
+        # 翻译映射
+        damage_translations = {
+            'body': '躯干伤害', 'head': '爆头伤害',
+            'pellet_damage': '每颗弹丸伤害', 'pellet_count': '弹丸数量',
+            'secondary': '次要攻击', 'bullet_damage': '子弹伤害',
+            'head_bullet_damage': '子弹爆头伤害', 'bullet_count': '子弹数量',
+            'direct': '直接命中伤害', 'splash': '溅射伤害',
+            'splash_radius': '溅射范围'
+        }
+        
+        tech_translations = {
+            'rpm': '射速', 'magazine_size': '弹匣容量',
+            'empty_reload': '空仓装填', 'tactical_reload': '战术装填',
+            'fire_mode': '射击模式'
+        }
+        
+        decay_translations = {
+            'min_range': '起始衰减', 'max_range': '最大衰减',
+            'decay_multiplier': '衰减系数'
+        }
+        
+        # 处理伤害数据
+        damage = {}
+        for key, value in data.get('damage', {}).items():
+            translated_key = damage_translations.get(key, key)
+            damage[translated_key] = value
+        
+        # 处理技术数据
+        technical_data = {}
+        tech_data_raw = data.get('technical_data', {})
+        for key, value in tech_data_raw.items():
+            translated_key = tech_translations.get(key, key)
+            technical_data[translated_key] = value
+        
+        # 计算DPS
+        dps = None
+        rpm_str = str(tech_data_raw.get('rpm', '0'))
+        match = re.search(r'^\d+', rpm_str)
+        rpm = int(match.group()) if match else 0
+        
+        damage_raw = data.get('damage', {})
+        damage_per_shot = 0
+        if 'body' in damage_raw:
+            damage_per_shot = damage_raw['body']
+        elif 'pellet_damage' in damage_raw and 'pellet_count' in damage_raw:
+            damage_per_shot = damage_raw['pellet_damage'] * damage_raw['pellet_count']
+        elif 'bullet_damage' in damage_raw and 'bullet_count' in damage_raw:
+            damage_per_shot = damage_raw['bullet_damage'] * damage_raw['bullet_count']
+        
+        if rpm > 0 and damage_per_shot > 0:
+            dps = int((rpm * damage_per_shot) / 60)
+        
+        # 处理伤害衰减
+        damage_decay = {}
+        for key, value in data.get('damage_decay', {}).items():
+            translated_key = decay_translations.get(key, key)
+            # 格式化数值
+            if 'range' in key:
+                damage_decay[translated_key] = f"{value}m"
+            else:
+                damage_decay[translated_key] = str(value)
+        
+        # 处理TTK数据
+        ttk = {}
+        ttk_data = data.get('ttk', {})
+        class_hp_map = {'轻型 (150HP)': '150', '中型 (250HP)': '250', '重型 (350HP)': '350'}
+        for class_name, hp_key in class_hp_map.items():
+            ttk_value = ttk_data.get(hp_key)
+            if ttk_value is not None:
+                ttk[class_name] = f"{ttk_value:.3f}s"
+        
+        # 确定赛季背景图
+        season_bg_map = {
+            "s3": "s3.png",
+            "s4": "s4.png",
+            "s5": "s5.png",
+            "s6": "s6.jpg",
+            "s7": "s7.jpg",
+            "s8": "s8.png"
+        }
+        season = settings.CURRENT_SEASON
+        season_bg = season_bg_map.get(season, "s8.png")
+        
+        return {
+            "weapon_name": weapon_name,
+            "introduction": data.get('introduction'),
+            "damage": damage if damage else None,
+            "technical_data": technical_data if technical_data else None,
+            "dps": dps,
+            "damage_decay": damage_decay if damage_decay else None,
+            "ttk": ttk if ttk else None,
+            "season_bg": season_bg
+        }
+    
+    async def generate_weapon_image(self, weapon_name: str, data: Dict[str, Any]) -> Optional[bytes]:
+        """生成武器信息图片"""
+        try:
+            template_data = self._prepare_template_data(weapon_name, data)
+            image_bytes = await self.image_generator.generate_image(
+                template_data=template_data,
+                html_content='weapon.html',
+                wait_selectors=['.weapon-header', '.data-grid']
+            )
+            return image_bytes
+        except Exception as e:
+            bot_logger.error(f"生成武器信息图片失败: {str(e)}", exc_info=True)
+            return None
+    
+    async def get_weapon_data_with_image(self, query: str) -> Union[bytes, str, None]:
+        """根据武器名称或别名查询武器数据并返回图片或文本"""
+        normalized_query = query.lower()
+        for weapon_name, data in self.weapon_data.items():
+            aliases = [alias.lower() for alias in data.get('aliases', [])]
+            if normalized_query == weapon_name.lower() or normalized_query in aliases:
+                # 尝试生成图片
+                image_bytes = await self.generate_weapon_image(weapon_name, data)
+                if image_bytes:
+                    return image_bytes
+                # 如果图片生成失败，返回文本格式
+                return self._format_weapon_data(weapon_name, data)
+        return None

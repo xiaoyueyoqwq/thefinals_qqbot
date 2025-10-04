@@ -1,14 +1,9 @@
-from core.plugin import Plugin, on_command, Event, EventType
+from core.plugin import Plugin, on_command
 from utils.message_handler import MessageHandler
 from core.powershift import PowerShiftQuery
 from core.bind import BindManager
 from utils.logger import bot_logger
-import orjson as json
-import os
-import random
 from utils.templates import SEPARATOR
-from botpy.message import Message
-from botpy.ext.command_util import Commands
 from utils.config import settings
 
 class PowerShiftPlugin(Plugin):
@@ -58,8 +53,15 @@ class PowerShiftPlugin(Plugin):
             # 执行查询
             result = await self.powershift_query.process_ps_command(player_name)
             
-            bot_logger.debug(f"[{self.name}] 查询结果: {result}")
-            await self.reply(handler, result)
+            bot_logger.debug(f"[{self.name}] 查询完成，结果类型: {type(result)}")
+            
+            # 根据返回类型处理结果
+            if isinstance(result, bytes):
+                # 返回图片
+                await handler.send_image(result)
+            else:
+                # 返回文本
+                await self.reply(handler, result)
             
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理平台争霸查询命令时发生错误: {str(e)}", exc_info=True)

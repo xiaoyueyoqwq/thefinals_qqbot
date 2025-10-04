@@ -1,5 +1,6 @@
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Union
 import asyncio
+import os
 import orjson as json
 from utils.logger import bot_logger
 from utils.config import settings
@@ -7,8 +8,8 @@ from utils.base_api import BaseAPI
 from core.season import SeasonManager, SeasonConfig
 from utils.templates import SEPARATOR
 from utils.redis_manager import RedisManager
-from datetime import datetime, timedelta
 from core.search_indexer import SearchIndexer
+from core.image_generator import ImageGenerator
 
 class WorldTourAPI(BaseAPI):
     """世界巡回赛API封装"""
@@ -330,6 +331,87 @@ class WorldTourQuery:
     
     def __init__(self):
         self.api = WorldTourAPI()
+        # 初始化图片生成器
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'templates')
+        self.image_generator = ImageGenerator(template_dir)
+
+    def _prepare_template_data(self, player_data: dict, season: str) -> Dict:
+        """准备模板数据"""
+        # 获取基础数据
+        name = player_data.get("name", "Unknown")
+        name_parts = name.split("#")
+        player_name = name_parts[0] if name_parts else name
+        player_tag = name_parts[1] if len(name_parts) > 1 else "0000"
+        
+        rank = player_data.get("rank", "N/A")
+        cashouts = player_data.get("cashouts", 0)
+        club_tag = player_data.get("clubTag", "")
+        
+        # 获取排名变化
+        change = player_data.get("change", 0)
+        rank_change = ""
+        rank_change_class = ""
+        if change > 0:
+            rank_change = f"↑{change}"
+            rank_change_class = "up"
+        elif change < 0:
+            rank_change = f"↓{abs(change)}"
+            rank_change_class = "down"
+        
+        # 获取平台信息
+        platforms = []
+        if player_data.get("steamName"):
+            platforms.append("Steam")
+        if player_data.get("psnName"):
+            platforms.append("PSN")
+        if player_data.get("xboxName"):
+            platforms.append("Xbox")
+        platform_str = "/".join(platforms) if platforms else "Unknown"
+        
+        # 获取赛季名称和背景图
+        season_icon, season_id, season_full_name = self.api.seasons.get(season, ("🎮", season, f"season {season[1:]}"))
+        season_name = season_full_name.upper().replace("SEASON ", "S")
+        
+        # 确定赛季背景图
+        season_bg_map = {
+            "s3": "s3.png",
+            "s4": "s4.png",
+            "s5": "s5.png",
+            "s6": "s6.jpg",
+            "s7": "s7.jpg",
+            "s8": "s8.png"
+        }
+        season_bg = season_bg_map.get(season, "s8.png")
+        
+        # 格式化奖金
+        formatted_cashouts = "{:,}".format(cashouts)
+        
+        return {
+            "player_name": player_name,
+            "player_tag": player_tag,
+            "club_tag": club_tag,
+            "platform": platform_str,
+            "rank": rank,
+            "rank_change": rank_change,
+            "rank_change_class": rank_change_class,
+            "cashouts": formatted_cashouts,
+            "season_name": season_name,
+            "season_bg": season_bg
+        }
+
+    async def generate_world_tour_image(self, player_data: dict, season: str) -> Optional[bytes]:
+        """生成世界巡回赛图片"""
+        try:
+            template_data = self._prepare_template_data(player_data, season)
+            image_bytes = await self.image_generator.generate_image(
+                template_data=template_data,
+                html_content='world_tour.html',
+                wait_selectors=['.info-card', '.title-icon']
+            )
+            return image_bytes
+        except Exception as e:
+            bot_logger.error(f"生成世界巡回赛图片失败: {str(e)}", exc_info=True)
+            return None
 
     def format_response(self, player_name: str, season_data: Dict[str, Optional[dict]], target_season: str = None) -> str:
         """格式化响应消息"""
@@ -359,7 +441,7 @@ class WorldTourQuery:
             f"{SEPARATOR}"
         )
 
-    async def process_wt_command(self, player_name: str = None, season: str = None) -> str:
+    async def process_wt_command(self, player_name: str = None, season: str = None) -> Union[str, bytes]:
         """处理世界巡回赛查询命令"""
         if not player_name:
             # 获取支持的赛季范围
@@ -380,23 +462,25 @@ class WorldTourQuery:
             )
 
         # 如果提供了赛季参数，只查询指定赛季
-        seasons_to_query = [season] if season and season in self.api.seasons else self.api.seasons.keys()
+        seasons_to_query = [season] if season and season in self.api.seasons else [settings.CURRENT_SEASON]
         
-        bot_logger.info(f"查询玩家 {player_name} 的世界巡回赛数据，赛季: {season if season else '全部'}")
+        bot_logger.info(f"查询玩家 {player_name} 的世界巡回赛数据，赛季: {season if season else seasons_to_query[0]}")
         
         try:
-            # 并发查询赛季数据
-            tasks = [
-                self.api.get_player_stats(player_name, s)
-                for s in seasons_to_query
-            ]
-            results = await asyncio.gather(*tasks)
+            # 查询指定赛季的数据
+            player_data = await self.api.get_player_stats(player_name, seasons_to_query[0])
             
-            # 将结果与赛季对应
-            season_data = dict(zip(seasons_to_query, results))
+            if not player_data:
+                return "\n⚠️ 未找到玩家数据"
             
-            # 格式化并返回结果
-            return self.format_response(player_name, season_data, season)
+            # 尝试生成图片
+            image_bytes = await self.generate_world_tour_image(player_data, seasons_to_query[0])
+            if image_bytes:
+                return image_bytes
+            
+            # 如果图片生成失败，返回文本格式
+            season_data = {seasons_to_query[0]: player_data}
+            return self.format_response(player_name, season_data, seasons_to_query[0])
             
         except Exception as e:
             bot_logger.error(f"处理世界巡回赛查询命令时出错: {str(e)}")

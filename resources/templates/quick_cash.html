@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Cash - THE FINALS</title>
+    <link rel="preload" href="../fonts/google_fonts.css" as="style">
+    <link rel="stylesheet" href="../fonts/google_fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Montserrat', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #fff;
+        }
+        
+        /* 背景容器 */
+        .bg-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 扫描线背景效果 */
+        .bg-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 255, 255, 0.03) 2px,
+                rgba(255, 255, 255, 0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* 主容器 */
+        .poster {
+            position: relative;
+            width: 1200px;
+            z-index: 2;
+        }
+        
+        /* 内容容器 */
+        .content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* 玩家信息区域 */
+        .player-section {
+            margin-bottom: 50px;
+        }
+        
+        .player-id {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .player-name {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 2px;
+        }
+        
+        .player-tag {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 3rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 700;
+        }
+        
+        .player-meta {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            font-size: 1.3rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .club-tag {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.5rem;
+            color: #E31E24;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+        
+        .platform-info {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+        }
+        
+        .platform-label {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 1rem;
+            margin-right: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* 统计数据区域 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 60px;
+            margin-bottom: 50px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 40px 35px;
+        }
+        
+        .stat-label {
+            font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        
+        .stat-label-en {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            font-style: italic;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-left: 10px;
+        }
+        
+        .stat-value {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 2px;
+            line-height: 1;
+        }
+        
+        .rank-change {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-left: 15px;
+        }
+        
+        .rank-change.up {
+            color: #10b981;
+        }
+        
+        .rank-change.down {
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-container" style="background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.5) 100%), url('../images/seasons/{{ season_bg }}') center/cover no-repeat;">
+        <div class="poster">
+            <div class="content">
+                <!-- 玩家信息 -->
+                <div class="player-section">
+                    <div class="player-id">
+                        <span class="player-name">{{ player_name }}</span>
+                        <span class="player-tag">#{{ player_tag }}</span>
+                    </div>
+                    <div class="player-meta">
+                        {% if club_tag %}
+                        <div class="club-tag">[ {{ club_tag }} ]</div>
+                        {% endif %}
+                        <div class="platform-info">
+                            <span class="platform-label">Platform</span>
+                            <span>{{ platform }}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 统计数据 -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            排名
+                            <span class="stat-label-en">Rank</span>
+                        </div>
+                        <div class="stat-value">
+                            #{{ rank }}
+                            {% if rank_change %}
+                            <span class="rank-change {{ rank_change_class }}">{{ rank_change }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            积分
+                            <span class="stat-label-en">Points</span>
+                        </div>
+                        <div class="stat-value">{{ points }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

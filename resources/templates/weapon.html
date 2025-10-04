@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weapon Info - THE FINALS</title>
+    <link rel="preload" href="../fonts/google_fonts.css" as="style">
+    <link rel="stylesheet" href="../fonts/google_fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Montserrat', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #fff;
+        }
+        
+        /* 背景容器 */
+        .bg-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 扫描线背景效果 */
+        .bg-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 255, 255, 0.03) 2px,
+                rgba(255, 255, 255, 0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* 主容器 */
+        .poster {
+            position: relative;
+            width: 1200px;
+            z-index: 2;
+        }
+        
+        /* 内容容器 */
+        .content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* 武器标题 */
+        .weapon-header {
+            margin-bottom: 40px;
+        }
+        
+        .weapon-name {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        
+        .weapon-intro {
+            font-size: 1.3rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        
+        /* 数据网格 */
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        /* 数据卡片 */
+        .data-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .card-title {
+            font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #E31E24;
+            margin-bottom: 20px;
+            letter-spacing: 1px;
+        }
+        
+        .card-title-en {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            font-style: italic;
+            color: rgba(227, 30, 36, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-left: 10px;
+        }
+        
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .data-item:last-child {
+            border-bottom: none;
+        }
+        
+        .data-label {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+        
+        .data-value {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        .data-value.highlight {
+            color: #E31E24;
+            font-size: 1.5rem;
+        }
+        
+        /* TTK 特殊样式 */
+        .ttk-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        
+        .ttk-item {
+            background: rgba(227, 30, 36, 0.1);
+            padding: 15px;
+            text-align: center;
+            border: 1px solid rgba(227, 30, 36, 0.3);
+        }
+        
+        .ttk-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .ttk-value {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: #E31E24;
+        }
+        
+        /* 全宽卡片 */
+        .full-width-card {
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-container" style="background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.5) 100%), url('../images/seasons/{{ season_bg }}') center/cover no-repeat;">
+        <div class="poster">
+            <div class="content">
+                <!-- 武器标题 -->
+                <div class="weapon-header">
+                    <h1 class="weapon-name">{{ weapon_name }}</h1>
+                    {% if introduction %}
+                    <p class="weapon-intro">{{ introduction }}</p>
+                    {% endif %}
+                </div>
+                
+                <!-- 数据网格 -->
+                <div class="data-grid">
+                    <!-- 伤害数据 -->
+                    {% if damage %}
+                    <div class="data-card">
+                        <h2 class="card-title">
+                            伤害
+                            <span class="card-title-en">Damage</span>
+                        </h2>
+                        {% for key, value in damage.items() %}
+                        <div class="data-item">
+                            <span class="data-label">{{ key }}</span>
+                            <span class="data-value{% if 'head' in key|lower or 'headshot' in key|lower %} highlight{% endif %}">{{ value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- 技术数据 -->
+                    {% if technical_data %}
+                    <div class="data-card">
+                        <h2 class="card-title">
+                            技术参数
+                            <span class="card-title-en">Technical Data</span>
+                        </h2>
+                        {% for key, value in technical_data.items() %}
+                        <div class="data-item">
+                            <span class="data-label">{{ key }}</span>
+                            <span class="data-value">{{ value }}</span>
+                        </div>
+                        {% endfor %}
+                        {% if dps %}
+                        <div class="data-item">
+                            <span class="data-label">每秒伤害 (DPS)</span>
+                            <span class="data-value highlight">{{ dps }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- 伤害衰减 -->
+                    {% if damage_decay %}
+                    <div class="data-card">
+                        <h2 class="card-title">
+                            伤害衰减
+                            <span class="card-title-en">Damage Decay</span>
+                        </h2>
+                        {% for key, value in damage_decay.items() %}
+                        <div class="data-item">
+                            <span class="data-label">{{ key }}</span>
+                            <span class="data-value">{{ value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- TTK数据 -->
+                    {% if ttk %}
+                    <div class="data-card {% if not damage_decay %}full-width-card{% endif %}">
+                        <h2 class="card-title">
+                            击杀时间
+                            <span class="card-title-en">Time To Kill</span>
+                        </h2>
+                        <div class="ttk-grid">
+                            {% for key, value in ttk.items() %}
+                            <div class="ttk-item">
+                                <div class="ttk-label">{{ key }}</div>
+                                <div class="ttk-value">{{ value }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

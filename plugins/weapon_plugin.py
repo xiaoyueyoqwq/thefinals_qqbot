@@ -42,8 +42,8 @@ class WeaponPlugin(Plugin):
                 ))
                 return
 
-            # 调用 WeaponData 的方法获取格式化好的武器信息
-            response = self.weapon_data.get_weapon_data(weapon_name)
+            # 调用 WeaponData 的方法获取武器信息（图片或文本）
+            response = await self.weapon_data.get_weapon_data_with_image(weapon_name)
 
             if not response:
                 # 发送错误消息和武器名称对照图片
@@ -64,7 +64,13 @@ class WeaponPlugin(Plugin):
                     await self.reply(handler, "图片链接: https://uapis.cn/static/uploads/febd9ce692dee3c97a1b8e1a3bec3cc3.png")
                 return
 
-            await self.reply(handler, response)
+            # 根据返回类型处理结果
+            if isinstance(response, bytes):
+                # 返回图片
+                await handler.send_image(response)
+            else:
+                # 返回文本
+                await self.reply(handler, response)
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理武器信息命令时发生错误: {str(e)}")
             await self.reply(handler, "\n⚠️ 处理武器信息命令时发生错误，请稍后重试")

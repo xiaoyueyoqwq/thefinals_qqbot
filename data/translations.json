@@ -38,6 +38,10 @@
         "template": "{season}全民曹飞"
       },
       {
+        "pattern": "^(?P<season>s\\d+)heavenorelse$",
+        "template": "{season}天堂曹飞"
+      },
+      {
         "pattern": "^(?P<season>s\\d+)cashball$",
         "template": "{season}光州球赛"
       },

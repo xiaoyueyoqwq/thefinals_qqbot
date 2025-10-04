@@ -1,6 +1,8 @@
 from core.plugin import Plugin, on_command
 from core.club import ClubQuery
 from core.deep_search import DeepSearch
+from utils.config import settings
+from utils.logger import bot_logger
 
 class ClubPlugin(Plugin):
     """俱乐部查询插件"""
@@ -40,17 +42,21 @@ class ClubPlugin(Plugin):
             # 提取实际的俱乐部标签
             club_tag = args.replace("/club", "").strip()
                 
-            # 移除加载提示消息
-            # loading_msg = self.club_query._format_loading_message(club_tag)
-            # await self.reply(handler, loading_msg)
-            
             # 调用核心查询功能
             result = await self.club_query.process_club_command(club_tag)
             
-            # 发送查询结果
-            await self.reply(handler, result)
+            # 判断返回的是文本还是图片
+            if isinstance(result, bytes):
+                # 如果返回的是图片bytes，使用send_image发送
+                send_method = settings.image.get("send_method", "base64")
+                bot_logger.debug(f"[{self.name}] 使用 {send_method} 方式发送战队信息图片")
+                if not await handler.send_image(result):
+                    await self.reply(handler, "\n⚠️ 发送图片时发生错误")
+            else:
+                # 如果返回的是文本，使用reply发送
+                await self.reply(handler, result)
             
         except Exception as e:
             error_msg = f"处理俱乐部查询命令时出错: {str(e)}"
-            self.logger.error(error_msg)
+            bot_logger.error(error_msg, exc_info=True)
             await self.reply(handler, "\n⚠️ 命令处理过程中发生错误，请稍后重试") 
