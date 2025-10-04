@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ - THE FINALS</title>
+    <link rel="preload" href="../fonts/google_fonts.css" as="style">
+    <link rel="stylesheet" href="../fonts/google_fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Montserrat', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #fff;
+        }
+        
+        /* 背景容器 */
+        .bg-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.5) 100%), url('../images/seasons/{{ season_bg }}') center/cover no-repeat;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 扫描线背景效果 */
+        .bg-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 255, 255, 0.03) 2px,
+                rgba(255, 255, 255, 0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* 主容器 */
+        .poster {
+            position: relative;
+            width: 900px;
+            z-index: 2;
+        }
+        
+        /* 内容容器 */
+        .content {
+            position: relative;
+            z-index: 2;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            padding: 50px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* 标题 */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 2px solid rgba(227, 30, 36, 0.3);
+        }
+        
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        
+        .title {
+            font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+        
+        .subtitle {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: rgba(227, 30, 36, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        /* 内容区域 */
+        .faq-content {
+            line-height: 2;
+        }
+        
+        .faq-section {
+            margin-bottom: 30px;
+        }
+        
+        .faq-text {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 15px;
+        }
+        
+        .faq-text.highlight {
+            color: #fff;
+            font-weight: 600;
+        }
+        
+        .faq-text.note {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1rem;
+        }
+        
+        .encouragement {
+            text-align: center;
+            font-size: 1.4rem;
+            color: #E31E24;
+            font-weight: 700;
+            margin: 30px 0;
+            letter-spacing: 2px;
+        }
+        
+        /* 联系信息 */
+        .contact {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+        
+        .contact-text {
+            font-size: 1.05rem;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.8;
+        }
+        
+        .contact-email {
+            color: #E31E24;
+            font-weight: 600;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-container">
+        <div class="poster">
+            <div class="content">
+                <!-- 标题 -->
+                <div class="header">
+                    <div class="icon">🤔</div>
+                    <h1 class="title">常见问题解答</h1>
+                    <p class="subtitle">FAQ</p>
+                </div>
+                
+                <!-- FAQ内容 -->
+                <div class="faq-content">
+                    <div class="faq-section">
+                        <p class="faq-text highlight">为什么查不到玩家信息？</p>
+                        <p class="faq-text">这通常不是出错了。</p>
+                    </div>
+                    
+                    <div class="faq-section">
+                        <p class="faq-text">由于我们的数据来源专注于顶尖玩家的竞技排名，目前我们只能查询到全球排名前 10,000 的玩家。</p>
+                    </div>
+                    
+                    <div class="faq-section">
+                        <p class="faq-text">如果您暂时无法被查询到，这通常意味着您正在冲榜的路上（）</p>
+                    </div>
+                    
+                    <div class="faq-section">
+                        <p class="faq-text">多总结提高，持之以恒地磨炼技巧。</p>
+                        <p class="faq-text">总有一天会成为明星选手的。</p>
+                    </div>
+                    
+                    <!-- 联系信息 -->
+                    <div class="contact">
+                        <p class="contact-text">
+                            如果您有任何问题，或者您已经在10000名以内但机器人无数据的，<br>
+                            欢迎发邮件到 <a href="mailto:shuakami@sdjz.wiki" class="contact-email">shuakami@sdjz.wiki</a> 联系我们。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
