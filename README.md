@@ -9,6 +9,16 @@
 > [!NOTE]
 > A comprehensive multi-platform bot for THE FINALS game, providing real-time player statistics, leaderboard tracking, and tournament data across QQ, HeyBox, and Kook platforms. Built with modern async architecture and containerized deployment support.
 
+## Try Our Bot
+
+Skip the setup and start using immediately. Our official bot instances are production-ready and fully maintained:
+
+| Platform | How to Add |
+|----------|------------|
+| **QQ** | Join group `1064038953` → Find bot in members → Add to your group |
+| **HeyBox** | [Direct Link](https://chat.xiaoheihe.cn/app/?bot_id=85018825) |
+| **Kook** | [OAuth Authorization](https://www.kookapp.cn/app/oauth2/authorize?id=38555&permissions=537817088&client_id=hPray95utfVVfpTv&redirect_uri=&scope=bot) |
+
 ## Quick Start
 
 ```bash
@@ -29,12 +39,12 @@ Weapon statistics are accessible through `/weapon` command, pulling detailed dat
 
 ## Supported Platforms
 
-| Platform | Status | Protocol | Features |
-|----------|--------|----------|----------|
-| QQ | ✅ Active | Official Bot API | Full command support, image generation, account binding |
-| QQ Guild | ✅ Active | QQ Guild API | Guild-specific features, channel management |
-| HeyBox | ✅ Active | HeyBox Bot API | Real-time queries, leaderboard tracking, multi-mode stats |
-| Kook | ✅ Active | Kook Bot API | Complete feature parity, voice channel ready |
+| Platform | Status | Protocol | Feature Support |
+|----------|--------|----------|-----------------|
+| QQ | ✅ Active | Official Bot API | 100% Full feature support |
+| QQ Guild | ✅ Active | QQ Guild API | 100% Full feature support |
+| HeyBox | ✅ Active | HeyBox Bot API | 100% Full feature support |
+| Kook | ✅ Active | Kook Bot API | 95% Full feature support (platform limitations: no command list/autocomplete) |
 
 ## Architecture
 
@@ -59,3 +69,5 @@ Visit our [comprehensive documentation](https://deepwiki.com/xiaoyueyoqwq/thefin
 ## License
 
 This project is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+If you use or indirectly use our source code or copyrighted content, you must provide clear and visible attribution in your project.
