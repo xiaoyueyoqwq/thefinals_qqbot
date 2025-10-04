@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey?style=flat-square)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/xiaoyueyoqwq/thefinals_qqbot)
 
-**[English]** | [中文](./README_CN.md)
+**English** | [中文](./README_CN.md)
 
 > [!NOTE]
 > A comprehensive multi-platform bot for THE FINALS game, providing real-time player statistics, leaderboard tracking, and tournament data across QQ, HeyBox, and Kook platforms. Built with modern async architecture and containerized deployment support.
@@ -22,9 +22,15 @@ python bot.py
 
 This overview covers the system's architecture, core components, and feature set. For detailed information about installation and configuration, see [Installation and Setup](https://deepwiki.com/xiaoyueyoqwq/thefinals_qqbot/1.1-installation-and-setup). For a complete list of available commands, see [Available Commands](https://deepwiki.com/xiaoyueyoqwq/thefinals_qqbot/1.2-available-commands).
 
+## Features
+
+The bot provides comprehensive player data queries across multiple game modes. Access real-time ranking statistics with `/rank` and `/r` commands, explore World Tour tournaments via `/wt`, and track competitive performance in Quick Cash, Power Shift, and Death Match modes through dedicated commands. The system supports fuzzy player search with `/ds`, account binding for streamlined queries, and dynamic leaderboard trend visualization.
+
+Weapon statistics are accessible through `/weapon` command, pulling detailed data including damage values, RPM, TTK calculations, and technical specifications. Club information can be queried with `/club` tags, while the `/df` command provides current season cutoff scores for competitive rankings.
+
 ## Architecture
 
-The bot implements a plugin-based architecture with multi-platform provider abstraction, enabling seamless cross-platform operation. Core features include real-time data caching with Redis, dynamic image generation via Playwright, and comprehensive player statistics tracking across multiple game modes including Ranked, World Tour, Quick Cash, and Death Match.
+Built on a plugin-based architecture with multi-platform provider abstraction, the bot seamlessly operates across QQ, HeyBox, and Kook platforms. Core infrastructure leverages Redis for high-performance data caching, Playwright for dynamic image generation, and FastAPI for RESTful API endpoints. The command processing pipeline handles parsing, validation, and execution through a structured event-driven system.
 
 ## Documentation
 
