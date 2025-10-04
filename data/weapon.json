@@ -794,7 +794,7 @@
   "BFR Titan": {
     "introduction": "“手持防空炮”",
     "damage": {
-      "body": 98,
+      "body": 90,
       "head": 147
     },
     "damage_decay": {

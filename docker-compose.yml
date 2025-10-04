@@ -53,8 +53,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # 配置文件 (只读)
-      - ./config:/app/config:ro
+      # 配置文件 (只读) - 使用 Docker 专用配置
+      - ./config/docker.config.yaml:/app/config/config.yaml:ro
       # 数据持久化
       - ./data:/app/data
       # 日志
