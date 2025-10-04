@@ -27,6 +27,15 @@ The bot provides comprehensive player data queries across multiple game modes. A
 
 Weapon statistics are accessible through `/weapon` command, pulling detailed data including damage values, RPM, TTK calculations, and technical specifications. Club information can be queried with `/club` tags, while the `/df` command provides current season cutoff scores for competitive rankings.
 
+## Supported Platforms
+
+| Platform | Status | Protocol | Features |
+|----------|--------|----------|----------|
+| QQ | ✅ Active | Official Bot API | Full command support, image generation, account binding |
+| QQ Guild | ✅ Active | QQ Guild API | Guild-specific features, channel management |
+| HeyBox | ✅ Active | HeyBox Bot API | Real-time queries, leaderboard tracking, multi-mode stats |
+| Kook | ✅ Active | Kook Bot API | Complete feature parity, voice channel ready |
+
 ## Architecture
 
 Built on a plugin-based architecture with multi-platform provider abstraction, the bot seamlessly operates across QQ, HeyBox, and Kook platforms. Core infrastructure leverages Redis for high-performance data caching, Playwright for dynamic image generation, and FastAPI for RESTful API endpoints. The command processing pipeline handles parsing, validation, and execution through a structured event-driven system.
