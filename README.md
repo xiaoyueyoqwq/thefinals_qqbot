@@ -4,8 +4,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-059669?style=flat-square&logoColor=white)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/xiaoyueyoqwq/thefinals_qqbot)
-
-**English** | [中文](./README_CN.md)
+[![Chinese Docs](https://img.shields.io/badge/Docs-Chinese-059669?style=flat-square)](./README_CN.md)
 
 > [!NOTE]
 > A comprehensive multi-platform bot for THE FINALS game, providing real-time player statistics, leaderboard tracking, and tournament data across QQ, HeyBox, and Kook platforms. Built with modern async architecture and containerized deployment support.

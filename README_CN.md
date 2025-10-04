@@ -4,8 +4,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-059669?style=flat-square&logoColor=white)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/xiaoyueyoqwq/thefinals_qqbot)
-
-[English](./README.md) | **[中文]**
+[![English Docs](https://img.shields.io/badge/Docs-English-059669?style=flat-square)](./README.md)
 
 > [!NOTE]
 > 一个功能完善的 THE FINALS 游戏数据查询机器人，支持实时玩家统计、排行榜追踪和赛事数据查询，覆盖 QQ、小黑盒和开黑啦多个平台。采用现代异步架构设计，支持容器化部署。
