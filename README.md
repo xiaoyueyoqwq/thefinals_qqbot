@@ -2,7 +2,7 @@
 
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/xiaoyueyoqwq/thefinals_qqbot)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey?style=flat-square)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+[![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-059669?style=flat-square&logoColor=white)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/xiaoyueyoqwq/thefinals_qqbot)
 
 **English** | [中文](./README_CN.md)
