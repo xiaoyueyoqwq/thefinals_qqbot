@@ -265,7 +265,9 @@ class WeaponData:
             image_bytes = await self.image_generator.generate_image(
                 template_data=template_data,
                 html_content='weapon.html',
-                wait_selectors=['.weapon-header', '.data-grid']
+                wait_selectors=['.weapon-header'],
+                image_quality=80,
+                wait_selectors_timeout_ms=300
             )
             return image_bytes
         except Exception as e:

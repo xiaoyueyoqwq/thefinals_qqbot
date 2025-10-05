@@ -4,121 +4,145 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>THE FINALS - Player Stats</title>
+    <link rel="preload" href="../fonts/local_fonts.css" as="style">
+    <link rel="stylesheet" href="../fonts/local_fonts.css">
     <style>
-        /* 本地字体定义 */
-        @font-face {
-            font-family: 'Rajdhani';
-            src: url('../fonts/google_font.woff2') format('woff2');
-            font-weight: 100 900;
-            font-style: normal;
-            font-display: swap;
-        }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Rajdhani', sans-serif;
+            font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
         }
 
         body {
             background-color: #000;
             color: #fff;
+        }
+
+        /* 背景容器 */
+        .bg-container {
+            width: 100%;
             min-height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
+            justify-content: center;
+            padding: 60px;
             position: relative;
             overflow: hidden;
         }
 
-        body::before {
+        /* 扫描线背景效果 */
+        .bg-container::before {
             content: '';
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url('../images/seasons/s3.png');
-            background-size: cover;
-            background-position: center;
-            opacity: 0.6;
-            filter: brightness(0.7) contrast(1.1);
-            z-index: -1;
+            right: 0;
+            bottom: 0;
+            background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAECAYAAABP2FU6AAAAGklEQVR4nAXBsQ0AAAzDIOSp/z+cgm2CcMEDNkoDDAL5fKEAAAAASUVORK5CYII=");
+            background-repeat: repeat;
+            background-size: 1px 4px;
+            pointer-events: none;
+            z-index: 1;
         }
 
         .container {
             width: 1200px;
-            height: 675px;
             position: relative;
-            overflow: hidden;
-            backdrop-filter: blur(5px);
+            z-index: 2;
         }
 
         .content {
             position: relative;
-            z-index: 1;
-            padding: 40px;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            z-index: 2;
         }
 
-        .header {
+        /* 玩家信息区域 */
+        .player-section {
+            margin-bottom: 40px;
+        }
+
+        .player-id {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            align-items: baseline;
+            gap: 12px;
             margin-bottom: 20px;
         }
 
-        .player-info {
-            display: flex;
-            align-items: center;
-            gap: 20px;
+        .player-name {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 2px;
         }
 
-        .player-name {
-            font-size: 3.5em;
-            font-weight: 700;
-            color: #fff;
-            text-shadow: 0 0 20px rgba(227,30,36,0.5);
+        .player-meta {
+            display: flex;
+            align-items: center;
+            gap: 30px;
         }
 
         .club-tag {
-            font-size: 1.8em;
-            color: rgba(255,255,255,0.7);
-            font-weight: 600;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.5rem;
+            color: #E31E24;
+            font-weight: 700;
+            letter-spacing: 2px;
         }
 
         .main-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        /* 左侧大卡片：段位信息 */
+        .league-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* 右下角三个小卡片 */
+        .bottom-stats {
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 40px;
-            margin: 20px 0;
-            height: 450px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
         }
 
         .stat-card {
-            background: rgba(227,30,36,0.1);
-            padding: 30px;
-            border-left: 4px solid #E31E24;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 40px 35px;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
-        }
-
-        .stat-card.highlight {
-            background: rgba(227,30,36,0.15);
-            grid-row: span 2;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
 
         .stat-label {
-            font-size: 1.2em;
-            color: rgba(255,255,255,0.5);
-            text-transform: uppercase;
+            font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.5);
             letter-spacing: 2px;
             margin-bottom: 15px;
+        }
+
+        .stat-label-en {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            font-style: italic;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-left: 10px;
         }
 
         .league-info {
@@ -131,53 +155,33 @@
         .league-header {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-left: -10px;
-            position: relative;
+            gap: 20px;
         }
 
         .league-icon {
-            width: 65px;
-            height: 65px;
+            width: 80px;
+            height: 80px;
             object-fit: contain;
-            filter: drop-shadow(0 0 10px rgba(227,30,36,0.3));
-            margin-top: -12px;
-            transform: translateY(-3px);
+        }
+
+        .league-info {
+            flex: 1;
         }
 
         .league-name {
-            font-size: 3.8em;
-            font-weight: 700;
-            color: #E31E24;
-            line-height: 0.9;
-            margin-top: -5px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 2px;
         }
 
         .grade-badge {
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 3em;
+            padding: 8px 20px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.8rem;
             font-weight: 700;
-            padding: 0 15px;
-            letter-spacing: 1px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .grade-badge::before {
-            content: 'GRADE';
-            position: absolute;
-            top: -12px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.35em;
-            font-weight: 600;
-            color: rgba(255,255,255,0.7);
-            letter-spacing: 3px;
-            text-shadow: none;
+            letter-spacing: 2px;
         }
 
         /* 最高级 SSSR */
@@ -274,68 +278,37 @@
             }
         }
 
-        .league-score-container {
+        .league-score-row {
             display: flex;
             align-items: baseline;
             gap: 15px;
         }
 
         .league-score {
-            font-size: 2.5em;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
             color: #fff;
+        }
+
+        .league-rank-text {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.5);
             font-weight: 600;
         }
 
-        .league-rank-tag {
-            font-size: 1.2em;
-            color: rgba(255,255,255,0.4);
-            font-weight: 500;
-            letter-spacing: 1px;
-        }
-
-        .league-rank-tag span {
-            color: rgba(255,255,255,0.8);
-            margin-left: 5px;
-        }
-
-        .league-rank-badge {
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            background: linear-gradient(135deg, rgba(227,30,36,0.2), rgba(227,30,36,0.05));
-            padding: 8px 15px;
-            border-radius: 4px;
-            border: 1px solid rgba(227,30,36,0.3);
-            font-size: 1.2em;
-            color: rgba(255,255,255,0.9);
-            letter-spacing: 1px;
-            backdrop-filter: blur(5px);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .league-rank-badge::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            background: #E31E24;
-            border-radius: 50%;
-            box-shadow: 0 0 10px rgba(227,30,36,0.5);
-        }
-
-        .league-rank-number {
-            font-weight: 600;
-            color: #E31E24;
-            text-shadow: 0 0 10px rgba(227,30,36,0.3);
+        .chart-label-text {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 10px;
         }
 
         .chart-container {
-            flex-grow: 1;
             position: relative;
-            margin-top: 20px;
-            height: calc(100% - 160px);
+            height: 160px;
+            width: 100%;
         }
 
         .chart {
@@ -389,137 +362,122 @@
             text-shadow: 0 0 3px rgba(255, 215, 0, 0.2);
         }
 
-        .chart-grid {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            opacity: 0.2;
-        }
 
-        .grid-line {
-            width: 100%;
-            height: 1px;
-            background: rgba(255,255,255,0.5);
-        }
+         .rank {
+             font-family: 'Montserrat', sans-serif;
+             font-size: 4rem;
+             color: #E31E24;
+             font-weight: 900;
+             line-height: 1;
+             margin: 20px 0;
+         }
 
-        .rank {
-            font-size: 5em;
-            color: #E31E24;
-            font-weight: 700;
-            line-height: 1;
-        }
+         .world-tour-value {
+             font-family: 'Montserrat', sans-serif;
+             font-size: 3.5rem;
+             color: #fff;
+             font-weight: 900;
+             margin: 20px 0;
+         }
 
-        .world-tour-value {
-            font-size: 3em;
-            color: #fff;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
 
-        .footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 30px 5px;
-            height: 170px;
-        }
+         .group-rank {
+             font-family: 'Noto Sans SC', sans-serif;
+             font-size: 1rem;
+             color: rgba(255, 255, 255, 0.4);
+             margin-top: auto;
+             padding-top: 15px;
+             border-top: 1px solid rgba(255, 255, 255, 0.1);
+         }
 
-        .footer-text {
-            font-size: 1.2em;
-            color: rgba(255,255,255,0.5);
-            text-transform: uppercase;
-            letter-spacing: 3px;
-        }
-
-        .highlight-text {
-            color: #E31E24;
-        }
-
-        .rank-info, .earnings-info {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-        .group-rank {
-            font-size: 1.1em;
-            color: rgba(255,255,255,0.4);
-            margin-top: auto;
-            padding-top: 15px;
-            border-top: 1px solid rgba(255,255,255,0.1);
-            letter-spacing: 1px;
-        }
-
-        .group-rank span {
-            color: rgba(255,255,255,0.8);
-            font-weight: 500;
-        }
+         .group-rank span {
+             color: rgba(255, 255, 255, 0.8);
+             font-weight: 600;
+         }
     </style>
-</head>
-<body>
-    <div class="container">
+  </head>
+  <body>
+      <div class="bg-container" style="background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.5) 100%), url('../images/seasons/{{ season_bg }}') center/cover no-repeat;">
+          <div class="container">
         <div class="content">
-            <div class="header">
-                <div class="player-info">
-                    <div class="player-name">{{ player_name }}</div>
-                    <div class="club-tag">{{ club_tag }}</div>
+            <!-- 玩家信息 -->
+            <div class="player-section">
+                <div class="player-id">
+                    <span class="player-name">{{ player_name }}</span>
                 </div>
+                {% if club_tag %}
+                <div class="player-meta">
+                    <div class="club-tag">[ {{ club_tag }} ]</div>
+                </div>
+                {% endif %}
             </div>
 
             <div class="main-stats">
-                <div class="stat-card highlight">
-                    <div class="stat-label">Current League</div>
-                    <div class="league-info">
-                        <div class="league-header">
-                            <img src="{{ league_icon_url }}" alt="{{ league_name }}" class="league-icon">
+                <!-- 左侧大卡片：段位信息 + 走势图 -->
+                <div class="league-card">
+                    <div class="league-header">
+                        <img src="{{ league_icon_url }}" alt="{{ league_name }}" class="league-icon">
+                        <div class="league-info">
+                            <div class="stat-label">
+                                当前段位
+                                <span class="stat-label-en">League</span>
+                            </div>
                             <div class="league-name">{{ league_name }}</div>
-                            <div class="grade-badge {{ grade_class }}">{{ grade_text }}</div>
                         </div>
-                        <div class="league-score-container">
-                            <div class="league-score">{{ league_score }} RS</div>
-                            <div class="league-rank-tag">RANK<span>#{{ league_rank }}</span></div>
-                        </div>
+                        <div class="grade-badge {{ grade_class }}">{{ grade_text }}</div>
                     </div>
-                    <div class="chart-container">
-                        <div class="chart-grid">
-                            <div class="grid-line"></div>
-                            <div class="grid-line"></div>
-                            <div class="grid-line"></div>
-                            <div class="grid-line"></div>
-                        </div>
-                        <div class="chart">
-                            <svg class="chart-path" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                <path d="{{ chart_path }}" fill="none"/>
-                            </svg>
-                            <div class="chart-dots" style="left: {{ chart_dot_left }}%; bottom: calc({{ chart_dot_bottom }}% - 2px);"></div>
-                            <div class="chart-label" style="left: {{ chart_label_left }}%; bottom: calc({{ chart_label_bottom }}% + 20px);">{{ chart_label_text }}</div>
+                    
+                    <div class="league-score-row">
+                        <div class="league-score">{{ league_score }} RS</div>
+                        <div class="league-rank-text">排名 #{{ league_rank }}</div>
+                    </div>
+                    
+                    <!-- 走势图 -->
+                    <div>
+                        <div class="chart-label-text">{{ chart_title }}</div>
+                        <div class="chart-container">
+                            <div class="chart">
+                                <svg class="chart-path" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                    <path d="{{ chart_path }}" fill="none"/>
+                                </svg>
+                                <div class="chart-dots" style="left: {{ chart_dot_left }}%; bottom: calc({{ chart_dot_bottom }}% - 2px);"></div>
+                                <div class="chart-label" style="left: {{ chart_label_left }}%; bottom: calc({{ chart_label_bottom }}% + 20px);">{{ chart_label_text }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="stat-card">
-                    <div class="rank-info">
-                        <div class="stat-label">Global Ranking</div>
+                
+                <!-- 右下角三个小卡片 -->
+                <div class="bottom-stats">
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            全球排名
+                            <span class="stat-label-en">Global Rank</span>
+                        </div>
                         <div class="rank">#{{ global_rank }}</div>
-                        <div class="group-rank">RANK <span>#{{ global_group_rank }}</span></div>
+                        <div class="group-rank">变化 <span>{{ global_group_rank }}</span></div>
                     </div>
-                </div>
-                <div class="stat-card">
-                    <div class="earnings-info">
-                        <div class="stat-label">World Tour Earnings</div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            快速提现
+                            <span class="stat-label-en">Quick Cash</span>
+                        </div>
+                        <div class="rank">#{{ qc_rank }}</div>
+                        <div class="group-rank">积分 <span>{{ qc_points }}</span></div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-label">
+                            世界巡回赛
+                            <span class="stat-label-en">World Tour</span>
+                        </div>
                         <div class="world-tour-value">$ {{ world_tour_earnings }}</div>
-                        <div class="group-rank">RANK <span>#{{ wt_group_rank }}</span></div>
+                        <div class="group-rank">排名 <span>#{{ wt_group_rank }}</span></div>
                     </div>
                 </div>
             </div>
-
-            <div class="footer">
-                <div class="footer-text">THE FINALS STATS</div>
-                <div class="footer-text">SEASON {{ season_number }}</div>
-            </div>
-        </div>
-    </div>
+          </div>
+      </div>
 </body>
 </html> 

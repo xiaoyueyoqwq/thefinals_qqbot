@@ -393,7 +393,9 @@ class DFQuery:
             image_data = await self.image_generator.generate_image(
                 template_data=template_data,
                 html_content="the_finals_cutoff.html",
-                wait_selectors=['.poster']
+                wait_selectors=['.poster'],
+                image_quality=80,
+                wait_selectors_timeout_ms=300
             )
             bot_logger.info("[DFQuery] 成功生成底分图片。")
             return image_data

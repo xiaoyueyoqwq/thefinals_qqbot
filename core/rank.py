@@ -366,8 +366,10 @@ class RankQuery:
                 # 现在直接将模板文件名传递给ImageGenerator
                 image_data = await self.image_generator.generate_image(
                     template_data=template_data,
-                    html_content=template_filename, # 传递模板文件名
-                    wait_selectors=['.rank-icon img', '.bg-container']
+                    html_content=template_filename,
+                    wait_selectors=['.bg-container'],
+                    image_quality=80,
+                    wait_selectors_timeout_ms=300
                 )
                 
                 if not image_data:

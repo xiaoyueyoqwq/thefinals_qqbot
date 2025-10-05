@@ -1,0 +1,88 @@
+/* 
+ * 优化的字体加载 - 本地字体文件
+ * 大幅减少@font-face数量，提升截图性能
+ */
+
+/* Montserrat - 仅保留常用字重 */
+/* 600 (SemiBold) */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCu173w5aXo.woff2) format('woff2');
+}
+
+/* 700 (Bold) */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr73w5aXo.woff2) format('woff2');
+}
+
+/* 800 (ExtraBold) */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCsQ73w5aXo.woff2) format('woff2');
+}
+
+/* 900 (Black) */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCsv73w5aXo.woff2) format('woff2');
+}
+
+/* Montserrat Italic - 仅保留常用字重 */
+/* 600 Italic */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: italic;
+  font-weight: 600;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/montserrat/v31/JTUFjIg1_i6t8kCHKm459Wx7xQYXK0vOoz6jq6R8aX0.woff2) format('woff2');
+}
+
+/* 900 Italic */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: italic;
+  font-weight: 900;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/montserrat/v31/JTUFjIg1_i6t8kCHKm459Wx7xQYXK0vOoz6jqyR9aX0.woff2) format('woff2');
+}
+
+/* Noto Sans SC - 仅保留中文字符集和常用字重 */
+/* 500 (Medium) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/notosanssc/v37/k3kIo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OQ.woff2) format('woff2');
+}
+
+/* 700 (Bold) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/notosanssc/v37/k3kIo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd0Hg1OQ.woff2) format('woff2');
+}
+
+/* 900 (Black) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: url(https://fonts.gstatic.com/s/notosanssc/v37/k3kIo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd2_g1OQ.woff2) format('woff2');
+}

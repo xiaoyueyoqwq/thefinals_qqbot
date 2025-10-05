@@ -58,7 +58,9 @@ class WhyPlugin(Plugin):
             image_bytes = await self.image_generator.generate_image(
                 template_data=template_data,
                 html_content='why.html',
-                wait_selectors=['.header', '.faq-content']
+                wait_selectors=['.header'],
+                image_quality=80,
+                wait_selectors_timeout_ms=300
             )
             return image_bytes
         except Exception as e:

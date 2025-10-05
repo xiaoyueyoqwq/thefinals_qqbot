@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>THE FINALS | 战队信息</title>
-<!-- 预加载 Google 字体 -->
-<link rel="preload" href="../fonts/google_fonts.css" as="style">
-<link rel="stylesheet" href="../fonts/google_fonts.css">
+<!-- 本地字体加载 -->
+<link rel="preload" href="../fonts/local_fonts.css" as="style">
+<link rel="stylesheet" href="../fonts/local_fonts.css">
 <style>
-  /* 重置样式 */
+  /* 重置样式（保持不变） */
   html,body,div,span,h1,h2,h3,h4,h5,h6,p,img,ul,li { margin:0; padding:0; border:0; }
   
   body {
@@ -26,9 +26,11 @@
     background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
     padding: 60px 80px;
     overflow: hidden;
+    /* ✅ 将容器隔离为独立合成上下文，缩小 backdrop-filter 的采样范围（视觉不变） */
+    isolation: isolate;
   }
   
-  /* 背景扫描线效果 */
+  /* ✅ 背景扫描线：由重复线性渐变改为等价 1×4px PNG 贴图（像素级一致但更省算力） */
   .poster::before {
     content: '';
     position: absolute;
@@ -36,6 +38,7 @@
     left: 0;
     right: 0;
     bottom: 0;
+    /* 原实现：
     background: repeating-linear-gradient(
       0deg,
       transparent,
@@ -43,6 +46,11 @@
       rgba(255, 255, 255, 0.03) 2px,
       rgba(255, 255, 255, 0.03) 4px
     );
+    */
+    /* 等价贴图：1px 宽 × 4px 高，前两行透明，后两行为 rgba(255,255,255,0.03) */
+    background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAECAYAAABP2FU6AAAAGklEQVR4nAXBsQ0AAAzDIOSp/z+cgm2CcMEDNkoDDAL5fKEAAAAASUVORK5CYII=");
+    background-repeat: repeat;
+    background-size: 1px 4px; /* 每 4px 重复一组（与原 2px 透明 + 2px 半透明一致） */
     pointer-events: none;
     z-index: 1;
   }
@@ -299,6 +307,7 @@
     background: linear-gradient(135deg, rgba(227, 30, 36, 0.1), rgba(227, 30, 36, 0.02));
     border: 1px solid rgba(227, 30, 36, 0.3);
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
   
   .ranking-mode {
@@ -335,7 +344,6 @@
     margin-right: 10px;
   }
   
-  
   /* ===== 赞助商区域 ===== */
   .sponsor-section {
     margin-top: 60px;
@@ -367,7 +375,7 @@
     opacity: 0.6;
   }
   
-  /* 动画效果 */
+  /* 动画效果（默认保留，以保持视觉/交互完全一致） */
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -386,6 +394,12 @@
   .member-item:nth-child(1) { animation-delay: 0.05s; }
   .member-item:nth-child(2) { animation-delay: 0.1s; }
   .member-item:nth-child(3) { animation-delay: 0.15s; }
+
+  /* ✅ 在“减少动态效果”环境中禁用动画/过渡（默认不生效，视觉不变，但极大有利于自动化截图性能与稳定） */
+  @media (prefers-reduced-motion: reduce) {
+    .member-item { animation: none !important; transition: none !important; }
+    .sponsor-logo { transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -456,4 +470,3 @@
   </main>
 </body>
 </html>
-

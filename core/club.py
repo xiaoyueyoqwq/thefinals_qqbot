@@ -2,58 +2,144 @@ from typing import Optional, Dict, List, Union
 import asyncio
 import os
 from utils.logger import bot_logger
-from utils.base_api import BaseAPI
 from utils.config import settings
 from core.rank import RankQuery  # 添加 RankQuery 导入
 from utils.translator import translator
 from utils.templates import SEPARATOR
 from core.deep_search import DeepSearch
 from core.image_generator import ImageGenerator
+from core.club_cache import ClubManager
 
-class ClubAPI(BaseAPI):
-    """俱乐部API封装"""
+
+class ClubAPI:
+    """
+    俱乐部API封装 - 使用全量缓存系统
+    参考 RankAPI 的设计，使用 ClubManager 管理缓存
+    """
+    _instance = None
+    _lock = asyncio.Lock()
+    _initialized = False
+    _preheated = False
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ClubAPI, cls).__new__(cls)
+        return cls._instance
     
     def __init__(self):
-        super().__init__(settings.api_base_url, timeout=20)
-        self.headers = {
-            "Accept": "application/json",
-            "User-Agent": "TheFinals-Bot/1.0"
-        }
-        self.api_prefix = "/v1"  # 俱乐部API使用不同的前缀
-
-    async def get_club_info(self, club_tag: str, exact_match: bool = True) -> Optional[List[dict]]:
-        """查询俱乐部信息"""
+        if self._initialized:
+            return
+        
+        # 初始化俱乐部管理器
+        self.club_manager = ClubManager()
+        self._init_task: Optional[asyncio.Task] = None
+        self._initialized = True
+        bot_logger.info("ClubAPI 单例初始化完成")
+    
+    async def initialize(self):
+        """初始化俱乐部管理器"""
+        if self._init_task is None:
+            self._init_task = asyncio.create_task(self._initialize())
+        await self._init_task
+    
+    async def _initialize(self):
+        """初始化俱乐部管理器"""
         try:
-            # 构建完整的URL，移除可能的命令前缀
-            clean_tag = club_tag.strip().strip('[]')  # 移除空格和中括号
-            url = f"{self.api_prefix}/clubs?exactClubTag={str(exact_match).lower()}"
+            bot_logger.info("[ClubAPI] 开始初始化...")
+            await self.club_manager.initialize()
+            bot_logger.info("[ClubAPI] 初始化完成")
+        except Exception as e:
+            bot_logger.error(f"[ClubAPI] 初始化失败: {str(e)}")
+            raise
+    
+    async def stop(self):
+        """停止所有任务"""
+        try:
+            bot_logger.info("[ClubAPI] 开始停止所有任务")
+            await self.club_manager.stop()
+            bot_logger.info("[ClubAPI] 所有任务已停止")
+        except Exception as e:
+            bot_logger.error(f"[ClubAPI] 停止任务失败: {str(e)}")
+    
+    async def get_club_info(self, club_tag: str, exact_match: bool = True) -> Optional[List[dict]]:
+        """
+        查询俱乐部信息 - 使用缓存系统
+        
+        参数:
+            club_tag: 俱乐部标签
+            exact_match: 是否精确匹配
             
-            response = await self.get(url, headers=self.headers, cache_ttl=3600)  # 设置缓存时间为1小时
-            if not response or response.status_code != 200:
-                return None
-                
-            data = self.handle_response(response)
-            if not isinstance(data, list) or not data:
-                return None
-                
-            # 在返回的数据中过滤匹配的俱乐部标签
-            filtered_data = [club for club in data if isinstance(club, dict) and club.get("clubTag", "").lower() == clean_tag.lower()]
-            return filtered_data
+        返回:
+            俱乐部数据列表或 None
+        """
+        try:
+            # 清理标签
+            clean_tag = club_tag.strip().strip('[]')
+            
+            # 如果缓存未就绪，尝试初始化
+            if not self.club_manager.is_ready():
+                bot_logger.warning("[ClubAPI] 俱乐部管理器未就绪，尝试初始化...")
+                await self.initialize()
+            
+            # 从缓存获取数据
+            data = await self.club_manager.get_club_data(clean_tag, exact_match)
+            
+            if data:
+                bot_logger.info(f"[ClubAPI] 成功从缓存获取俱乐部 {clean_tag} 的数据")
+            else:
+                bot_logger.info(f"[ClubAPI] 未找到俱乐部 {clean_tag} 的数据")
+            
+            return data
             
         except Exception as e:
-            bot_logger.error(f"查询俱乐部失败 - 标签: {club_tag}, 错误: {str(e)}")
+            bot_logger.error(f"[ClubAPI] 查询俱乐部失败 - 标签: {club_tag}, 错误: {str(e)}")
             return None
+    
+    async def wait_for_init(self):
+        """等待初始化完成"""
+        await self.initialize()
 
 class ClubQuery:
-    """俱乐部查询功能"""
+    """
+    俱乐部查询功能 - 参考 RankQuery 设计
+    使用单例模式和全量缓存
+    """
+    _instance = None
+    _lock = asyncio.Lock()
+    _initialized = False
+    _preheated = False
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ClubQuery, cls).__new__(cls)
+        return cls._instance
     
     def __init__(self, deep_search_instance: Optional[DeepSearch] = None):
+        if self._initialized:
+            return
+        
         self.api = ClubAPI()
         self.rank_query = RankQuery()  # 创建 RankQuery 实例
         self.deep_search = deep_search_instance
         # 初始化图片生成器
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'templates')
         self.image_generator = ImageGenerator(template_dir)
+        self._initialized = True
+        bot_logger.info("ClubQuery 单例初始化完成")
+    
+    async def initialize(self):
+        """初始化 ClubQuery"""
+        if self._preheated:
+            return
+        
+        async with self._lock:
+            if self._preheated:
+                return
+            
+            bot_logger.info("[ClubQuery] 初始化流程启动 (非阻塞)")
+            await self.api.initialize()
+            self._preheated = True
+            bot_logger.info("[ClubQuery] 初始化标记完成")
 
     def _format_leaderboard_info(self, leaderboards: List[dict]) -> str:
         """格式化排行榜信息"""
@@ -196,8 +282,9 @@ class ClubQuery:
             image_bytes = await self.image_generator.generate_image(
                 template_data=template_data,
                 html_content='club_info.html',
-                wait_selectors=['.member-grid', '.header'],
-                image_quality=90
+                wait_selectors=['.header'],  # 减少等待选择器
+                image_quality=80,  # 降低质量以加快截图
+                wait_selectors_timeout_ms=300  # 减少等待超时
             )
             
             return image_bytes
@@ -264,14 +351,16 @@ class ClubQuery:
                 "3. 仅显示前10K玩家"
             )
 
-        bot_logger.info(f"查询俱乐部 {club_tag} 的数据 (直接API查询)")
+        bot_logger.info(f"查询俱乐部 {club_tag} 的数据 (使用全量缓存系统)")
         
         result = "\n⚠️ 查询过程中发生内部错误，请稍后重试" # Default error message
         try:
             # 先尝试精确匹配
+            bot_logger.debug(f"[ClubQuery] 尝试精确匹配俱乐部标签: {club_tag}")
             data = await self.api.get_club_info(club_tag, True)
             if not data:
                 # 如果没有结果，尝试模糊匹配
+                bot_logger.debug(f"[ClubQuery] 精确匹配失败，尝试模糊匹配: {club_tag}")
                 data = await self.api.get_club_info(club_tag, False)
             
             if not data:

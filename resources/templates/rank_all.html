@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historical Rankings - THE FINALS</title>
+    <link rel="preload" href="../fonts/local_fonts.css" as="style">
+    <link rel="stylesheet" href="../fonts/local_fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Montserrat', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #fff;
+        }
+        
+        /* 背景容器 */
+        .bg-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 扫描线背景效果 */
+        .bg-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(255, 255, 255, 0.03) 2px,
+                rgba(255, 255, 255, 0.03) 4px
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* 主容器 */
+        .poster {
+            position: relative;
+            width: 1200px;
+            z-index: 2;
+        }
+        
+        /* 内容容器 */
+        .content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* 标题区域 */
+        .title-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+        
+        .title-main {
+            font-family: 'Noto Sans SC', 'Montserrat', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
+            letter-spacing: 8px;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+        
+        .title-sub {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-style: italic;
+            color: rgba(227, 30, 36, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+        
+        /* 玩家信息卡片 */
+        .player-info {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            padding: 30px 40px;
+            margin-bottom: 50px;
+            text-align: center;
+        }
+        
+        .player-name {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 2px;
+        }
+        
+        /* 赛季数据网格 */
+        .seasons-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+        }
+        
+        .season-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            padding: 30px 25px;
+            transition: all 0.3s ease;
+        }
+        
+        .season-card.no-data {
+            opacity: 0.75;
+        }
+        
+        .season-name {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+            font-style: italic;
+            color: rgba(227, 30, 36, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 25px;
+        }
+        
+        .season-data {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .data-label {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 1px;
+        }
+        
+        .data-value {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+        
+        .no-data-text {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.3);
+            text-align: center;
+            padding: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-container" style="background: url('../images/seasons/{{ season_bg }}') center/cover no-repeat;">
+        <div class="poster">
+            <div class="content">
+                <!-- 标题 -->
+                <div class="title-header">
+                    <div class="title-main">历史数据</div>
+                    <div class="title-sub">HISTORICAL RANKINGS</div>
+                </div>
+                
+                <!-- 玩家信息 -->
+                <div class="player-info">
+                    <div class="player-name">{{ player_name }}</div>
+                </div>
+                
+                <!-- 赛季数据网格 -->
+                <div class="seasons-grid">
+                    {% for season in seasons %}
+                    <div class="season-card {% if not season.has_data %}no-data{% endif %}">
+                        <div class="season-name">{{ season.name }}</div>
+                        {% if season.has_data %}
+                        <div class="season-data">
+                            <div class="data-row">
+                                <span class="data-label">排名</span>
+                                <span class="data-value">#{{ season.rank }}</span>
+                            </div>
+                            {% if season.score %}
+                            <div class="data-row">
+                                <span class="data-label">分数</span>
+                                <span class="data-value">{{ season.score }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="no-data-text">无数据</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

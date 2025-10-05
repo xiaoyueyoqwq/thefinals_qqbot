@@ -5,18 +5,38 @@ from utils.config import settings
 from utils.logger import bot_logger
 
 class ClubPlugin(Plugin):
-    """俱乐部查询插件"""
-    
-    # 在类级别定义属性
-    name = "ClubPlugin"
-    description = "查询俱乐部信息"
-    version = "1.0.0"
+    """俱乐部查询插件 - 使用全量缓存系统"""
     
     def __init__(self):
-        super().__init__()  # 调用父类初始化
-        # 同时初始化 DeepSearch，并将其注入 ClubQuery
+        super().__init__()  # 调用父类初始化，会自动设置 name 属性
+        # 初始化 DeepSearch，并将其注入 ClubQuery
         self.deep_search = DeepSearch()
         self.club_query = ClubQuery(deep_search_instance=self.deep_search)
+        bot_logger.debug(f"[{self.name}] 初始化完成，使用全量缓存系统")
+    
+    async def on_load(self):
+        """插件加载时初始化缓存系统"""
+        try:
+            bot_logger.info(f"[{self.name}] 开始初始化俱乐部缓存...")
+            await self.club_query.initialize()
+            bot_logger.info(f"[{self.name}] 俱乐部缓存初始化完成")
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 初始化缓存失败: {str(e)}", exc_info=True)
+            raise
+        finally:
+            await super().on_load()
+    
+    async def on_unload(self):
+        """插件卸载时清理缓存系统"""
+        try:
+            bot_logger.info(f"[{self.name}] 开始停止俱乐部缓存...")
+            await self.club_query.api.stop()
+            bot_logger.info(f"[{self.name}] 俱乐部缓存已停止")
+        except Exception as e:
+            bot_logger.error(f"[{self.name}] 停止缓存失败: {str(e)}", exc_info=True)
+        finally:
+            # 调用父类的 on_unload
+            await super().on_unload()
 
     @on_command("club", "查询俱乐部信息")
     async def handle_club_command(self, handler, content: str):

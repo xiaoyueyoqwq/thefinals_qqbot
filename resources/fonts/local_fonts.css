@@ -1,0 +1,68 @@
+/* 
+ * 本地字体加载 - 完整字重支持
+ * Montserrat: 600, 700, 800, 900
+ * Noto Sans SC: 600, 700, 800
+ */
+
+/* Montserrat SemiBold (600) */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(Montserrat-SemiBold.woff2) format('woff2');
+}
+
+/* Montserrat Bold (700) */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(Montserrat-Bold.woff2) format('woff2');
+}
+
+/* Montserrat ExtraBold (800) */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+  src: url(Montserrat-ExtraBold.woff2) format('woff2');
+}
+
+/* Montserrat Black (900) */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: url(Montserrat-Black.woff2) format('woff2');
+}
+
+/* Noto Sans SC SemiBold (600) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url(NotoSansSC-SemiBold.woff2) format('woff2');
+}
+
+/* Noto Sans SC Bold (700) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url(NotoSansSC-Bold.woff2) format('woff2');
+}
+
+/* Noto Sans SC ExtraBold (800) */
+@font-face {
+  font-family: 'Noto Sans SC';
+  font-style: normal;
+  font-weight: 800;
+  font-display: block;
+  src: url(NotoSansSC-ExtraBold.woff2) format('woff2');
+}

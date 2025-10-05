@@ -194,7 +194,9 @@ class QuickCashQuery:
             image_bytes = await self.image_generator.generate_image(
                 template_data=template_data,
                 html_content='quick_cash.html',
-                wait_selectors=['.player-section', '.stats-grid']
+                wait_selectors=['.player-section'],
+                image_quality=80,
+                wait_selectors_timeout_ms=300
             )
             return image_bytes
         except Exception as e:

@@ -406,7 +406,9 @@ class WorldTourQuery:
             image_bytes = await self.image_generator.generate_image(
                 template_data=template_data,
                 html_content='world_tour.html',
-                wait_selectors=['.info-card', '.title-icon']
+                wait_selectors=['.info-card'],
+                image_quality=80,
+                wait_selectors_timeout_ms=300
             )
             return image_bytes
         except Exception as e:

@@ -123,12 +123,16 @@ class RankAllPlugin(Plugin):
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}")
             
-            # 使用核心功能查询数据
-            all_data = await self.rank_all.query_all_seasons(player_name)
+            # 使用核心功能处理查询
+            result = await self.rank_all.process_rank_all_command(player_name)
             
-            # 使用核心功能格式化结果
-            response = self.rank_all.format_all_seasons(player_name, all_data)
-            await self.reply(handler, response)
+            # 根据返回类型处理结果
+            if isinstance(result, bytes):
+                # 返回图片
+                await handler.send_image(result)
+            else:
+                # 返回文本
+                await self.reply(handler, result)
             
         except Exception as e:
             bot_logger.error(f"[{self.name}] 处理全赛季排名查询命令时发生错误: {str(e)}")
