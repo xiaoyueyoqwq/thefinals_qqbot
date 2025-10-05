@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weapon List - THE FINALS</title>
+    <link rel="preload" href="../fonts/local_fonts.css" as="style">
+    <link rel="stylesheet" href="../fonts/local_fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #fff;
+        }
+        
+        /* 背景容器 */
+        .bg-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 扫描线背景效果 */
+        .bg-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAECAYAAABP2FU6AAAAGklEQVR4nAXBsQ0AAAzDIOSp/z+cgm2CcMEDNkoDDAL5fKEAAAAASUVORK5CYII=");
+            background-repeat: repeat;
+            background-size: 1px 4px;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* 主容器 */
+        .container {
+            position: relative;
+            width: 1200px;
+            z-index: 2;
+        }
+        
+        /* 标题 */
+        .header {
+            margin-bottom: 40px;
+        }
+        
+        .title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        
+        .subtitle {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.6);
+            letter-spacing: 1px;
+        }
+        
+        .error-message {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 1.3rem;
+            color: #E31E24;
+            margin-top: 10px;
+            padding: 15px 20px;
+            background: rgba(227, 30, 36, 0.1);
+            border-left: 4px solid #E31E24;
+        }
+        
+        /* 武器网格 */
+        .weapon-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        /* 武器卡片 */
+        .weapon-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            transition: all 0.2s ease;
+        }
+        
+        .weapon-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-3px);
+        }
+        
+        .weapon-name {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #E31E24;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .weapon-intro {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 12px;
+            font-style: italic;
+        }
+        
+        .aliases-label {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+        
+        .aliases {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        
+        .alias-tag {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 10px;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-container" style="background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.5) 100%), url('../images/seasons/{{ season_bg }}') center/cover no-repeat;">
+        <div class="container">
+            <!-- 标题 -->
+            <div class="header">
+                <h1 class="title">WEAPON DATABASE</h1>
+                <p class="subtitle">武器数据库 - 所有可用武器及别名</p>
+                {% if search_query %}
+                <div class="error-message">
+                    未找到武器 "{{ search_query }}"，请从下方列表中选择
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- 武器网格 -->
+            <div class="weapon-grid">
+                {% for weapon in weapons %}
+                <div class="weapon-card">
+                    <div class="weapon-name">{{ weapon.name }}</div>
+                    {% if weapon.intro %}
+                    <div class="weapon-intro">{{ weapon.intro }}</div>
+                    {% endif %}
+                    {% if weapon.aliases %}
+                    <div class="aliases-label">别名</div>
+                    <div class="aliases">
+                        {% for alias in weapon.aliases %}
+                        <span class="alias-tag">{{ alias }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

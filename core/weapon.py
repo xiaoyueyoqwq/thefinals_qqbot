@@ -398,3 +398,65 @@ class WeaponData:
             bot_logger.error(f"[WeaponData] 生成武器排行榜失败: {str(e)}")
             bot_logger.exception(e)
             return None
+    
+    async def generate_weapon_list(self, search_query: str = None) -> Optional[bytes]:
+        """生成武器列表图片（所有武器名和别名）
+        
+        Args:
+            search_query: 用户搜索的武器名（可选，用于错误提示）
+            
+        Returns:
+            Optional[bytes]: 图片数据，如果生成失败则返回None
+        """
+        try:
+            # 提取所有武器信息
+            weapons_list = []
+            for weapon_name, data in self.weapon_data.items():
+                aliases = data.get('aliases', [])
+                intro = data.get('introduction', '').strip('"')
+                
+                weapons_list.append({
+                    'name': weapon_name,
+                    'intro': intro if intro else None,
+                    'aliases': aliases if aliases else None
+                })
+            
+            # 按武器名称排序
+            weapons_list.sort(key=lambda x: x['name'])
+            
+            # 确定赛季背景图
+            season_bg_map = {
+                "s3": "s3.png",
+                "s4": "s4.png",
+                "s5": "s5.png",
+                "s6": "s6.jpg",
+                "s7": "s7.jpg",
+                "s8": "s8.png"
+            }
+            season = settings.CURRENT_SEASON
+            season_bg = season_bg_map.get(season, "s8.png")
+            
+            # 准备模板数据
+            template_data = {
+                'weapons': weapons_list,
+                'search_query': search_query,
+                'season_bg': season_bg
+            }
+            
+            bot_logger.info(f"[WeaponData] 生成武器列表，共 {len(weapons_list)} 个武器")
+            
+            # 生成图片
+            image_data = await self.image_generator.generate_image(
+                template_data=template_data,
+                html_content='weapon_list.html',
+                wait_selectors=['.weapon-grid'],
+                image_quality=80,
+                wait_selectors_timeout_ms=300
+            )
+            
+            return image_data
+            
+        except Exception as e:
+            bot_logger.error(f"[WeaponData] 生成武器列表失败: {str(e)}")
+            bot_logger.exception(e)
+            return None
