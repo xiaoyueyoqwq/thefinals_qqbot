@@ -287,3 +287,114 @@ class WeaponData:
                 # 如果图片生成失败，返回文本格式
                 return self._format_weapon_data(weapon_name, data)
         return None
+    
+    def _calculate_dps(self, weapon_data: Dict[str, Any]) -> Optional[int]:
+        """计算武器DPS
+        
+        Args:
+            weapon_data: 武器数据
+            
+        Returns:
+            Optional[int]: DPS值，如果无法计算则返回None
+        """
+        try:
+            tech_data = weapon_data.get('technical_data', {})
+            damage_data = weapon_data.get('damage', {})
+            
+            # 获取RPM
+            rpm_str = tech_data.get('rpm', '')
+            if not rpm_str or not str(rpm_str).replace(',', '').isdigit():
+                return None
+            rpm = int(str(rpm_str).replace(',', ''))
+            
+            # 计算每发伤害
+            damage_per_shot = 0
+            if 'body' in damage_data:
+                # 普通武器：body伤害
+                damage_value = damage_data['body']
+                if isinstance(damage_value, (int, float)):
+                    damage_per_shot = damage_value
+                elif isinstance(damage_value, str) and damage_value.replace('.', '').isdigit():
+                    damage_per_shot = float(damage_value)
+            elif 'pellet_damage' in damage_data and 'pellet_count' in damage_data:
+                # 散弹武器：弹丸伤害 × 弹丸数量
+                damage_per_shot = damage_data['pellet_damage'] * damage_data['pellet_count']
+            elif 'bullet_damage' in damage_data and 'bullet_count' in damage_data:
+                # 子弹武器：子弹伤害 × 子弹数量
+                damage_per_shot = damage_data['bullet_damage'] * damage_data['bullet_count']
+            
+            if rpm > 0 and damage_per_shot > 0:
+                return int((rpm * damage_per_shot) / 60)
+            
+            return None
+        except Exception as e:
+            bot_logger.error(f"[WeaponData] 计算DPS失败: {str(e)}")
+            return None
+    
+    async def generate_weapon_leaderboard(self) -> Optional[bytes]:
+        """生成武器排行榜图片
+        
+        Returns:
+            Optional[bytes]: 图片数据，如果生成失败则返回None
+        """
+        try:
+            # 计算所有武器的DPS并排序
+            weapons_with_dps = []
+            for weapon_name, data in self.weapon_data.items():
+                dps = self._calculate_dps(data)
+                if dps is not None:  # 只包含能计算DPS的武器
+                    tech_data = data.get('technical_data', {})
+                    damage_data = data.get('damage', {})
+                    
+                    # 获取伤害值
+                    damage_display = damage_data.get('body', 'N/A')
+                    if isinstance(damage_display, (int, float)):
+                        damage_display = str(int(damage_display))
+                    
+                    weapons_with_dps.append({
+                        'name': weapon_name,
+                        'intro': data.get('introduction', '').strip('"'),
+                        'dps': dps,
+                        'rpm': tech_data.get('rpm', 'N/A'),
+                        'damage': damage_display,
+                        'mag': tech_data.get('magazine_size', 'N/A')
+                    })
+            
+            # 按DPS降序排序
+            weapons_with_dps.sort(key=lambda x: x['dps'], reverse=True)
+            
+            # 确定赛季背景图
+            season_bg_map = {
+                "s3": "s3.png",
+                "s4": "s4.png",
+                "s5": "s5.png",
+                "s6": "s6.jpg",
+                "s7": "s7.jpg",
+                "s8": "s8.png"
+            }
+            season = settings.CURRENT_SEASON
+            season_bg = season_bg_map.get(season, "s8.png")
+            
+            # 准备模板数据
+            template_data = {
+                'weapons': weapons_with_dps,
+                'season_bg': season_bg
+            }
+            
+            bot_logger.info(f"[WeaponData] 生成武器排行榜，共 {len(weapons_with_dps)} 个武器")
+            
+            # 生成图片
+            image_data = await self.image_generator.generate_image(
+                template_data=template_data,
+                html_content='weapon_leaderboard.html',
+                wait_selectors=['.leaderboard-table'],
+                image_quality=80,
+                wait_selectors_timeout_ms=300
+            )
+            
+            return image_data
+            
+        except Exception as e:
+            bot_logger.error(f"[WeaponData] 生成武器排行榜失败: {str(e)}")
+            bot_logger.exception(e)
+            return None

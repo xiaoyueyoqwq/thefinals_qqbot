@@ -30,16 +30,23 @@ class WeaponPlugin(Plugin):
             args = content.strip()
             weapon_name = args.replace("/weapon", "").strip() # 先提取武器名称
 
-            if not weapon_name: # 再检查提取到的武器名称是否为空
-                await self.reply(handler, (
-                    "\n❌ 未指定武器名称\n"
-                    f"{SEPARATOR}\n"
-                    "🎮 使用方法:\n"
-                    "- /weapon <武器名称>\n"
-                    f"{SEPARATOR}\n"
-                    "💡 小贴士:\n"
-                    "武器名称可以用别名"
-                ))
+            if not weapon_name: # 没有参数，显示武器排行榜
+                bot_logger.info(f"[{self.name}] 生成武器排行榜")
+                leaderboard_image = await self.weapon_data.generate_weapon_leaderboard()
+                
+                if leaderboard_image:
+                    await handler.send_image(leaderboard_image)
+                else:
+                    await self.reply(handler, (
+                        "\n❌ 生成武器排行榜失败\n"
+                        f"{SEPARATOR}\n"
+                        "🎮 使用方法:\n"
+                        "- /weapon (查看武器排行榜)\n"
+                        "- /weapon <武器名称> (查看武器详情)\n"
+                        f"{SEPARATOR}\n"
+                        "💡 小贴士:\n"
+                        "武器名称可以用别名"
+                    ))
                 return
 
             # 调用 WeaponData 的方法获取武器信息（图片或文本）

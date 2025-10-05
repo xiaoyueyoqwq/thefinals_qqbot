@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weapon Leaderboard - THE FINALS</title>
+    <link rel="preload" href="../fonts/local_fonts.css" as="style">
+    <link rel="stylesheet" href="../fonts/local_fonts.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: 'Montserrat', 'Noto Sans SC', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #fff;
+        }
+        
+        /* 背景容器 */
+        .bg-container {
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 扫描线背景效果 */
+        .bg-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAECAYAAABP2FU6AAAAGklEQVR4nAXBsQ0AAAzDIOSp/z+cgm2CcMEDNkoDDAL5fKEAAAAASUVORK5CYII=");
+            background-repeat: repeat;
+            background-size: 1px 4px;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* 主容器 */
+        .container {
+            position: relative;
+            width: 1400px;
+            z-index: 2;
+        }
+        
+        /* 标题 */
+        .header {
+            margin-bottom: 40px;
+        }
+        
+        .title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        
+        .subtitle {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 1.3rem;
+            color: rgba(255, 255, 255, 0.6);
+            letter-spacing: 1px;
+        }
+        
+        /* 表格 */
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 15px;
+        }
+        
+        .table-header {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: left;
+            padding: 0 20px 20px 20px;
+        }
+        
+        .table-header.center {
+            text-align: center;
+        }
+        
+        .table-header.rank-col {
+            width: 80px;
+            text-align: center;
+        }
+        
+        .table-header.name-col {
+            width: 300px;
+        }
+        
+        .table-header.dps-col {
+            width: 150px;
+            text-align: center;
+        }
+        
+        .table-header.rpm-col,
+        .table-header.damage-col,
+        .table-header.mag-col {
+            width: 130px;
+            text-align: center;
+        }
+        
+        /* 武器行 */
+        .weapon-row {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+        
+        .weapon-row:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(5px);
+        }
+        
+        /* Top 3 特殊样式 */
+        .weapon-row.top-1 {
+            background: linear-gradient(90deg, rgba(255, 215, 0, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+        }
+        
+        .weapon-row.top-2 {
+            background: linear-gradient(90deg, rgba(192, 192, 192, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+        }
+        
+        .weapon-row.top-3 {
+            background: linear-gradient(90deg, rgba(205, 127, 50, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+        }
+        
+        .weapon-cell {
+            padding: 25px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .weapon-row td:first-child {
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .weapon-row td:last-child {
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        /* 排名列 */
+        .rank-cell {
+            text-align: center;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .weapon-row.top-1 .rank-cell {
+            color: #FFD700;
+            font-size: 2.5rem;
+        }
+        
+        .weapon-row.top-2 .rank-cell {
+            color: #C0C0C0;
+            font-size: 2.3rem;
+        }
+        
+        .weapon-row.top-3 .rank-cell {
+            color: #CD7F32;
+            font-size: 2.1rem;
+        }
+        
+        /* 武器名称 */
+        .weapon-name-cell {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+        
+        .weapon-intro {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 5px;
+            font-style: italic;
+        }
+        
+        /* DPS (重点突出) */
+        .dps-cell {
+            text-align: center;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 900;
+            color: #E31E24;
+        }
+        
+        .weapon-row.top-1 .dps-cell {
+            color: #FFD700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+        
+        .weapon-row.top-2 .dps-cell {
+            color: #C0C0C0;
+        }
+        
+        .weapon-row.top-3 .dps-cell {
+            color: #CD7F32;
+        }
+        
+        /* 其他数据列 */
+        .stat-cell {
+            text-align: center;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-container" style="background: linear-gradient(135deg, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.5) 100%), url('../images/seasons/{{ season_bg }}') center/cover no-repeat;">
+        <div class="container">
+            <!-- 标题 -->
+            <div class="header">
+                <h1 class="title">WEAPON LEADERBOARD</h1>
+                <p class="subtitle">武器排行榜 - 按 DPS（每秒伤害）排序</p>
+            </div>
+            
+            <!-- 排行榜表格 -->
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th class="table-header rank-col">排名</th>
+                        <th class="table-header name-col">武器</th>
+                        <th class="table-header dps-col">DPS</th>
+                        <th class="table-header rpm-col">射速</th>
+                        <th class="table-header damage-col">伤害</th>
+                        <th class="table-header mag-col">弹夹</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for weapon in weapons %}
+                    <tr class="weapon-row{% if loop.index == 1 %} top-1{% elif loop.index == 2 %} top-2{% elif loop.index == 3 %} top-3{% endif %}">
+                        <td class="weapon-cell rank-cell">#{{ loop.index }}</td>
+                        <td class="weapon-cell weapon-name-cell">
+                            {{ weapon.name }}
+                            {% if weapon.intro %}
+                            <div class="weapon-intro">{{ weapon.intro }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="weapon-cell dps-cell">{{ weapon.dps }}</td>
+                        <td class="weapon-cell stat-cell">
+                            {{ weapon.rpm }}
+                            <div class="stat-label">RPM</div>
+                        </td>
+                        <td class="weapon-cell stat-cell">
+                            {{ weapon.damage }}
+                            <div class="stat-label">DMG</div>
+                        </td>
+                        <td class="weapon-cell stat-cell">
+                            {{ weapon.mag }}
+                            <div class="stat-label">MAG</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -1,5 +1,4 @@
 from core.plugin import Plugin, on_command
-from utils.message_handler import MessageHandler
 from core.me import MeQuery
 from core.bind import BindManager
 from core.season import SeasonManager, SeasonConfig
