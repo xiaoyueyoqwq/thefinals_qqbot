@@ -39,42 +39,33 @@ class MePlugin(Plugin):
         """处理个人信息查询命令"""
         try:
             # 移除命令前缀并分割参数
-            args = content.replace("/me", "").strip()
+            args = content.replace("/me", "").strip().split()
             
-            # 确定要查询的玩家ID
-            if args:
-                player_name = args
-            else:
-                # 如果没有参数，则使用绑定的ID
-                bound_id = self.bind_manager.get_game_id(handler.user_id)
-                if not bound_id:
-                    await self.reply(handler, self._get_help_message())
-                    return
+            # 获取绑定的ID
+            bound_id = self.bind_manager.get_game_id(handler.user_id)
             
             # 解析命令参数
-            if len(args) <= 1:  # 没有参数，使用绑定ID和默认赛季
+            if not args:  # 没有参数，使用绑定ID
                 if not bound_id:
                     await self.reply(handler, self._messages["not_found"])
                     return
                 player_name = bound_id
-                season = SeasonConfig.CURRENT_SEASON  # 默认赛季
-            else:
-                args = args.split()
-                if len(args) == 1:  # 只有一个参数
-                    if args[0].lower().startswith('s') and args[0].lower() in self.season_manager.get_all_seasons():
-                        # 参数是赛季，使用绑定ID
-                        if not bound_id:
-                            await self.reply(handler, "\n❌ 请先绑定游戏ID或提供玩家ID")
-                            return
-                        player_name = bound_id
-                        season = args[0].lower()
-                    else:
-                        # 参数是玩家ID，使用默认赛季
-                        player_name = args[0]
-                        season = SeasonConfig.CURRENT_SEASON
-                else:  # 有两个参数
+                season = SeasonConfig.CURRENT_SEASON
+            elif len(args) == 1:  # 一个参数
+                if args[0].lower().startswith('s') and args[0].lower() in self.season_manager.get_all_seasons():
+                    # 参数是赛季，使用绑定ID
+                    if not bound_id:
+                        await self.reply(handler, "\n❌ 请先绑定游戏ID或提供玩家ID")
+                        return
+                    player_name = bound_id
+                    season = args[0].lower()
+                else:
+                    # 参数是玩家ID
                     player_name = args[0]
-                    season = args[1].lower()
+                    season = SeasonConfig.CURRENT_SEASON
+            else:  # 两个参数：玩家ID + 赛季
+                player_name = args[0]
+                season = args[1].lower()
             
             bot_logger.debug(f"[{self.name}] 解析参数 - 玩家: {player_name}, 赛季: {season}")
             
