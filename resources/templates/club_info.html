@@ -12,17 +12,18 @@
   html,body,div,span,h1,h2,h3,h4,h5,h6,p,img,ul,li { margin:0; padding:0; border:0; }
   
   body {
-    background: #000;
+    background: transparent;
     color: #fff;
     font-family: 'Montserrat', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
   }
   
   .poster {
     position: relative;
-    width: 1200px;
-    margin: 0 auto;
+    width: 1000px;
     background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
     padding: 60px 80px;
     overflow: hidden;
@@ -67,12 +68,15 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 50px;
+    gap: 40px;
   }
   
   .title-section {
     display: flex;
     align-items: center;
     gap: 20px;
+    flex: 1;
+    min-width: 0;
   }
   
   .squad-label {
@@ -106,10 +110,15 @@
     font-weight: 900;
     letter-spacing: 4px;
     color: #E31E24;
+    word-break: break-all;
+    max-width: 600px;
   }
   
   .member-count {
     text-align: right;
+    flex-shrink: 0;
+    min-width: 350px;
+    white-space: nowrap;
   }
   
   .member-count-label {
@@ -119,6 +128,7 @@
     color: rgba(255, 255, 255, 0.6);
     letter-spacing: 2px;
     margin-bottom: 8px;
+    white-space: nowrap;
   }
   
   .member-count-label-en {
@@ -131,6 +141,7 @@
     letter-spacing: 2px;
     display: block;
     margin-top: 3px;
+    white-space: nowrap;
   }
   
   .member-count-value {
@@ -187,6 +198,8 @@
     border-left: 3px solid transparent;
     transition: all 0.2s ease;
     font-size: 1.1rem;
+    /* 防止内容溢出 */
+    min-width: 0;
   }
   
   /* 已上榜玩家 */
@@ -250,10 +263,12 @@
     flex: 1;
     font-weight: 600;
     font-size: 1.05rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
     white-space: nowrap;
     letter-spacing: 0.5px;
+    /* 确保文本有足够空间不被截断 */
+    min-width: 0;
+    padding-right: 5px;
   }
   
   .member-score {
@@ -262,6 +277,9 @@
     font-style: italic;
     font-size: 1.05rem;
     letter-spacing: 1px;
+    /* 确保分数有足够的显示空间 */
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   
   /* ===== 战队排名区域 ===== */

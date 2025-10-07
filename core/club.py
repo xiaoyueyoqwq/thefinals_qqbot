@@ -284,7 +284,9 @@ class ClubQuery:
                 html_content='club_info.html',
                 wait_selectors=['.header'],  # 减少等待选择器
                 image_quality=80,  # 降低质量以加快截图
-                wait_selectors_timeout_ms=300  # 减少等待超时
+                wait_selectors_timeout_ms=300,  # 减少等待超时
+                screenshot_selector='.poster',  # 只截取 .poster 元素，避免额外空白
+                full_page=False  # 禁用整页截图
             )
             
             return image_bytes

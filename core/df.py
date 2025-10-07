@@ -327,6 +327,18 @@ class DFQuery:
             except Exception:
                 bot_logger.warning(f"[DFQuery] 无效的赛季结束时间配置: {season_end_time_str}")
 
+        # 确定赛季背景图
+        season_bg_map = {
+            "s3": "s3.png",
+            "s4": "s4.png",
+            "s5": "s5.png",
+            "s6": "s6.jpg",
+            "s7": "s7.jpg",
+            "s8": "s8.png"
+        }
+        season = settings.CURRENT_SEASON
+        season_bg = season_bg_map.get(season, "s8.png")
+
         # 处理 Top 500 (红宝石)
         ruby_data = data.get("500", {})
         ruby_score = ruby_data.get("score")
@@ -373,7 +385,8 @@ class DFQuery:
 
             "update_time": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             "safe_score_line": safe_score_line,
-            "season_remaining_days": remaining_days_display
+            "season_remaining_days": remaining_days_display,
+            "season_bg": season_bg
         }
         return template_data
         
