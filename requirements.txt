@@ -16,7 +16,7 @@ websockets==14.1
 orjson==3.11.3
 PyYAML==6.0.3
 pydantic==2.11.9
-requests==2.32.3
+requests==2.32.4
 
 # File & IO
 aiofiles==24.1.0
