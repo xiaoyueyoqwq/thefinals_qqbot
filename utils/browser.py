@@ -126,7 +126,7 @@ class BrowserManager:
         return page
 
     async def release_page(self, page: Page):
-        """将页面直接归还到池中，不再重置状态"""
+        """将页面归还到池中，并重置关键状态以避免污染"""
         r0 = time.perf_counter()
         if not self.page_pool:
             # 如果池不存在（可能在清理阶段），尝试关闭页面
@@ -159,6 +159,43 @@ class BrowserManager:
                 bot_logger.error(f"无法创建新页面来替换已关闭的页面: {e}")
                 _perf_log("page.release.recreate_error", error=str(e))
                 return  # 无法补充，直接返回
+        else:
+            # 重置页面状态以避免状态污染
+            try:
+                # 重置 viewport 到默认值
+                current_viewport = page.viewport_size
+                if current_viewport != DEFAULT_VIEWPORT:
+                    await page.set_viewport_size(DEFAULT_VIEWPORT)
+                    bot_logger.debug(f"重置 viewport 从 {current_viewport} 到 {DEFAULT_VIEWPORT}")
+                
+                # 清除 warmup 标记，让下次使用时重新预热
+                if hasattr(page, '_warmed_for'):
+                    delattr(page, '_warmed_for')
+                    
+            except Exception as e:
+                bot_logger.warning(f"重置页面状态时出错: {e}，页面可能已损坏，将创建新页面")
+                # 如果重置失败，关闭损坏的页面并创建新的
+                try:
+                    if not page.is_closed():
+                        await page.close()
+                    if self.browser:
+                        page = await self.browser.new_page(
+                            viewport=DEFAULT_VIEWPORT,
+                            device_scale_factor=DEFAULT_DEVICE_SCALE_FACTOR
+                        )
+                        try:
+                            page.set_default_timeout(DEFAULT_TIMEOUT_MS)
+                            page.set_default_navigation_timeout(DEFAULT_NAV_TIMEOUT_MS)
+                        except Exception:
+                            pass
+                    else:
+                        bot_logger.error("浏览器实例不存在，无法创建新页面。")
+                        _perf_log("page.release.reset_error.browser_missing")
+                        return
+                except Exception as e2:
+                    bot_logger.error(f"创建替换页面失败: {e2}")
+                    _perf_log("page.release.reset_error.recreate_failed", error=str(e2))
+                    return
         
         await self.page_pool.put(page)
         r1 = time.perf_counter()

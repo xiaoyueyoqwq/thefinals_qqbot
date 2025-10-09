@@ -6,7 +6,6 @@ import time
 import uuid
 import contextlib
 from typing import Optional, List, Dict, Any
-from pathlib import Path
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 from jinja2 import Environment, FileSystemLoader
 from utils.logger import bot_logger
@@ -139,7 +138,12 @@ class ImageGenerator:
                 else:
                     raise Exception("未提供HTML模板内容或模板文件名")
 
+            # 2) 设置页面内容
+            with perf.step("page.set_content"):
+                await page.set_content(html_to_set, wait_until='domcontentloaded')
+
             # 注入禁用动画（多数情况下可减少绘制时间、避免抖动）
+            # 必须在 set_content 之后注入，否则会被清除
             if disable_css_animations:
                 with perf.step("inject_disable_animations_style"):
                     try:
@@ -154,10 +158,6 @@ class ImageGenerator:
                     except Exception:
                         # 注入失败不影响主流程
                         pass
-
-            # 2) 设置页面内容
-            with perf.step("page.set_content"):
-                await page.set_content(html_to_set, wait_until='domcontentloaded')
 
             # 3) 等待关键选择器（并发等待，降低总等待时间）
             if wait_selectors:
