@@ -1,6 +1,6 @@
 {
   "93R": {
-    "introduction": "“矮子专用法马斯”",
+    "introduction": "“矮子专用法玛斯”",
     "damage": {
       "body": 26,
       "head": 39
@@ -54,7 +54,7 @@
     }
   },
   "Dagger": {
-    "introduction": "“曾经辉煌过，现在下水道”",
+    "introduction": "“小刀划屁股”",
     "damage": {
       "body": "60/75（暴击伤害）",
       "secondary": "320 (背刺伤害)"
@@ -66,7 +66,7 @@
     ]
   },
   "LH1": {
-    "introduction": "“抽死你”",
+    "introduction": "“抽死你抽死你抽死你”",
     "damage": {
       "body": 44,
       "head": 84
@@ -138,7 +138,8 @@
     },
     "aliases": [
       "M26 Matter",
-      "矮喷"
+      "矮喷",
+      "m26"
     ]
   },
   "Recurve Bow": {
@@ -212,7 +213,7 @@
     ]
   },
   "Sword": {
-    "introduction": "“以前很畜生，现在下水道”",
+    "introduction": "“马来剑享受者”",
     "damage": {
       "body": 74,
       "secondary": 105
@@ -344,7 +345,7 @@
     ]
   },
   "Cerberus 12GA": {
-    "introduction": "“出生龙息”",
+    "introduction": "“惨遭削弱”",
     "damage": {
       "pellet_damage": 10,
       "pellet_count": 11
@@ -419,6 +420,7 @@
     },
     "aliases": [
       "FAMAS",
+      "法玛斯",
       "法马斯"
     ],
     "ttk": {
