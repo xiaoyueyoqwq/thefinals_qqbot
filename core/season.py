@@ -122,7 +122,8 @@ class Season:
         try:
             bot_logger.info(f"开始更新赛季 {self.season_id} 数据到 Redis...")
             api_url = SeasonConfig.get_api_url(self.season_id)
-            response = await self.api.get(api_url, headers=self.headers, use_cache=False)
+            # 优化：启用HTTP缓存，支持304 Not Modified响应，大幅减少流量
+            response = await self.api.get(api_url, headers=self.headers, use_cache=True)
             
             if not (response and response.status_code == 200):
                 bot_logger.error(f"获取赛季 {self.season_id} API 数据失败: {response.status_code if response else 'No response'}")
@@ -275,7 +276,11 @@ class SeasonManager:
         if self._initialized:
             return
         self.api = BaseAPI(SeasonConfig.API_BASE_URL, timeout=SeasonConfig.API_TIMEOUT)
-        self.api_headers = {"Accept": "application/json", "User-Agent": "TheFinals-Bot/1.0"}
+        self.api_headers = {
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br", 
+            "User-Agent": "TheFinals-Bot/1.0"
+        }
         self.seasons_config = SeasonConfig.SEASONS
         self._seasons: Dict[str, Season] = {}
         # 这个锁用于保护 _seasons 字典的并发访问

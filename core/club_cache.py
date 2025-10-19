@@ -238,7 +238,8 @@ class ClubCache:
         try:
             bot_logger.info("开始更新俱乐部数据到 Redis...")
             api_url = "/v1/clubs"
-            response = await self.api.get(api_url, headers=self.headers, use_cache=False)
+            # 优化：启用HTTP缓存，支持304 Not Modified响应，大幅减少流量
+            response = await self.api.get(api_url, headers=self.headers, use_cache=True)
             
             if not (response and response.status_code == 200):
                 bot_logger.error(f"获取俱乐部 API 数据失败: {response.status_code if response else 'No response'}")
@@ -453,6 +454,7 @@ class ClubManager:
         self.api = BaseAPI(settings.api_base_url, timeout=20)
         self.api_headers = {
             "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br", 
             "User-Agent": "TheFinals-Bot/1.0"
         }
         self.indexer = ClubIndexer()

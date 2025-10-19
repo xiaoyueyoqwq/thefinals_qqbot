@@ -19,6 +19,7 @@ class H2HAPI(BaseAPI):
         # 设置默认请求头
         self.headers = {
             "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br", 
             "User-Agent": "TheFinals-Bot/1.0"
         }
         

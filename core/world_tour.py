@@ -35,6 +35,7 @@ class WorldTourAPI(BaseAPI):
         # 设置默认请求头
         self.headers = {
             "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br", 
             "User-Agent": "TheFinals-Bot/1.0"
         }
         
@@ -136,7 +137,8 @@ class WorldTourAPI(BaseAPI):
 
         try:
             url = f"/v1/leaderboard/{season}worldtour/{self.platform}"
-            response = await self.get(url, headers=self.headers)
+            # 优化：明确启用HTTP缓存，支持304 Not Modified响应，减少流量
+            response = await self.get(url, headers=self.headers, use_cache=True)
             if not response or response.status_code != 200:
                 bot_logger.warning(f"[WorldTourAPI] 获取赛季 {season} API数据失败，状态码: {response.status_code if response else 'N/A'}")
                 return

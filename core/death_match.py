@@ -15,6 +15,7 @@ class DeathMatchAPI(BaseAPI):
         super().__init__("https://api.the-finals-leaderboard.com", timeout=10)
         self.headers = {
             "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate, br", 
             "User-Agent": "TheFinals-Bot/1.0"
         }
         self.platform = "crossplay"
