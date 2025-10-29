@@ -8,6 +8,7 @@ class RedisManager:
     """统一的Redis管理器 (单例)"""
     _instance = None
     _pool = None
+    _binary_pool = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -28,12 +29,22 @@ class RedisManager:
                 'password': redis_settings.password,
                 'timeout': redis_settings.timeout,
             }
+            # 创建文本连接池（自动解码）
             self._pool = redis.ConnectionPool(
                 host=redis_settings.host,
                 port=redis_settings.port,
                 db=redis_settings.db,
                 password=redis_settings.password or None,
                 decode_responses=True,  # 自动将响应解码为UTF-8
+                socket_connect_timeout=redis_settings.timeout,
+            )
+            # 创建二进制连接池（不解码）
+            self._binary_pool = redis.ConnectionPool(
+                host=redis_settings.host,
+                port=redis_settings.port,
+                db=redis_settings.db,
+                password=redis_settings.password or None,
+                decode_responses=False,  # 不自动解码，保持原始字节
                 socket_connect_timeout=redis_settings.timeout,
             )
             bot_logger.info(f"Redis 连接池已成功初始化 -> {redis_settings.host}:{redis_settings.port}")
@@ -46,11 +57,20 @@ class RedisManager:
         if self._pool:
             try:
                 await self._pool.disconnect()
-                bot_logger.info("Redis 连接池已关闭")
+                bot_logger.info("Redis 文本连接池已关闭")
             except Exception as e:
-                bot_logger.error(f"关闭 Redis 连接池时出错: {e}")
+                bot_logger.error(f"关闭 Redis 文本连接池时出错: {e}")
             finally:
                 self._pool = None
+        
+        if self._binary_pool:
+            try:
+                await self._binary_pool.disconnect()
+                bot_logger.info("Redis 二进制连接池已关闭")
+            except Exception as e:
+                bot_logger.error(f"关闭 Redis 二进制连接池时出错: {e}")
+            finally:
+                self._binary_pool = None
 
     def _get_client(self) -> redis.Redis:
         """从连接池获取一个Redis客户端实例"""
@@ -60,23 +80,9 @@ class RedisManager:
     
     def _get_binary_client(self) -> redis.Redis:
         """获取用于二进制数据的Redis客户端（不自动解码）"""
-        if self._pool is None:
+        if self._binary_pool is None:
             raise ConnectionError("RedisManager 尚未初始化。请先调用 initialize()")
-        # 创建不解码的连接池
-        redis_settings = self.__dict__.get('_redis_settings') or {
-            'host': self._pool.connection_kwargs.get('host'),
-            'port': self._pool.connection_kwargs.get('port'),
-            'db': self._pool.connection_kwargs.get('db'),
-            'password': self._pool.connection_kwargs.get('password'),
-        }
-        # 创建临时的二进制客户端
-        return redis.Redis(
-            host=redis_settings.get('host', '127.0.0.1'),
-            port=redis_settings.get('port', 6379),
-            db=redis_settings.get('db', 0),
-            password=redis_settings.get('password') or None,
-            decode_responses=False  # 关键：不自动解码
-        )
+        return redis.Redis(connection_pool=self._binary_pool)
 
     # --- 基础 Key-Value 操作 (主要用于字符串和JSON) ---
 
