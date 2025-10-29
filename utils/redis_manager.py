@@ -20,6 +20,14 @@ class RedisManager:
             return
         try:
             redis_settings = settings.redis
+            # 保存配置供后续使用
+            self._redis_settings = {
+                'host': redis_settings.host,
+                'port': redis_settings.port,
+                'db': redis_settings.db,
+                'password': redis_settings.password,
+                'timeout': redis_settings.timeout,
+            }
             self._pool = redis.ConnectionPool(
                 host=redis_settings.host,
                 port=redis_settings.port,
@@ -49,6 +57,26 @@ class RedisManager:
         if self._pool is None:
             raise ConnectionError("RedisManager 尚未初始化。请先调用 initialize()")
         return redis.Redis(connection_pool=self._pool)
+    
+    def _get_binary_client(self) -> redis.Redis:
+        """获取用于二进制数据的Redis客户端（不自动解码）"""
+        if self._pool is None:
+            raise ConnectionError("RedisManager 尚未初始化。请先调用 initialize()")
+        # 创建不解码的连接池
+        redis_settings = self.__dict__.get('_redis_settings') or {
+            'host': self._pool.connection_kwargs.get('host'),
+            'port': self._pool.connection_kwargs.get('port'),
+            'db': self._pool.connection_kwargs.get('db'),
+            'password': self._pool.connection_kwargs.get('password'),
+        }
+        # 创建临时的二进制客户端
+        return redis.Redis(
+            host=redis_settings.get('host', '127.0.0.1'),
+            port=redis_settings.get('port', 6379),
+            db=redis_settings.get('db', 0),
+            password=redis_settings.get('password') or None,
+            decode_responses=False  # 关键：不自动解码
+        )
 
     # --- 基础 Key-Value 操作 (主要用于字符串和JSON) ---
 
@@ -57,12 +85,23 @@ class RedisManager:
         client = self._get_client()
         if isinstance(value, (dict, list)):
             value = json.dumps(value)
+        elif isinstance(value, bytes):
+            # 对于二进制数据，需要使用不解码的客户端
+            binary_client = self._get_binary_client()
+            await binary_client.set(key, value, ex=expire)
+            return
         await client.set(key, value, ex=expire)
 
     async def get(self, key: str) -> Optional[Any]:
-        """获取一个键的值"""
+        """获取一个键的值（自动检测二进制数据）"""
+        # 先尝试用普通客户端获取
         client = self._get_client()
-        return await client.get(key)
+        try:
+            return await client.get(key)
+        except UnicodeDecodeError:
+            # 如果解码失败，说明是二进制数据，使用二进制客户端
+            binary_client = self._get_binary_client()
+            return await binary_client.get(key)
 
     async def delete(self, *keys: str) -> int:
         """删除一个或多个键"""
