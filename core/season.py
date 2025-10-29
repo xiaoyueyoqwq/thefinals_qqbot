@@ -278,7 +278,6 @@ class SeasonManager:
         self.api = BaseAPI(SeasonConfig.API_BASE_URL, timeout=SeasonConfig.API_TIMEOUT)
         self.api_headers = {
             "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate, br", 
             "User-Agent": "TheFinals-Bot/1.0"
         }
         self.seasons_config = SeasonConfig.SEASONS

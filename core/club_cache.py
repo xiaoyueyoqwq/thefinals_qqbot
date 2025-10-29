@@ -454,7 +454,6 @@ class ClubManager:
         self.api = BaseAPI(settings.api_base_url, timeout=20)
         self.api_headers = {
             "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate, br", 
             "User-Agent": "TheFinals-Bot/1.0"
         }
         self.indexer = ClubIndexer()
