@@ -3,35 +3,35 @@
     "patterns": [
       {
         "pattern": "^(?P<season>s\\d+)$",
-        "template": "{season}排位"
+        "template": "{season}排位赛"
       },
       {
         "pattern": "^(?P<season>s\\d+)sponsor$",
-        "template": "{season}粉丝"
+        "template": "{season}社团粉丝"
       },
       {
         "pattern": "^(?P<season>s\\d+)worldtour$",
-        "template": "{season}巡回"
+        "template": "{season}世界巡回"
       },
       {
         "pattern": "^(?P<season>s\\d+)quickcash$",
-        "template": "{season}快提"
+        "template": "{season}快速提现"
       },
       {
         "pattern": "^(?P<season>s\\d+)bankit$",
-        "template": "{season}存钱"
+        "template": "{season}存钱至上(RIP)"
       },
       {
         "pattern": "^(?P<season>s\\d+)powershift$",
-        "template": "{season}争霸"
+        "template": "{season}平台争霸"
       },
       {
         "pattern": "^(?P<season>s\\d+)teamdeathmatch$",
-        "template": "{season}死斗"
+        "template": "{season}团队死斗"
       },
       {
         "pattern": "^(?P<season>s\\d+)terminalattack$",
-        "template": "{season}爆破"
+        "template": "{season}终端爆破(RIP)"
       },
       {
         "pattern": "^(?P<season>s\\d+)heavyhitters$",
@@ -48,6 +48,14 @@
       {
         "pattern": "^(?P<season>s\\d+)blastoff$",
         "template": "{season}全民炸飞"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)ghoulrush$",
+        "template": "{season}全民炸飞2.0"
+      },
+      {
+        "pattern": "^(?P<season>s\\d+)head2head$",
+        "template": "{season}对对碰"
       }
     ]
   }

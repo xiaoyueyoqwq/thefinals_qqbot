@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import dateutil.parser
 import pytz
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 from utils.json_utils import load_json, save_json
 from utils.config import settings
@@ -20,15 +20,16 @@ class Announcement:
 
 class AnnouncementManager:
     def __init__(self):
-        self.MAX_ANNOUNCEMENTS_PER_GROUP = 10
         self._announcements: List[Announcement] = []
         # 新的数据结构: { "group_id": { "date": "YYYY-MM-DD", "count": N } }
-        self._sent_data: Dict[str, Dict[str, any]] = {}
+        self._sent_data: Dict[str, Dict[str, Any]] = {}
         self._lock = asyncio.Lock()
         self.enabled = settings.announcements.get("enabled", False)
+        # 从配置读取每个群组的最大公告发送数，默认为10
+        self.max_announcements_per_group = settings.announcements.get("max_announcements_per_group", 10)
         if self.enabled:
             self._load_config()
-            bot_logger.info(f"公告功能已启用，共加载 {len(self._announcements)} 条公告。")
+            bot_logger.info(f"公告功能已启用，共加载 {len(self._announcements)} 条公告，每个群组最多每日发送 {self.max_announcements_per_group} 条。")
 
     def _load_config(self):
         announcements_config = settings.announcements.get("items", [])
@@ -116,7 +117,7 @@ class AnnouncementManager:
             if last_sent_date != today_str:
                 sent_count = 0
             
-            if sent_count >= self.MAX_ANNOUNCEMENTS_PER_GROUP:
+            if sent_count >= self.max_announcements_per_group:
                 return None  # 已达到该群组的每日上限
 
             bot_logger.debug(f"为群组 {group_id} 找到有效公告: {active_announcement.id} (今日已发送 {sent_count} 次)")

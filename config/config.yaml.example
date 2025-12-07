@@ -120,6 +120,7 @@ redis:
 # -----------------------------------------------------------------
 announcements:
   enabled: false  # 是否启用公告功能
+  max_announcements_per_group: 10  # 每个群组每日最多接收的公告数量（默认为10）
   items:
     # 公告ID，必须唯一
     - id: "announcement_1" 
