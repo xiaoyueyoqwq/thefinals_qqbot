@@ -275,6 +275,8 @@ class DFQuery:
         Returns:
             tuple: (段位名称, 图标文件名)
         """
+        if score >= 48000:
+            return "Ruby", "ruby.png"
         if score >= 47500:
             return "Diamond 1", "diamond-1.png"
         elif score >= 45000:
