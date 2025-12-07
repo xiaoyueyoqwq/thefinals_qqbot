@@ -171,7 +171,13 @@ class Season:
                 pipeline.expire(self.redis_key_playernames, expire_time)
                 pipeline.expire(self.redis_key_last_update, expire_time)
             
-            await pipeline.execute()
+            results = await pipeline.execute()
+            # 检查pipeline执行结果，确保没有命令失败
+            failed_commands = [i for i, result in enumerate(results) if isinstance(result, Exception)]
+            if failed_commands:
+                bot_logger.error(f"赛季 {self.season_id} Redis pipeline执行有失败: 失败的命令索引 {failed_commands}，结果 {results}")
+                raise RuntimeError(f"Redis pipeline执行失败，共{len(failed_commands)}个命令失败")
+            
             bot_logger.info(f"赛季 {self.season_id} 数据成功更新到 Redis，共 {len(players)} 条记录。")
 
             # 5. 更新搜索索引 (如果需要)
@@ -250,14 +256,22 @@ class Season:
         """从 Redis 流式获取所有玩家数据"""
         cursor = 0
         client = redis_manager._get_client()
-        while True:
-            cursor, data = await client.hscan(self.redis_key_players, cursor, count=100)
-            if not data:
-                break
-            for player_name, player_data_json in data.items():
-                yield json.loads(player_data_json)
-            if cursor == 0:
-                break
+        try:
+            while True:
+                cursor, data = await client.hscan(self.redis_key_players, cursor, count=100)
+                if not data:
+                    break
+                for player_name, player_data_json in data.items():
+                    try:
+                        yield json.loads(player_data_json)
+                    except (json.JSONDecodeError, TypeError) as e:
+                        bot_logger.warning(f"赛季 {self.season_id} 玩家 {player_name} 数据格式错误，跳过: {e}")
+                        continue
+                if cursor == 0:
+                    break
+        except Exception as e:
+            bot_logger.error(f"赛季 {self.season_id} 获取所有玩家数据时失败: {e}", exc_info=True)
+            raise
 
 
 class SeasonManager:

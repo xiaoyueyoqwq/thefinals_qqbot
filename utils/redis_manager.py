@@ -89,14 +89,18 @@ class RedisManager:
     async def set(self, key: str, value: Any, expire: Optional[int] = None):
         """设置一个键值对，可以是字符串或可序列化为JSON的对象"""
         client = self._get_client()
-        if isinstance(value, (dict, list)):
-            value = json.dumps(value)
-        elif isinstance(value, bytes):
-            # 对于二进制数据，需要使用不解码的客户端
-            binary_client = self._get_binary_client()
-            await binary_client.set(key, value, ex=expire)
-            return
-        await client.set(key, value, ex=expire)
+        try:
+            if isinstance(value, (dict, list)):
+                value = json.dumps(value)
+            elif isinstance(value, bytes):
+                # 对于二进制数据，需要使用不解码的客户端
+                binary_client = self._get_binary_client()
+                await binary_client.set(key, value, ex=expire)
+                return
+            await client.set(key, value, ex=expire)
+        except Exception as e:
+            bot_logger.error(f"Redis set操作失败 [键: {key}]: {e}", exc_info=True)
+            raise
 
     async def get(self, key: str) -> Optional[Any]:
         """获取一个键的值（自动检测二进制数据）"""

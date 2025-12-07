@@ -67,28 +67,42 @@ class DFQuery:
             # 尝试从Redis加载实时数据
             redis_live_data = await redis_manager.get(self.redis_key_live)
             if redis_live_data:
-                self.last_fetched_data = json.loads(redis_live_data)
-                bot_logger.info("[DFQuery] 已从 Redis 成功恢复上次的实时数据。")
+                try:
+                    self.last_fetched_data = json.loads(redis_live_data)
+                    bot_logger.info("[DFQuery] 已从 Redis 成功恢复上次的实时数据。")
+                except (json.JSONDecodeError, TypeError) as e:
+                    bot_logger.warning(f"[DFQuery] Redis中的实时数据格式错误，无法解析: {e}，将尝试从JSON文件加载")
+                    self.last_fetched_data = {}
             else:
                 # Redis中没有数据，从JSON文件加载
                 self.last_fetched_data = await load_json(self.live_data_path, default={})
                 if self.last_fetched_data:
                     bot_logger.info("[DFQuery] 已从 JSON 文件成功恢复上次的实时数据。")
                     # 将数据同步到Redis
-                    await redis_manager.set(self.redis_key_live, self.last_fetched_data, expire=300)
+                    try:
+                        await redis_manager.set(self.redis_key_live, self.last_fetched_data, expire=300)
+                    except Exception as sync_error:
+                        bot_logger.warning(f"[DFQuery] 同步实时数据到Redis失败: {sync_error}")
 
             # 尝试从Redis加载历史数据
             redis_history_data = await redis_manager.get(self.redis_key_history)
             if redis_history_data:
-                self.historical_data = json.loads(redis_history_data)
-                bot_logger.info(f"[DFQuery] 已从 Redis 加载 {len(self.historical_data)} 条历史数据。")
+                try:
+                    self.historical_data = json.loads(redis_history_data)
+                    bot_logger.info(f"[DFQuery] 已从 Redis 加载 {len(self.historical_data)} 条历史数据。")
+                except (json.JSONDecodeError, TypeError) as e:
+                    bot_logger.warning(f"[DFQuery] Redis中的历史数据格式错误，无法解析: {e}，将尝试从JSON文件加载")
+                    self.historical_data = []
             else:
                 # Redis中没有数据，从JSON文件加载
                 self.historical_data = await load_json(self.history_data_path, default=[])
                 if self.historical_data:
                     bot_logger.info(f"[DFQuery] 已从 JSON 文件加载 {len(self.historical_data)} 条历史数据。")
                     # 将数据同步到Redis
-                    await redis_manager.set(self.redis_key_history, self.historical_data)
+                    try:
+                        await redis_manager.set(self.redis_key_history, self.historical_data)
+                    except Exception as sync_error:
+                        bot_logger.warning(f"[DFQuery] 同步历史数据到Redis失败: {sync_error}")
                     
         except Exception as e:
             bot_logger.error(f"[DFQuery] 加载数据失败: {e}", exc_info=True)
@@ -168,11 +182,23 @@ class DFQuery:
                 return
 
             self.last_fetched_data = scores_to_cache
-            # 双重保存：Redis + JSON文件
-            await asyncio.gather(
+            # 双重保存：Redis + JSON文件，return_exceptions=True以捕获所有异常
+            results = await asyncio.gather(
                 redis_manager.set(self.redis_key_live, scores_to_cache, expire=300),
-                save_json(self.live_data_path, scores_to_cache)
+                save_json(self.live_data_path, scores_to_cache),
+                return_exceptions=True
             )
+            
+            # 检查保存结果
+            redis_result, json_result = results
+            if isinstance(redis_result, Exception):
+                bot_logger.error(f"[DFQuery] 保存实时数据到Redis失败: {redis_result}", exc_info=redis_result)
+                raise redis_result
+            if isinstance(json_result, Exception):
+                bot_logger.error(f"[DFQuery] 保存实时数据到JSON文件失败: {json_result}", exc_info=json_result)
+                raise json_result
+            
+            bot_logger.debug(f"[DFQuery] 实时底分数据已成功保存到Redis和JSON文件")
         except Exception as e:
             bot_logger.error(f"[DFQuery] 更新实时底分数据时发生错误: {e}", exc_info=True)
         finally:
@@ -217,11 +243,20 @@ class DFQuery:
         
         self.historical_data = list(reversed(unique_history))
         
-        # 双重保存：Redis + JSON文件
-        await asyncio.gather(
-            redis_manager.set(self.redis_key_history, self.historical_data),
-            save_json(self.history_data_path, self.historical_data)
+        # 双重保存：Redis + JSON文件（历史数据保留7天）
+        results = await asyncio.gather(
+            redis_manager.set(self.redis_key_history, self.historical_data, expire=7*24*3600),
+            save_json(self.history_data_path, self.historical_data),
+            return_exceptions=True
         )
+        
+        # 检查保存结果
+        redis_result, json_result = results
+        if isinstance(redis_result, Exception):
+            bot_logger.error(f"[DFQuery] 保存历史数据到Redis失败: {redis_result}", exc_info=redis_result)
+        if isinstance(json_result, Exception):
+            bot_logger.error(f"[DFQuery] 保存历史数据到JSON文件失败: {json_result}", exc_info=json_result)
+        
         bot_logger.info(f"[DFQuery] 已成功保存 {today_str} 的排行榜历史数据到 Redis 和 JSON 文件。")
 
     def _get_rank_info_by_score(self, score: int) -> tuple[str, str]:
