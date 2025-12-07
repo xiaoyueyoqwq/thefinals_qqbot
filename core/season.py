@@ -50,6 +50,8 @@ class Season:
         self._is_current = SeasonConfig.is_current_season(self.season_id)
         self._update_task = None
         self._is_updating = False
+        # 添加锁以保护_update_data的原子性
+        self._update_lock = asyncio.Lock()
 
         # Redis key 定义
         self.redis_key_players = f"season:{self.season_id}:players"
@@ -106,19 +108,23 @@ class Season:
                 await asyncio.sleep(60)
 
     async def _update_data(self, force_update: bool = False) -> None:
-        if self._is_updating:
-            return
-
-        # 如果不是强制更新，并且是当前赛季，则检查更新间隔
-        if not force_update and self._is_current:
-            last_update_str = await redis_manager.get(self.redis_key_last_update)
-            if last_update_str:
-                last_update_time = datetime.fromisoformat(last_update_str)
-                if datetime.now() - last_update_time < timedelta(seconds=self.update_interval):
-                    bot_logger.debug(f"赛季 {self.season_id} 数据在更新间隔内，跳过本次更新。")
-                    return
+        # 使用锁确保同一时刻只有一个_update_data执行
+        async with self._update_lock:
+            if self._is_updating:
+                bot_logger.debug(f"赛季 {self.season_id} 有其他更新正在执行，跳过本次更新")
+                return
+            
+            # 如果不是强制更新，并且是当前赛季，则检查更新间隔
+            if not force_update and self._is_current:
+                last_update_str = await redis_manager.get(self.redis_key_last_update)
+                if last_update_str:
+                    last_update_time = datetime.fromisoformat(last_update_str)
+                    if datetime.now() - last_update_time < timedelta(seconds=self.update_interval):
+                        bot_logger.debug(f"赛季 {self.season_id} 数据在更新间隔内，跳过本次更新。")
+                        return
+            
+            self._is_updating = True
         
-        self._is_updating = True
         try:
             bot_logger.info(f"开始更新赛季 {self.season_id} 数据到 Redis...")
             api_url = SeasonConfig.get_api_url(self.season_id)

@@ -36,6 +36,8 @@ class DFQuery:
         self._update_task = None
         self._daily_save_task = None
         self._is_updating = False
+        # 添加锁以保护fetch_leaderboard的原子性
+        self._update_lock = asyncio.Lock()
 
         # 初始化图片生成器
         self.resources_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "resources")
@@ -126,9 +128,13 @@ class DFQuery:
             
     async def fetch_leaderboard(self):
         """获取并更新排行榜实时数据到 JSON 文件"""
-        if self._is_updating:
-            return
-        self._is_updating = True
+        # 使用锁确保同一时刻只有一个fetch_leaderboard执行
+        async with self._update_lock:
+            if self._is_updating:
+                bot_logger.debug("[DFQuery] 有其他fetch_leaderboard正在执行，跳过本次更新")
+                return
+            self._is_updating = True
+        
         bot_logger.debug("[DFQuery] 开始从赛季数据更新底分...")
         try:
             season = await self.season_manager.get_season(settings.CURRENT_SEASON)
