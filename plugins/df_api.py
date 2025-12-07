@@ -2,7 +2,7 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
 from core.api import api_route
-from core.df import DFQuery
+from core.df import DFQueryManager
 from utils.logger import bot_logger
 from core.plugin import Plugin
 from fastapi import HTTPException
@@ -114,18 +114,20 @@ class DFAPIPlugin(Plugin):
     
     def __init__(self):
         super().__init__()
-        self.df_query = DFQuery()
+        # 使用DFQueryManager获取单例实例
+        self.df_query = DFQueryManager.get_instance_sync()
         
     async def on_load(self):
         """插件加载时的回调"""
         bot_logger.debug("[DFAPIPlugin] 开始加载底分查询API插件")
-        await self.df_query.start()
+        await DFQueryManager.initialize()
         bot_logger.info("[DFAPIPlugin] 底分查询API插件已加载")
         
     async def on_unload(self):
         """插件卸载时的回调"""
         bot_logger.debug("[DFAPIPlugin] 开始卸载底分查询API插件")
-        await self.df_query.stop()
+        # 不在这里调用shutdown，因为其他插件可能还在使用
+        # 在整个应用关闭时由框架统一处理
         bot_logger.info("[DFAPIPlugin] 底分查询API插件已卸载")
         
     @api_route("/api/df/current", methods=["GET"], 

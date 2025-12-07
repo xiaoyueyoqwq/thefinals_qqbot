@@ -109,6 +109,7 @@ class Season:
 
     async def _update_data(self, force_update: bool = False) -> None:
         # 使用锁确保同一时刻只有一个_update_data执行
+        # 注意：锁必须保护整个函数，不能提前释放
         async with self._update_lock:
             if self._is_updating:
                 bot_logger.debug(f"赛季 {self.season_id} 有其他更新正在执行，跳过本次更新")
@@ -124,82 +125,82 @@ class Season:
                         return
             
             self._is_updating = True
-        
-        try:
-            bot_logger.info(f"开始更新赛季 {self.season_id} 数据到 Redis...")
-            api_url = SeasonConfig.get_api_url(self.season_id)
-            # 优化：启用HTTP缓存，支持304 Not Modified响应，大幅减少流量
-            response = await self.api.get(api_url, headers=self.headers, use_cache=True)
             
-            if not (response and response.status_code == 200):
-                bot_logger.error(f"获取赛季 {self.season_id} API 数据失败: {response.status_code if response else 'No response'}")
-                return
+            try:
+                bot_logger.info(f"开始更新赛季 {self.season_id} 数据到 Redis...")
+                api_url = SeasonConfig.get_api_url(self.season_id)
+                # 优化：启用HTTP缓存，支持304 Not Modified响应，大幅减少流量
+                response = await self.api.get(api_url, headers=self.headers, use_cache=True)
+                
+                if not (response and response.status_code == 200):
+                    bot_logger.error(f"获取赛季 {self.season_id} API 数据失败: {response.status_code if response else 'No response'}")
+                    return
 
-            players = response.json().get("data", [])
-            if not players:
-                bot_logger.warning(f"赛季 {self.season_id} API 未返回任何玩家数据。")
-                return
+                players = response.json().get("data", [])
+                if not players:
+                    bot_logger.warning(f"赛季 {self.season_id} API 未返回任何玩家数据。")
+                    return
 
-            # --- Redis 操作 ---
-            client = redis_manager._get_client()
-            pipeline = client.pipeline()
+                # --- Redis 操作 ---
+                client = redis_manager._get_client()
+                pipeline = client.pipeline()
 
-            # 1. 清理旧数据
-            pipeline.delete(self.redis_key_players, self.redis_key_top5, self.redis_key_playernames)
+                # 1. 清理旧数据
+                pipeline.delete(self.redis_key_players, self.redis_key_top5, self.redis_key_playernames)
 
-            # 2. 准备新数据
-            player_hash_data = {}
-            player_names_set = set()
-            for player in players:
-                player_name = player.get("name", "").lower()
-                if player_name:
-                    player_hash_data[player_name] = json.dumps(player)
-                    player_names_set.add(player_name)
-            
-            # 3. 写入新数据
-            if player_hash_data:
-                pipeline.hmset(self.redis_key_players, player_hash_data)
-            
-            if player_names_set:
-                pipeline.sadd(self.redis_key_playernames, *player_names_set)
+                # 2. 准备新数据
+                player_hash_data = {}
+                player_names_set = set()
+                for player in players:
+                    player_name = player.get("name", "").lower()
+                    if player_name:
+                        player_hash_data[player_name] = json.dumps(player)
+                        player_names_set.add(player_name)
+                
+                # 3. 写入新数据
+                if player_hash_data:
+                    pipeline.hmset(self.redis_key_players, player_hash_data)
+                
+                if player_names_set:
+                    pipeline.sadd(self.redis_key_playernames, *player_names_set)
 
-            top_5_players = [p.get("name") for p in players[:5] if p.get("name")]
-            pipeline.set(self.redis_key_top5, json.dumps(top_5_players))
-            
-            # 更新上次更新时间戳
-            pipeline.set(self.redis_key_last_update, datetime.now().isoformat())
+                top_5_players = [p.get("name") for p in players[:5] if p.get("name")]
+                pipeline.set(self.redis_key_top5, json.dumps(top_5_players))
+                
+                # 更新上次更新时间戳
+                pipeline.set(self.redis_key_last_update, datetime.now().isoformat())
 
-            # 4. 设置过期时间（仅限当前赛季）
-            if self._is_current:
-                expire_time = self.update_interval * 2
-                pipeline.expire(self.redis_key_players, expire_time)
-                pipeline.expire(self.redis_key_top5, expire_time)
-                pipeline.expire(self.redis_key_playernames, expire_time)
-                pipeline.expire(self.redis_key_last_update, expire_time)
-            
-            results = await pipeline.execute()
-            # 检查pipeline执行结果，确保没有命令失败
-            failed_commands = [i for i, result in enumerate(results) if isinstance(result, Exception)]
-            if failed_commands:
-                bot_logger.error(f"赛季 {self.season_id} Redis pipeline执行有失败: 失败的命令索引 {failed_commands}，结果 {results}")
-                raise RuntimeError(f"Redis pipeline执行失败，共{len(failed_commands)}个命令失败")
-            
-            bot_logger.info(f"赛季 {self.season_id} 数据成功更新到 Redis，共 {len(players)} 条记录。")
+                # 4. 设置过期时间（仅限当前赛季）
+                if self._is_current:
+                    expire_time = self.update_interval * 2
+                    pipeline.expire(self.redis_key_players, expire_time)
+                    pipeline.expire(self.redis_key_top5, expire_time)
+                    pipeline.expire(self.redis_key_playernames, expire_time)
+                    pipeline.expire(self.redis_key_last_update, expire_time)
+                
+                results = await pipeline.execute()
+                # 检查pipeline执行结果，确保没有命令失败
+                failed_commands = [i for i, result in enumerate(results) if isinstance(result, Exception)]
+                if failed_commands:
+                    bot_logger.error(f"赛季 {self.season_id} Redis pipeline执行有失败: 失败的命令索引 {failed_commands}，结果 {results}")
+                    raise RuntimeError(f"Redis pipeline执行失败，共{len(failed_commands)}个命令失败")
+                
+                bot_logger.info(f"赛季 {self.season_id} 数据成功更新到 Redis，共 {len(players)} 条记录。")
 
-            # 5. 更新搜索索引 (如果需要)
-            if self._is_current and hasattr(self.manager, "search_indexer"):
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(
-                    None,  # 使用默认的线程池执行器
-                    self.manager.search_indexer.build_index,
-                    players
-                )
+                # 5. 更新搜索索引 (如果需要)
+                if self._is_current and hasattr(self.manager, "search_indexer"):
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(
+                        None,  # 使用默认的线程池执行器
+                        self.manager.search_indexer.build_index,
+                        players
+                    )
 
-        except Exception as e:
-            bot_logger.error(f"更新赛季 {self.season_id} Redis 数据失败: {e}", exc_info=True)
-            raise
-        finally:
-            self._is_updating = False
+            except Exception as e:
+                bot_logger.error(f"更新赛季 {self.season_id} Redis 数据失败: {e}", exc_info=True)
+                raise
+            finally:
+                self._is_updating = False
 
     async def get_player_data(self, player_name: str, use_fuzzy_search: bool = True) -> Optional[dict]:
         """从 Redis 获取玩家数据"""

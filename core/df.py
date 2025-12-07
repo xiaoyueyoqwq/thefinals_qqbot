@@ -129,86 +129,87 @@ class DFQuery:
     async def fetch_leaderboard(self):
         """获取并更新排行榜实时数据到 JSON 文件"""
         # 使用锁确保同一时刻只有一个fetch_leaderboard执行
+        # 注意：锁必须保护整个函数，不能提前释放
         async with self._update_lock:
             if self._is_updating:
                 bot_logger.debug("[DFQuery] 有其他fetch_leaderboard正在执行，跳过本次更新")
                 return
             self._is_updating = True
-        
-        bot_logger.debug("[DFQuery] 开始从赛季数据更新底分...")
-        try:
-            season = await self.season_manager.get_season(settings.CURRENT_SEASON)
-            if not season:
-                bot_logger.error("[DFQuery] 无法获取当前赛季实例。")
-                return
-                
-            all_data_generator = season.get_all_players()
             
-            target_ranks = {500, 10000}
-            scores_to_cache = {}
-            
-            # 新增：查找钻石段位最后一位
-            diamond_bottom_rank = None
-            diamond_bottom_data = None
-            
-            async for player_data in all_data_generator:
-                rank = player_data.get('rank')
-                league = player_data.get('league', '')
+            bot_logger.debug("[DFQuery] 开始从赛季数据更新底分...")
+            try:
+                season = await self.season_manager.get_season(settings.CURRENT_SEASON)
+                if not season:
+                    bot_logger.error("[DFQuery] 无法获取当前赛季实例。")
+                    return
+                    
+                all_data_generator = season.get_all_players()
                 
-                # 检查固定排名
-                if rank in target_ranks:
-                    scores_to_cache[str(rank)] = {
-                        "player_id": player_data.get('name'),
-                        "score": player_data.get('rankScore'),
-                        "update_time": datetime.now().isoformat()
-                    }
+                target_ranks = {500, 10000}
+                scores_to_cache = {}
                 
-                # 查找钻石段位最后一位
-                if league and "diamond" in league.lower():
-                    if diamond_bottom_rank is None or rank > diamond_bottom_rank:
-                        diamond_bottom_rank = rank
-                        diamond_bottom_data = {
+                # 新增：查找钻石段位最后一位
+                diamond_bottom_rank = None
+                diamond_bottom_data = None
+                
+                async for player_data in all_data_generator:
+                    rank = player_data.get('rank')
+                    league = player_data.get('league', '')
+                    
+                    # 检查固定排名
+                    if rank in target_ranks:
+                        scores_to_cache[str(rank)] = {
                             "player_id": player_data.get('name'),
-                            "update_time": datetime.now().isoformat(),
-                            "league": league,
-                            "rank": rank
+                            "score": player_data.get('rankScore'),
+                            "update_time": datetime.now().isoformat()
                         }
+                    
+                    # 查找钻石段位最后一位
+                    if league and "diamond" in league.lower():
+                        if diamond_bottom_rank is None or rank > diamond_bottom_rank:
+                            diamond_bottom_rank = rank
+                            diamond_bottom_data = {
+                                "player_id": player_data.get('name'),
+                                "update_time": datetime.now().isoformat(),
+                                "league": league,
+                                "rank": rank
+                            }
+                    
+                    # 如果找到所有固定排名且已经超出钻石段位范围，可以提前退出
+                    if len(scores_to_cache) == len(target_ranks) and diamond_bottom_data and diamond_bottom_rank and rank > diamond_bottom_rank + 1000:
+                        break
                 
-                # 如果找到所有固定排名且已经超出钻石段位范围，可以提前退出
-                if len(scores_to_cache) == len(target_ranks) and diamond_bottom_data and diamond_bottom_rank and rank > diamond_bottom_rank + 1000:
-                    break
-            
-            # 添加钻石段位数据到缓存
-            if diamond_bottom_data:
-                scores_to_cache["diamond_bottom"] = diamond_bottom_data
-                bot_logger.info(f"[DFQuery] 找到钻石段位最后一位: 排名 {diamond_bottom_rank}, {diamond_bottom_data['league']}, 玩家 {diamond_bottom_data['player_id']}")
-            
-            if not scores_to_cache:
-                bot_logger.warning("[DFQuery] 未找到目标排名 (500, 10000, diamond_bottom) 的数据。")
-                return
+                # 添加钻石段位数据到缓存
+                if diamond_bottom_data:
+                    scores_to_cache["diamond_bottom"] = diamond_bottom_data
+                    bot_logger.info(f"[DFQuery] 找到钻石段位最后一位: 排名 {diamond_bottom_rank}, {diamond_bottom_data['league']}, 玩家 {diamond_bottom_data['player_id']}")
+                
+                if not scores_to_cache:
+                    bot_logger.warning("[DFQuery] 未找到目标排名 (500, 10000, diamond_bottom) 的数据。")
+                    return
 
-            self.last_fetched_data = scores_to_cache
-            # 双重保存：Redis + JSON文件，return_exceptions=True以捕获所有异常
-            results = await asyncio.gather(
-                redis_manager.set(self.redis_key_live, scores_to_cache, expire=300),
-                save_json(self.live_data_path, scores_to_cache),
-                return_exceptions=True
-            )
-            
-            # 检查保存结果
-            redis_result, json_result = results
-            if isinstance(redis_result, Exception):
-                bot_logger.error(f"[DFQuery] 保存实时数据到Redis失败: {redis_result}", exc_info=redis_result)
-                raise redis_result
-            if isinstance(json_result, Exception):
-                bot_logger.error(f"[DFQuery] 保存实时数据到JSON文件失败: {json_result}", exc_info=json_result)
-                raise json_result
-            
-            bot_logger.debug(f"[DFQuery] 实时底分数据已成功保存到Redis和JSON文件")
-        except Exception as e:
-            bot_logger.error(f"[DFQuery] 更新实时底分数据时发生错误: {e}", exc_info=True)
-        finally:
-            self._is_updating = False
+                self.last_fetched_data = scores_to_cache
+                # 双重保存：Redis + JSON文件，return_exceptions=True以捕获所有异常
+                results = await asyncio.gather(
+                    redis_manager.set(self.redis_key_live, scores_to_cache, expire=300),
+                    save_json(self.live_data_path, scores_to_cache),
+                    return_exceptions=True
+                )
+                
+                # 检查保存结果
+                redis_result, json_result = results
+                if isinstance(redis_result, Exception):
+                    bot_logger.error(f"[DFQuery] 保存实时数据到Redis失败: {redis_result}", exc_info=redis_result)
+                    raise redis_result
+                if isinstance(json_result, Exception):
+                    bot_logger.error(f"[DFQuery] 保存实时数据到JSON文件失败: {json_result}", exc_info=json_result)
+                    raise json_result
+                
+                bot_logger.debug(f"[DFQuery] 实时底分数据已成功保存到Redis和JSON文件")
+            except Exception as e:
+                bot_logger.error(f"[DFQuery] 更新实时底分数据时发生错误: {e}", exc_info=True)
+            finally:
+                self._is_updating = False
 
     async def get_bottom_scores(self) -> Dict[str, Any]:
         """从 JSON 文件获取实时底分数据"""
@@ -689,3 +690,48 @@ class DFQuery:
         if self._daily_save_task and not self._daily_save_task.done():
             self._daily_save_task.cancel()
         bot_logger.info("[DFQuery] 所有任务已停止。")
+
+
+# ==================== 单例管理器 ====================
+
+class DFQueryManager:
+    """DFQuery的单例管理器，确保全局只有一个DFQuery实例和一个更新循环"""
+    
+    _instance: Optional['DFQuery'] = None
+    _lock = asyncio.Lock()
+    
+    @classmethod
+    async def get_instance(cls) -> 'DFQuery':
+        """获取或创建DFQuery实例（线程安全）"""
+        if cls._instance is None:
+            async with cls._lock:
+                # 双重检查：确保在获得锁后再次检查
+                if cls._instance is None:
+                    cls._instance = DFQuery()
+                    bot_logger.debug("[DFQueryManager] DFQuery实例已创建")
+        return cls._instance
+    
+    @classmethod
+    def get_instance_sync(cls) -> 'DFQuery':
+        """同步获取DFQuery实例（用于__init__中）
+        
+        注意：仅当你确认实例已创建或将立即在异步上下文中创建时使用
+        """
+        if cls._instance is None:
+            cls._instance = DFQuery()
+            bot_logger.debug("[DFQueryManager] DFQuery实例已创建")
+        return cls._instance
+    
+    @classmethod
+    async def initialize(cls) -> 'DFQuery':
+        """初始化DFQuery（启动后台任务）"""
+        instance = await cls.get_instance()
+        await instance.start()
+        return instance
+    
+    @classmethod
+    async def shutdown(cls) -> None:
+        """关闭DFQuery"""
+        if cls._instance:
+            await cls._instance.stop()
+            cls._instance = None

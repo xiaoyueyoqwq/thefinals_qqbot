@@ -1,6 +1,6 @@
 from core.plugin import Plugin, on_command
 from utils.message_handler import MessageHandler
-from core.df import DFQuery
+from core.df import DFQueryManager
 from utils.logger import bot_logger
 import asyncio
 from utils.templates import SEPARATOR
@@ -13,21 +13,24 @@ class DFPlugin(Plugin):
     def __init__(self):
         """初始化底分查询插件"""
         super().__init__()
-        self.df_query = DFQuery()
+        # 使用DFQueryManager获取单例实例
+        self.df_query = DFQueryManager.get_instance_sync()
         bot_logger.debug(f"[{self.name}] 初始化底分查询插件")
         
     async def on_load(self):
         """插件加载时的处理"""
         bot_logger.debug(f"[{self.name}] 开始加载底分查询插件")
         await super().on_load()  # 等待父类的 on_load 完成
-        await self.df_query.start()  # 初始化DFQuery
+        await DFQueryManager.initialize()  # 初始化DFQuery（仅第一次有效）
         bot_logger.info(f"[{self.name}] 底分查询插件已加载")
         
     async def on_unload(self):
         """插件卸载时的处理"""
-        await self.df_query.stop()  # 停止所有任务
+        # 不在这里调用stop，因为其他插件可能还在使用
+        # 在整个应用关闭时由框架统一处理
         await super().on_unload()
         bot_logger.info(f"[{self.name}] 底分查询插件已卸载")
+
         
     @on_command("df", "查询排行榜底分")
     async def handle_df(self, handler: MessageHandler, content: str) -> None:
